@@ -5,15 +5,95 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>App Chofer - Gestión de Flota</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; padding-bottom: 90px; }
-        .container { max-width: 500px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: auto; }
-        h2 { color: #333; text-align: center; }
-        label { font-weight: bold; display: block; margin-top: 15px; }
-        input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        .checklist-item { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding: 8px; background: #fafafa; border: 1px solid #eee; border-radius: 4px; }
-        button { background: #28a745; color: white; border: none; padding: 12px; width: 100%; font-size: 16px; border-radius: 4px; cursor: pointer; margin-top: 20px; }
-        button:hover { background: #218838; }
-        #gps-status { margin-top: 15px; padding: 10px; background: #e2f0d9; border-radius: 4px; font-size: 14px; text-align: center; }
+        body { 
+            font-family: Arial, sans-serif; 
+            background: #0f172a; /* Fondo general azul oscuro profundo */
+            margin: 0; 
+            padding: 20px; 
+            padding-bottom: 90px; 
+            color: #f8fafc;
+        }
+        .container { 
+            max-width: 500px; 
+            background: #1e293b; /* Tarjeta principal azul oscuro corporativo */
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3); 
+            margin: auto; 
+            border: 1px solid #334155;
+        }
+        h2 { 
+            color: #f8fafc; 
+            text-align: center; 
+            border-bottom: 2px solid #334155;
+            padding-bottom: 12px;
+            margin-top: 0;
+        }
+        h3 {
+            color: #93c5fd;
+            font-size: 1.1rem;
+            margin-top: 25px;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 6px;
+        }
+        label { 
+            font-weight: bold; 
+            display: block; 
+            margin-top: 15px; 
+            color: #cbd5e1;
+            font-size: 0.95rem;
+        }
+        input, select, textarea { 
+            width: 100%; 
+            padding: 10px; 
+            margin-top: 5px; 
+            background: #0f172a;
+            border: 1px solid #475569; 
+            border-radius: 6px; 
+            box-sizing: border-box; 
+            color: #f8fafc;
+            font-size: 0.95rem;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+        }
+        .checklist-item { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-top: 10px; 
+            padding: 10px; 
+            background: #0f172a; 
+            border: 1px solid #334155; 
+            border-radius: 6px; 
+            font-size: 0.9rem;
+        }
+        button { 
+            background: #2563eb; /* Azul corporativo PepsiCo / Admin */
+            color: white; 
+            border: none; 
+            padding: 12px; 
+            width: 100%; 
+            font-size: 16px; 
+            font-weight: bold;
+            border-radius: 6px; 
+            cursor: pointer; 
+            margin-top: 20px; 
+            transition: background 0.2s;
+        }
+        button:hover { background: #1d4ed8; }
+        #gps-status { 
+            margin-top: 15px; 
+            padding: 12px; 
+            background: #064e3b; 
+            border: 1px solid #059669;
+            border-radius: 6px; 
+            font-size: 14px; 
+            text-align: center; 
+            color: #a7f3d0;
+        }
         
         /* Estilos de la isla flotante inferior (Solapas) */
         .nav-island {
@@ -21,13 +101,14 @@
             bottom: 15px;
             left: 50%;
             transform: translateX(-50%);
-            background: #1e293b;
-            padding: 8px 15px;
+            background: #0f172a;
+            padding: 8px 12px;
             border-radius: 30px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.5);
             display: flex;
             gap: 10px;
             z-index: 1000;
+            border: 1px solid #334155;
         }
         .nav-btn {
             background: transparent;
@@ -45,6 +126,7 @@
         .nav-btn.active {
             background: #2563eb;
             color: white;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
         }
         .vista-seccion { display: none; }
         .vista-seccion.active { display: block; }
@@ -86,7 +168,7 @@
     <div id="seccion-combustible" class="vista-seccion">
         <form id="combustibleForm">
             <h3>⛽ Carga y Gasto de Combustible</h3>
-            <p style="font-size: 0.85rem; color: #666; text-align: center;">Registrá tu carga para calcular automáticamente el rendimiento en Km/L.</p>
+            <p style="font-size: 0.85rem; color: #94a3b8; text-align: center;">Registrá tu carga para calcular automáticamente el rendimiento en Km/L.</p>
 
             <label for="chofer_combustible">Nombre del Chofer:</label>
             <input type="text" id="chofer_combustible" required placeholder="Ej: Gustavo Mercado">
@@ -103,7 +185,7 @@
             <label for="odometroActual">Kilometraje Actual del Tablero:</label>
             <input type="number" id="odometroActual" required placeholder="Ej: 12450">
 
-            <button type="submit" style="background: #2563eb;">Registrar Carga de Combustible</button>
+            <button type="submit">Registrar Carga de Combustible</button>
         </form>
     </div>
 
@@ -263,18 +345,4 @@
                 await fetch('/api/ubicacion', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chofer_id, vehiculo, latitud, longitud })
-                });
-                console.log("📍 Ubicación GPS enviada automáticamente al servidor.");
-            } catch (err) {
-                console.error("Error enviando GPS:", err);
-            }
-        }, (error) => {
-            console.warn("No se pudo obtener la ubicación GPS:", error.message);
-            document.getElementById('coords').innerText = "⚠️ Activa el GPS del dispositivo.";
-        }, { enableHighAccuracy: true });
-    }
-</script>
-
-</body>
-</html>
+                    body: JSON.stringify({ chofer_id, vehiculo, latitud, longitud
