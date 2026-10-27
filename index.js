@@ -9,6 +9,7 @@ app.use(express.json());
 // Memoria temporal para el prototipo
 let choferesUbicaciones = [];
 let checkListsEnviados = [];
+let cargasCombustible = [];
 
 // Objeto para llevar el registro de kilometraje por vehículo
 let estadisticasVehiculos = {};
@@ -28,7 +29,7 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
 
 // Ruta de Bienvenida
 app.get('/', (req, res) => {
-    res.json({ mensaje: "¡API de Gestión de Flota con Odómetro funcionando! 🚚" });
+    res.json({ mensaje: "¡API de Gestión de Flota con Odómetro y Combustible funcionando! 🚚⛽" });
 });
 
 // --- 1. MÓDULO DE UBICACIÓN GPS Y DISTANCIA RECORRIDA ---
@@ -133,6 +134,52 @@ app.post('/api/checklist', (req, res) => {
 
 app.get('/api/checklists', (req, res) => {
     res.json(checkListsEnviados);
+});
+
+
+// --- 3. MÓDULO DE CONTROL DE COMBUSTIBLE ---
+app.post('/api/combustible', (req, res) => {
+    const { chofer, dominio, litros, costoTotal, odometroActual } = req.body;
+
+    if (!chofer || !dominio || !litros || !odometroActual) {
+        return res.status(400).json({ error: "Faltan datos obligatorios para registrar la carga" });
+    }
+
+    // Buscamos cargas previas de este vehículo para calcular el rendimiento
+    const cargasPrevias = cargasCombustible.filter(c => c.dominio === dominio);
+    let rendimientoKmLitros = 0;
+
+    if (cargasPrevias.length > 0) {
+        const ultimaCarga = cargasPrevias[cargasPrevias.length - 1];
+        const distanciaRecorrida = Number(odometroActual) - Number(ultimaCarga.odometroActual);
+        if (distanciaRecorrida > 0 && Number(litros) > 0) {
+            rendimientoKmLitros = Number((distanciaRecorrida / Number(litros)).toFixed(2));
+        }
+    }
+
+    const nuevaCarga = {
+        id: cargasCombustible.length + 1,
+        fecha: new Date(),
+        chofer,
+        dominio,
+        litros: Number(litros),
+        costoTotal: Number(costoTotal || 0),
+        odometroActual: Number(odometroActual),
+        rendimientoKmLitros
+    };
+
+    cargasCombustible.push(nuevaCarga);
+
+    console.log(`⛽ Carga registrada [${dominio}] por ${chofer}: ${litros}L | Rendimiento: ${rendimientoKmLitros} Km/L`);
+    res.status(201).json({
+        exito: true,
+        mensaje: "Carga de combustible registrada exitosamente",
+        rendimientoKmLitros
+    });
+});
+
+app.get('/api/combustible', (req, res) => {
+    res.json(cargasCombustible);
 });
 
 // Levantar el servidor (compatible con puertos locales y de la nube como Render)
