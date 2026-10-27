@@ -1,7 +1,7 @@
 const express = require('express');
 const app = express();
 app.use(express.static('.'));
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Middleware para entender JSON
 app.use(express.json());
@@ -11,7 +11,6 @@ let choferesUbicaciones = [];
 let checkListsEnviados = [];
 
 // Objeto para llevar el registro de kilometraje por vehículo
-// Estructura: { "Dominio": { distanciaKm: 0, ultimaLat: null, ultimaLon: null } }
 let estadisticasVehiculos = {};
 
 // Función matemática de Haversine para calcular distancia en km entre dos coordenadas GPS
@@ -45,6 +44,7 @@ app.post('/api/ubicacion', (req, res) => {
     // Si el vehículo no tiene registro previo, lo inicializamos
     if (!estadisticasVehiculos[vehiculoKey]) {
         estadisticasVehiculos[vehiculoKey] = {
+            chofer: chofer_id,
             distanciaKm: 0,
             ultimaLat: null,
             ultimaLon: null
@@ -52,13 +52,14 @@ app.post('/api/ubicacion', (req, res) => {
     }
 
     const vehStats = estadisticasVehiculos[vehiculoKey];
+    vehStats.chofer = chofer_id; // Actualizamos el chofer actual
 
     // Si hay una ubicación anterior registrada, calculamos el tramo recorrido
     if (vehStats.ultimaLat !== null && vehStats.ultimaLon !== null) {
         const distanciaTramo = calcularDistancia(vehStats.ultimaLat, vehStats.ultimaLon, latitud, longitud);
         
-        // Filtro de seguridad: descartar saltos erróneos de GPS mayores a 10 km en un solo intervalo de 30s
-        if (distanciaTramo < 10) {
+        // Filtro de seguridad: descartar saltos erróneos de GPS mayores a 10 km o micro-saltos menores a 1 metro
+        if (distanciaTramo < 10 && distanciaTramo > 0.001) {
             vehStats.distanciaKm += distanciaTramo;
         }
     }
@@ -67,33 +68,42 @@ app.post('/api/ubicacion', (req, res) => {
     vehStats.ultimaLat = latitud;
     vehStats.ultimaLon = longitud;
 
+    const distanciaTotalRedondeada = Number(vehStats.distanciaKm.toFixed(2));
+
     const nuevaUbicacion = {
         chofer_id,
         vehiculo: vehiculoKey,
         latitud,
         longitud,
-        distanciaTotalKm: Number(vehStats.distanciaKm.toFixed(2)),
+        distanciaTotalKm: distanciaTotalRedondeada,
         fecha_hora: new Date()
     };
 
     choferesUbicaciones.push(nuevaUbicacion);
     
-    console.log(`📍 GPS de ${chofer_id} [${vehiculoKey}] | Distancia acumulada: ${vehStats.distanciaKm.toFixed(2)} km`);
+    console.log(`📍 GPS de ${chofer_id} [${vehiculoKey}] | Distancia acumulada: ${distanciaTotalRedondeada} km`);
     res.status(201).json({ 
         exito: true, 
         mensaje: "Ubicación y distancia registradas", 
-        distanciaTotalKm: Number(vehStats.distanciaKm.toFixed(2)) 
+        distanciaTotalKm: distanciaTotalRedondeada 
     });
 });
 
-// El Admin consulta las ubicaciones actuales y kilometrajes
+// El Admin consulta las ubicaciones actuales
 app.get('/api/ubicaciones', (req, res) => {
     res.json(choferesUbicaciones);
 });
 
-// Endpoint para consultar estadísticas de kilometraje por vehículo
+// Endpoint consolidado para consultar estadísticas de kilometraje por vehículo en formato array
 app.get('/api/estadisticas', (req, res) => {
-    res.json(estadisticasVehiculos);
+    const listaEstadisticas = Object.keys(estadisticasVehiculos).map(vehiculo => ({
+        vehiculo,
+        chofer: estadisticasVehiculos[vehiculo].chofer,
+        distanciaTotalKm: Number(estadisticasVehiculos[vehiculo].distanciaKm.toFixed(2)),
+        ultimaLat: estadisticasVehiculos[vehiculo].ultimaLat,
+        ultimaLon: estadisticasVehiculos[vehiculo].ultimaLon
+    }));
+    res.json(listaEstadisticas);
 });
 
 
@@ -125,7 +135,7 @@ app.get('/api/checklists', (req, res) => {
     res.json(checkListsEnviados);
 });
 
-// Levantar el servidor
+// Levantar el servidor (compatible con puertos locales y de la nube como Render)
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en el puerto ${PORT}`);
 });
