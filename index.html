@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>App Chofer - Gestión de Flota</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
+        body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; padding-bottom: 90px; }
         .container { max-width: 500px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: auto; }
         h2 { color: #333; text-align: center; }
         label { font-weight: bold; display: block; margin-top: 15px; }
@@ -14,43 +14,124 @@
         button { background: #28a745; color: white; border: none; padding: 12px; width: 100%; font-size: 16px; border-radius: 4px; cursor: pointer; margin-top: 20px; }
         button:hover { background: #218838; }
         #gps-status { margin-top: 15px; padding: 10px; background: #e2f0d9; border-radius: 4px; font-size: 14px; text-align: center; }
+        
+        /* Estilos de la isla flotante inferior (Solapas) */
+        .nav-island {
+            position: fixed;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            padding: 8px 15px;
+            border-radius: 30px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+        .nav-btn {
+            background: transparent;
+            color: #94a3b8;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 0;
+            width: auto;
+            transition: all 0.2s ease;
+        }
+        .nav-btn.active {
+            background: #2563eb;
+            color: white;
+        }
+        .vista-seccion { display: none; }
+        .vista-seccion.active { display: block; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>🚚 Panel del Chofer</h2>
-    
-    <form id="checklistForm">
-        <label for="chofer">Nombre del Chofer:</label>
-        <input type="text" id="chofer" required placeholder="Ej: Gustavo Mercado">
 
-        <label for="dominio">Dominio / Patente:</label>
-        <input type="text" id="dominio" required placeholder="Ej: AF 189 LD">
+    <!-- SECCIÓN 1: CHECK-LIST -->
+    <div id="seccion-checklist" class="vista-seccion active">
+        <form id="checklistForm">
+            <label for="chofer">Nombre del Chofer:</label>
+            <input type="text" id="chofer" required placeholder="Ej: Gustavo Mercado">
 
-        <label for="tipo_vehiculo">Tipo de Vehículo:</label>
-        <select id="tipo_vehiculo">
-            <option value="Vehiculo (Auto o Camioneta)">Vehículo (Auto o Camioneta)</option>
-            <option value="Camión">Camión</option>
-        </select>
+            <label for="dominio">Dominio / Patente:</label>
+            <input type="text" id="dominio" required placeholder="Ej: AF 189 LD">
 
-        <h3>📋 Check-list Diario de Seguridad</h3>
-        <div id="checklist-container">
-            <!-- Se generará dinámicamente -->
-        </div>
+            <label for="tipo_vehiculo">Tipo de Vehículo:</label>
+            <select id="tipo_vehiculo">
+                <option value="Vehiculo (Auto o Camioneta)">Vehículo (Auto o Camioneta)</option>
+                <option value="Camión">Camión</option>
+            </select>
 
-        <label for="observaciones">Observaciones generales:</label>
-        <textarea id="observaciones" rows="3" placeholder="Detalles o novedades..."></textarea>
+            <h3>📋 Check-list Diario de Seguridad</h3>
+            <div id="checklist-container">
+                <!-- Se generará dinámicamente -->
+            </div>
 
-        <button type="submit">Enviar Check-list y Activar GPS</button>
-    </form>
+            <label for="observaciones">Observaciones generales:</label>
+            <textarea id="observaciones" rows="3" placeholder="Detalles o novedades..."></textarea>
+
+            <button type="submit">Enviar Check-list y Activar GPS</button>
+        </form>
+    </div>
+
+    <!-- SECCIÓN 2: CARGA DE COMBUSTIBLE -->
+    <div id="seccion-combustible" class="vista-seccion">
+        <form id="combustibleForm">
+            <h3>⛽ Carga y Gasto de Combustible</h3>
+            <p style="font-size: 0.85rem; color: #666; text-align: center;">Registrá tu carga para calcular automáticamente el rendimiento en Km/L.</p>
+
+            <label for="chofer_combustible">Nombre del Chofer:</label>
+            <input type="text" id="chofer_combustible" required placeholder="Ej: Gustavo Mercado">
+
+            <label for="dominio_combustible">Dominio / Patente:</label>
+            <input type="text" id="dominio_combustible" required placeholder="Ej: AF 189 LD">
+
+            <label for="litros">Litros Cargados:</label>
+            <input type="number" step="0.01" id="litros" required placeholder="Ej: 45.5">
+
+            <label for="costoTotal">Costo Total ($):</label>
+            <input type="number" step="0.01" id="costoTotal" required placeholder="Ej: 35000">
+
+            <label for="odometroActual">Kilometraje Actual del Tablero:</label>
+            <input type="number" id="odometroActual" required placeholder="Ej: 12450">
+
+            <button type="submit" style="background: #2563eb;">Registrar Carga de Combustible</button>
+        </form>
+    </div>
 
     <div id="gps-status" style="display:none;">
         📍 <b>GPS Activo:</b> Enviando ubicación en segundo plano... <span id="coords">Esperando señal...</span>
     </div>
 </div>
 
+<!-- ISLA INTERACTIVA INFERIOR (SOLAPAS) -->
+<div class="nav-island">
+    <button class="nav-btn active" onclick="cambiarVista('checklist', this)">📋 Check-list</button>
+    <button class="nav-btn" onclick="cambiarVista('combustible', this)">⛽ Combustible</button>
+</div>
+
 <script>
+    // Función para alternar entre solapas de la isla interactiva
+    function cambiarVista(vista, btn) {
+        document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+
+        if (vista === 'checklist') {
+            document.getElementById('seccion-checklist').classList.add('active');
+        } else if (vista === 'combustible') {
+            document.getElementById('seccion-combustible').classList.add('active');
+        }
+        btn.classList.add('active');
+    }
+
     // Ítems basados en tu planilla de Excel original
     const itemsChecklist = [
         "Documentación Completa (Licencia, Cédula, Seguro, ITV, etc.)",
@@ -83,7 +164,7 @@
 
     let intervaloGPS = null;
 
-    // Enviar el formulario al Servidor Backend
+    // Enviar el Check-list al Servidor Backend
     document.getElementById('checklistForm').addEventListener('submit', async (e) => {
         e.preventDefault();
 
@@ -92,7 +173,6 @@
         const tipo_vehiculo = document.getElementById('tipo_vehiculo').value;
         const observaciones = document.getElementById('observaciones').value;
 
-        // Recopilar respuestas del checklist
         const respuestas = {};
         itemsChecklist.forEach((item, index) => {
             const selectVal = document.querySelector(`[name="item_${index}"]`).value;
@@ -112,14 +192,47 @@
             if (respuesta.ok) {
                 alert("¡Check-list enviado con éxito! GPS activado en segundo plano.");
                 document.getElementById('gps-status').style.display = 'block';
-                
-                // Activar el rastreo continuo cada 30 segundos
                 iniciarEnvioGPS(chofer, dominio);
             } else {
                 alert("Error: " + resultado.error);
             }
         } catch (error) {
             console.error("Error al enviar:", error);
+            alert("No se pudo conectar con el servidor.");
+        }
+    });
+
+    // Enviar Registro de Combustible al Servidor Backend
+    document.getElementById('combustibleForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const chofer = document.getElementById('chofer_combustible').value;
+        const dominio = document.getElementById('dominio_combustible').value;
+        const litros = document.getElementById('litros').value;
+        const costoTotal = document.getElementById('costoTotal').value;
+        const odometroActual = document.getElementById('odometroActual').value;
+
+        const datosCarga = { chofer, dominio, litros, costoTotal, odometroActual };
+
+        try {
+            const respuesta = await fetch('/api/combustible', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(datosCarga)
+            });
+
+            const resultado = await respuesta.json();
+            if (respuesta.ok) {
+                const rendimientoMsg = resultado.rendimientoKmLitros > 0 
+                    ? `\nRendimiento calculado: ${resultado.rendimientoKmLitros} Km/L` 
+                    : `\n(Primer registro base guardado)`;
+                alert("⛽ ¡Carga de combustible registrada con éxito!" + rendimientoMsg);
+                document.getElementById('combustibleForm').reset();
+            } else {
+                alert("Error: " + resultado.error);
+            }
+        } catch (error) {
+            console.error("Error al registrar combustible:", error);
             alert("No se pudo conectar con el servidor.");
         }
     });
@@ -131,10 +244,8 @@
             return;
         }
 
-        // Limpiar intervalo previo por seguridad si ya existiera
         if (intervaloGPS) clearInterval(intervaloGPS);
 
-        // Enviar ubicación inmediatamente y programar repetición cada 30 segundos (30000 ms)
         enviarCoordenadas(chofer, vehiculo);
         intervaloGPS = setInterval(() => {
             enviarCoordenadas(chofer, vehiculo);

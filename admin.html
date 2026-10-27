@@ -56,6 +56,27 @@
     </div>
 </div>
 
+<!-- Módulo de Auditoría de Combustible -->
+<div class="card" style="margin-top: 20px;">
+    <h2>⛽ Auditoría de Cargas de Combustible y Rendimiento</h2>
+    <table id="tabla-combustible">
+        <thead>
+            <tr>
+                <th>Fecha / Hora</th>
+                <th>Chofer</th>
+                <th>Dominio</th>
+                <th>Litros</th>
+                <th>Costo Total ($)</th>
+                <th>Odómetro (Km)</th>
+                <th>Rendimiento Estimado</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Se llena por JavaScript -->
+        </tbody>
+    </table>
+</div>
+
 <!-- Historial de Check-lists -->
 <div class="card" style="margin-top: 20px;">
     <h2>📋 Historial de Check-lists de Seguridad Recibidos</h2>
@@ -128,7 +149,36 @@
                 });
             }
 
-            // 2. Cargar Checklists
+            // 2. Cargar Auditoría de Combustible
+            const resCombustible = await fetch('/api/combustible');
+            const listaCombustible = await resCombustible.json();
+
+            const tablaCombustibleBody = document.querySelector('#tabla-combustible tbody');
+            tablaCombustibleBody.innerHTML = '';
+
+            if (listaCombustible.length === 0) {
+                tablaCombustibleBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No hay registros de combustible aún</td></tr>';
+            } else {
+                listaCombustible.reverse().forEach(c => {
+                    const rendimientoTexto = c.rendimientoKmLitros > 0 
+                        ? `<span style="color: #16a34a; font-weight: bold;">${c.rendimientoKmLitros} Km/L</span>` 
+                        : `<span style="color: #64748b;">Base inicial (Sin cálculo previo)</span>`;
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${new Date(c.fecha).toLocaleString()}</td>
+                        <td>${c.chofer}</td>
+                        <td><b>${c.dominio}</b></td>
+                        <td>${c.litros} L</td>
+                        <td>$${c.costoTotal}</td>
+                        <td>${c.odometroActual} km</td>
+                        <td>${rendimientoTexto}</td>
+                    `;
+                    tablaCombustibleBody.appendChild(tr);
+                });
+            }
+
+            // 3. Cargar Checklists
             const resChecklists = await fetch('/api/checklists');
             const checklists = await resChecklists.json();
 
