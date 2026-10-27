@@ -1,0 +1,11 @@
+{
+  "name": "node-starter",
+  "private": true,
+  "dependencies": {
+    "express": "^4.22.3",
+    "localtunnel": "^2.0.2"
+  },
+  "scripts": {
+    "start": "node index.js"
+  }
+}

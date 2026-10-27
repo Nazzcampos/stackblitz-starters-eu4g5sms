@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Administrador - Gestión de Flota</title>
+    <!-- Librería de Mapas Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { font-family: Arial, sans-serif; background: #eef2f5; margin: 0; padding: 20px; }
+        .header { background: #1e293b; color: white; padding: 15px 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .grid-container { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-top: 20px; }
+        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        h2 { color: #1e293b; margin-top: 0; font-size: 1.2rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+        #map { height: 350px; border-radius: 6px; margin-top: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+        th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; }
+        th { background: #f1f5f9; }
+        button { background: #2563eb; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #1d4ed8; }
+        @media (max-width: 768px) { .grid-container { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>📊 Centro de Control de Flota - PepsiCo</h1>
+    <div>
+        <a href="/index.html" style="color: #93c5fd; text-decoration: none; margin-right: 15px;">📱 Ir a App Chofer</a>
+        <button onclick="cargarDatos()">Actualizar Datos</button>
+    </div>
+</div>
+
+<div class="grid-container">
+    <!-- Mapa de GPS -->
+    <div class="card">
+        <h2>📍 Ubicación de Choferes en Tiempo Real</h2>
+        <div id="map"></div>
+    </div>
+
+    <!-- Estado de Kilometraje / Odómetro de la Flota -->
+    <div class="card">
+        <h2>🛣️ Odómetro de la Flota (Km Recorridos)</h2>
+        <table id="tabla-kilometraje">
+            <thead>
+                <tr>
+                    <th>Vehículo (Dominio)</th>
+                    <th>Chofer</th>
+                    <th>Km Totales</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td colspan="3" style="text-align: center;">Cargando estadísticas...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Historial de Check-lists -->
+<div class="card" style="margin-top: 20px;">
+    <h2>📋 Historial de Check-lists de Seguridad Recibidos</h2>
+    <table id="tabla-checklists">
+        <thead>
+            <tr>
+                <th>Fecha / Hora</th>
+                <th>Chofer</th>
+                <th>Vehículo (Dominio)</th>
+                <th>Tipo</th>
+                <th>Observaciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Se llena por JavaScript -->
+        </tbody>
+    </table>
+</div>
+
+<!-- Script de Leaflet -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // Inicializar el mapa
+    const map = L.map('map').setView([-33.2814, -62.1785], 14);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    let marcadores = {};
+
+    async function cargarDatos() {
+        try {
+            // 1. Cargar Ubicaciones y Kilometraje
+            const resUbicaciones = await fetch('/api/ubicaciones');
+            const ubicaciones = await resUbicaciones.json();
+
+            const tablaKmBody = document.querySelector('#tabla-kilometraje tbody');
+            tablaKmBody.innerHTML = '';
+
+            let vehiculosUnicos = {};
+            ubicaciones.forEach(u => {
+                vehiculosUnicos[u.vehiculo] = u; // Último reporte con el total acumulado
+            });
+
+            const listaVehiculos = Object.values(vehiculosUnicos);
+
+            if (listaVehiculos.length === 0) {
+                tablaKmBody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Sin registros de movimiento aún</td></tr>';
+            } else {
+                listaVehiculos.forEach(v => {
+                    // Actualizar o crear marcador en el mapa con los kilómetros
+                    if (marcadores[v.vehiculo]) {
+                        marcadores[v.vehiculo].setLatLng([v.latitud, v.longitud])
+                            .bindPopup(`<b>${v.vehiculo}</b><br>Chofer: ${v.chofer_id}<br><b>${v.distanciaTotalKm} km</b>`);
+                    } else {
+                        marcadores[v.vehiculo] = L.marker([v.latitud, v.longitud]).addTo(map)
+                            .bindPopup(`<b>${v.vehiculo}</b><br>Chofer: ${v.chofer_id}<br><b>${v.distanciaTotalKm} km</b>`);
+                    }
+
+                    // Agregar fila a la tabla de odómetro
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td><b>${v.vehiculo}</b></td>
+                        <td>${v.chofer_id}</td>
+                        <td><span style="color: #2563eb; font-weight: bold;">${v.distanciaTotalKm} km</span></td>
+                    `;
+                    tablaKmBody.appendChild(tr);
+                });
+            }
+
+            // 2. Cargar Checklists
+            const resChecklists = await fetch('/api/checklists');
+            const checklists = await resChecklists.json();
+
+            const tablaChecklistBody = document.querySelector('#tabla-checklists tbody');
+            tablaChecklistBody.innerHTML = '';
+
+            if (checklists.length === 0) {
+                tablaChecklistBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No hay check-lists registrados</td></tr>';
+            } else {
+                checklists.reverse().forEach(c => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${new Date(c.marca_temporal).toLocaleString()}</td>
+                        <td>${c.chofer}</td>
+                        <td><b>${c.dominio}</b></td>
+                        <td>${c.tipo_vehiculo}</td>
+                        <td>${c.observaciones}</td>
+                    `;
+                    tablaChecklistBody.appendChild(tr);
+                });
+            }
+
+        } catch (error) {
+            console.error("Error al actualizar datos del panel:", error);
+        }
+    }
+
+    // Cargar datos al abrir y actualizar automáticamente cada 10 segundos
+    cargarDatos();
+    setInterval(cargarDatos, 10000);
+</script>
+</body>
+</html>
