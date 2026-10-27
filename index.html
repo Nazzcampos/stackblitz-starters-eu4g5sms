@@ -7,7 +7,7 @@
     <style>
         body { 
             font-family: Arial, sans-serif; 
-            background: #0f172a; /* Fondo general azul oscuro profundo */
+            background: #0f172a; 
             margin: 0; 
             padding: 20px; 
             padding-bottom: 90px; 
@@ -15,7 +15,7 @@
         }
         .container { 
             max-width: 500px; 
-            background: #1e293b; /* Tarjeta principal azul oscuro corporativo */
+            background: #1e293b; 
             padding: 20px; 
             border-radius: 12px; 
             box-shadow: 0 10px 25px rgba(0,0,0,0.3); 
@@ -71,7 +71,7 @@
             font-size: 0.9rem;
         }
         button { 
-            background: #2563eb; /* Azul corporativo PepsiCo / Admin */
+            background: #2563eb; 
             color: white; 
             border: none; 
             padding: 12px; 
@@ -196,8 +196,8 @@
 
 <!-- ISLA INTERACTIVA INFERIOR (SOLAPAS) -->
 <div class="nav-island">
-    <button class="nav-btn active" onclick="cambiarVista('checklist', this)">📋 Check-list</button>
-    <button class="nav-btn" onclick="cambiarVista('combustible', this)">⛽ Combustible</button>
+    <button type="button" class="nav-btn active" onclick="cambiarVista('checklist', this)">📋 Check-list</button>
+    <button type="button" class="nav-btn" onclick="cambiarVista('combustible', this)">⛽ Combustible</button>
 </div>
 
 <script>
@@ -235,7 +235,7 @@
         div.className = 'checklist-item';
         div.innerHTML = `
             <span>${item}</span>
-            <select name="item_${index}" style="width: 100px; margin: 0;">
+            <select name="item_${index}" style="width: 100px; margin: 0; background: #1e293b; color: white;">
                 <option value="OK">OK</option>
                 <option value="Falla">Falla</option>
                 <option value="N/A">N/A</option>
@@ -345,4 +345,18 @@
                 await fetch('/api/ubicacion', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chofer_id, vehiculo, latitud, longitud
+                    body: JSON.stringify({ chofer_id, vehiculo, latitud, longitud })
+                });
+                console.log("📍 Ubicación GPS enviada automáticamente al servidor.");
+            } catch (err) {
+                console.error("Error enviando GPS:", err);
+            }
+        }, (error) => {
+            console.warn("No se pudo obtener la ubicación GPS:", error.message);
+            document.getElementById('coords').innerText = "⚠️ Activa el GPS del dispositivo.";
+        }, { enableHighAccuracy: true });
+    }
+</script>
+
+</body>
+</html>
