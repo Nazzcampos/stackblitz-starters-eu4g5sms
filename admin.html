@@ -9,9 +9,10 @@
     <style>
         body { 
             font-family: Arial, sans-serif; 
-            background: #0f172a; /* Fondo general azul oscuro profundo */
+            background: #0f172a; 
             margin: 0; 
             padding: 20px; 
+            padding-bottom: 90px; /* Espacio para la isla flotante */
             color: #f8fafc;
         }
         .header { 
@@ -30,8 +31,6 @@
             align-items: center;
             gap: 12px;
         }
-        
-        /* Estilos del Logo Animado */
         .logo-container {
             width: 45px;
             height: 45px;
@@ -49,6 +48,10 @@
             100% { transform: scale(1); box-shadow: 0 0 10px rgba(37, 99, 235, 0.4); }
         }
 
+        /* Sistema de Vistas por Pestañas */
+        .vista-seccion { display: none; }
+        .vista-seccion.active { display: block; }
+
         .grid-container { 
             display: grid; 
             grid-template-columns: 2fr 1fr; 
@@ -56,11 +59,12 @@
             margin-top: 20px; 
         }
         .card { 
-            background: #1e293b; /* Tarjeta azul oscuro corporativo */
+            background: #1e293b; 
             padding: 20px; 
             border-radius: 12px; 
             box-shadow: 0 8px 20px rgba(0,0,0,0.3); 
             border: 1px solid #334155;
+            margin-top: 20px;
         }
         h2 { 
             color: #93c5fd; 
@@ -70,7 +74,7 @@
             padding-bottom: 8px; 
         }
         #map { 
-            height: 350px; 
+            height: 450px; 
             border-radius: 6px; 
             margin-top: 10px; 
             border: 1px solid #475569;
@@ -98,13 +102,53 @@
             background: #2563eb; 
             color: white; 
             border: none; 
-            padding: 10px 16px; 
+            padding: 8px 14px; 
             border-radius: 6px; 
             cursor: pointer; 
             font-weight: bold;
             transition: background 0.2s;
         }
         button:hover { background: #1d4ed8; }
+        .btn-danger {
+            background: #dc2626;
+            padding: 5px 10px;
+            font-size: 0.8rem;
+        }
+        .btn-danger:hover { background: #b91c1c; }
+
+        /* Isla Flotante Inferior de Navegación */
+        .nav-island {
+            position: fixed;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #0f172a;
+            padding: 8px 12px;
+            border-radius: 30px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+            border: 1px solid #334155;
+        }
+        .nav-btn {
+            background: transparent;
+            color: #94a3b8;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            width: auto;
+            transition: all 0.2s ease;
+        }
+        .nav-btn.active {
+            background: #2563eb;
+            color: white;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+        }
+
         @media (max-width: 768px) { .grid-container { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -120,82 +164,111 @@
                 <circle cx="18.5" cy="18.5" r="2.5"></circle>
             </svg>
         </div>
-        <h1 style="font-size: 1.4rem; margin: 0;">Centro de Control de Flota - PepsiCo</h1>
+        <h1 style="font-size: 1.3rem; margin: 0;">Centro de Control de Flota - PepsiCo</h1>
     </div>
     <div>
-        <a href="/index.html" style="color: #93c5fd; text-decoration: none; margin-right: 15px; font-weight: bold;">📱 Ir a App Chofer</a>
-        <button onclick="cargarDatos()">Actualizar Datos</button>
+        <a href="/index.html" style="color: #93c5fd; text-decoration: none; margin-right: 15px; font-weight: bold;">📱 App Chofer</a>
+        <button onclick="cargarDatos()">Actualizar</button>
     </div>
 </div>
 
-<div class="grid-container">
-    <!-- Mapa de GPS -->
-    <div class="card">
-        <h2>📍 Ubicación de Choferes en Tiempo Real</h2>
-        <div id="map"></div>
+<!-- ================= PESTAÑA 1: CONTROL DE FLOTA Y GPS ================= -->
+<div id="seccion-gps" class="vista-seccion active">
+    <div class="grid-container">
+        <div class="card" style="margin-top: 0;">
+            <h2>📍 Ubicación de Choferes en Tiempo Real</h2>
+            <div id="map"></div>
+        </div>
+        <div class="card" style="margin-top: 0;">
+            <h2>🛣️ Odómetro de la Flota (Km Recorridos)</h2>
+            <table id="tabla-kilometraje">
+                <thead>
+                    <tr>
+                        <th>Vehículo</th>
+                        <th>Chofer</th>
+                        <th>Km Totales</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td colspan="3" style="text-align: center; color: #94a3b8;">Cargando estadísticas...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
+</div>
 
-    <!-- Estado de Kilometraje / Odómetro de la Flota -->
+<!-- ================= PESTAÑA 2: CHECK-LISTS ================= -->
+<div id="seccion-checklists" class="vista-seccion">
     <div class="card">
-        <h2>🛣️ Odómetro de la Flota (Km Recorridos)</h2>
-        <table id="tabla-kilometraje">
+        <h2>📋 Historial de Check-lists de Seguridad</h2>
+        <table id="tabla-checklists">
             <thead>
                 <tr>
-                    <th>Vehículo (Dominio)</th>
+                    <th>Fecha / Hora</th>
                     <th>Chofer</th>
-                    <th>Km Totales</th>
+                    <th>Vehículo (Dominio)</th>
+                    <th>Tipo</th>
+                    <th>Observaciones</th>
+                    <th>Acción</th>
                 </tr>
             </thead>
             <tbody>
-                <tr><td colspan="3" style="text-align: center; color: #94a3b8;">Cargando estadísticas...</td></tr>
+                <!-- Se llena por JavaScript -->
             </tbody>
         </table>
     </div>
 </div>
 
-<!-- Módulo de Auditoría de Combustible -->
-<div class="card" style="margin-top: 20px;">
-    <h2>⛽ Auditoría de Cargas de Combustible y Rendimiento</h2>
-    <table id="tabla-combustible">
-        <thead>
-            <tr>
-                <th>Fecha / Hora</th>
-                <th>Chofer</th>
-                <th>Dominio</th>
-                <th>Litros</th>
-                <th>Costo Total ($)</th>
-                <th>Odómetro (Km)</th>
-                <th>Rendimiento Estimado</th>
-            </tr>
-        </thead>
-        <tbody>
-            <!-- Se llena por JavaScript -->
-        </tbody>
-    </table>
+<!-- ================= PESTAÑA 3: COMBUSTIBLE ================= -->
+<div id="seccion-combustible" class="vista-seccion">
+    <div class="card">
+        <h2>⛽ Auditoría de Cargas de Combustible y Rendimiento</h2>
+        <table id="tabla-combustible">
+            <thead>
+                <tr>
+                    <th>Fecha / Hora</th>
+                    <th>Chofer</th>
+                    <th>Dominio</th>
+                    <th>Litros</th>
+                    <th>Costo ($)</th>
+                    <th>Odómetro</th>
+                    <th>Rendimiento</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Se llena por JavaScript -->
+            </tbody>
+        </table>
+    </div>
 </div>
 
-<!-- Historial de Check-lists -->
-<div class="card" style="margin-top: 20px;">
-    <h2>📋 Historial de Check-lists de Seguridad Recibidos</h2>
-    <table id="tabla-checklists">
-        <thead>
-            <tr>
-                <th>Fecha / Hora</th>
-                <th>Chofer</th>
-                <th>Vehículo (Dominio)</th>
-                <th>Tipo</th>
-                <th>Observaciones</th>
-            </tr>
-        </thead>
-        <tbody>
-            <!-- Se llena por JavaScript -->
-        </tbody>
-    </table>
+<!-- ISLA FLOTANTE INFERIOR DE NAVEGACIÓN -->
+<div class="nav-island">
+    <button type="button" class="nav-btn active" onclick="cambiarVistaAdmin('gps', this)">🗺️ Control de Flota</button>
+    <button type="button" class="nav-btn" onclick="cambiarVistaAdmin('checklists', this)">📋 Check-lists</button>
+    <button type="button" class="nav-btn" onclick="cambiarVistaAdmin('combustible', this)">⛽ Combustible</button>
 </div>
 
-<!-- Script de Leaflet -->
+<!-- Script de Leaflet y Lógica -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+    // Función para cambiar de pestaña en el panel administrador
+    function cambiarVistaAdmin(vista, btn) {
+        document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+
+        if (vista === 'gps') {
+            document.getElementById('seccion-gps').classList.add('active');
+            setTimeout(() => { map.invalidateSize(); }, 200); // Recalcular mapa al mostrarse
+        } else if (vista === 'checklists') {
+            document.getElementById('seccion-checklists').classList.add('active');
+        } else if (vista === 'combustible') {
+            document.getElementById('seccion-combustible').classList.add('active');
+        }
+        btn.classList.add('active');
+    }
+
     // Inicializar el mapa
     const map = L.map('map').setView([-33.2814, -62.1785], 14);
 
@@ -217,7 +290,7 @@
 
             let vehiculosUnicos = {};
             ubicaciones.forEach(u => {
-                vehiculosUnicos[u.vehiculo] = u; // Último reporte con el total acumulado
+                vehiculosUnicos[u.vehiculo] = u;
             });
 
             const listaVehiculos = Object.values(vehiculosUnicos);
@@ -226,7 +299,6 @@
                 tablaKmBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #94a3b8;">Sin registros de movimiento aún</td></tr>';
             } else {
                 listaVehiculos.forEach(v => {
-                    // Actualizar o crear marcador en el mapa con los kilómetros
                     if (marcadores[v.vehiculo]) {
                         marcadores[v.vehiculo].setLatLng([v.latitud, v.longitud])
                             .bindPopup(`<b>${v.vehiculo}</b><br>Chofer: ${v.chofer_id}<br><b>${v.distanciaTotalKm} km</b>`);
@@ -235,7 +307,6 @@
                             .bindPopup(`<b>${v.vehiculo}</b><br>Chofer: ${v.chofer_id}<br><b>${v.distanciaTotalKm} km</b>`);
                     }
 
-                    // Agregar fila a la tabla de odómetro
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td><b>${v.vehiculo}</b></td>
@@ -254,12 +325,12 @@
             tablaCombustibleBody.innerHTML = '';
 
             if (listaCombustible.length === 0) {
-                tablaCombustibleBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #94a3b8;">No hay registros de combustible aún</td></tr>';
+                tablaCombustibleBody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #94a3b8;">No hay registros de combustible aún</td></tr>';
             } else {
                 listaCombustible.reverse().forEach(c => {
                     const rendimientoTexto = c.rendimientoKmLitros > 0 
                         ? `<span style="color: #4ade80; font-weight: bold;">${c.rendimientoKmLitros} Km/L</span>` 
-                        : `<span style="color: #94a3b8;">Base inicial (Sin cálculo previo)</span>`;
+                        : `<span style="color: #94a3b8;">Base inicial</span>`;
 
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
@@ -270,6 +341,7 @@
                         <td>$${c.costoTotal}</td>
                         <td>${c.odometroActual} km</td>
                         <td>${rendimientoTexto}</td>
+                        <td><button class="btn-danger" onclick="eliminarCombustible(${c.id})">🗑️ Borrar</button></td>
                     `;
                     tablaCombustibleBody.appendChild(tr);
                 });
@@ -283,7 +355,7 @@
             tablaChecklistBody.innerHTML = '';
 
             if (checklists.length === 0) {
-                tablaChecklistBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #94a3b8;">No hay check-lists registrados</td></tr>';
+                tablaChecklistBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #94a3b8;">No hay check-lists registrados</td></tr>';
             } else {
                 checklists.reverse().forEach(c => {
                     const tr = document.createElement('tr');
@@ -292,7 +364,8 @@
                         <td>${c.chofer}</td>
                         <td><b>${c.dominio}</b></td>
                         <td>${c.tipo_vehiculo}</td>
-                        <td>${c.observaciones}</td>
+                        <td>${c.observaciones || 'Sin novedades'}</td>
+                        <td><button class="btn-danger" onclick="eliminarChecklist(${c.id})">🗑️ Borrar</button></td>
                     `;
                     tablaChecklistBody.appendChild(tr);
                 });
@@ -300,6 +373,35 @@
 
         } catch (error) {
             console.error("Error al actualizar datos del panel:", error);
+        }
+    }
+
+    // Funciones para eliminar registros mediante el botón interactivo
+    async function eliminarChecklist(id) {
+        if (!confirm("¿Estás seguro de eliminar este check-list?")) return;
+        try {
+            const res = await fetch(`/api/checklist/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                cargarDatos();
+            } else {
+                alert("No se pudo eliminar el registro.");
+            }
+        } catch (err) {
+            alert("Error de conexión al eliminar.");
+        }
+    }
+
+    async function eliminarCombustible(id) {
+        if (!confirm("¿Estás seguro de eliminar este registro de combustible?")) return;
+        try {
+            const res = await fetch(`/api/combustible/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                cargarDatos();
+            } else {
+                alert("No se pudo eliminar el registro.");
+            }
+        } catch (err) {
+            alert("Error de conexión al eliminar.");
         }
     }
 
