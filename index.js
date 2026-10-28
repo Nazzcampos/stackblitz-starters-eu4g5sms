@@ -12,20 +12,51 @@ const pool = new Pool({
     user: 'gcw-bido',
     host: 'bi.data.gescom.online',
     database: 'gcwbi',
-    password: 'f1dqTqpo9Iwf4wTJ8ziUnDubh', // Contraseña corregida con comillas
+    password: 'f1dqTqpo9Iwf4wTJ8ziUnDubh',
     port: 5432,
     ssl: {
         rejectUnauthorized: false // Requerido para aceptar el certificado SSL del servidor remoto
     }
 });
 
+// --- AUTODIAGNÓSTICO INICIAL AL ARRANCAR EL SERVIDOR ---
+async function probarConexionYListarTablas() {
+    try {
+        console.log("🔍 Intentando conectar al servidor de Gescom (bi.data.gescom.online)...");
+        const client = await pool.connect();
+        console.log("✅ ¡Conexión exitosa a la base de datos gcwbi!");
+
+        const queryTablas = `
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+            ORDER BY table_name;
+        `;
+        const resultado = await client.query(queryTablas);
+        client.release();
+
+        console.log("📋 --- TABLAS DISPONIBLES EN GESCOM (BIDO SRL) ---");
+        if (resultado.rows.length === 0) {
+            console.log("⚠️ La conexión fue exitosa, pero el esquema 'public' no devolvió tablas.");
+        } else {
+            resultado.rows.forEach((row, index) => {
+                console.log(`   ${index + 1}. ${row.table_name}`);
+            });
+        }
+        console.log("--------------------------------------------------");
+    } catch (err) {
+        console.error("❌ Error al conectar o consultar Gescom:", err.message);
+    }
+}
+
+// Ejecutar el diagnóstico automáticamente al iniciar
+probarConexionYListarTablas();
+
 // Memoria temporal para el prototipo
 let choferesUbicaciones = [];
 let checkListsEnviados = [];
 let cargasCombustible = [];
-
-// Objeto para llevar le registro de kilometraje por vehículo
-let estadisticasVehiculos = {};
+let estadisticasVehiculos = {}; // Declarado una sola vez correctamente
 
 // Función matemática de Haversine para calcular distancia en km entre dos coordenadas GPS
 function calcularDistancia(lat1, lon1, lat2, lon2) {
@@ -45,12 +76,30 @@ app.get('/', (req, res) => {
     res.json({ mensaje: "¡API de Gestión de Flota PepsiCo conectada a Gescom funcionando! 🚚⛽" });
 });
 
+// --- RUTA DE DIAGNÓSTICO: Ver tablas de Gescom via Web ---
+app.get('/api/esquema', async (req, res) => {
+    try {
+        const queryTablas = `
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+        `;
+        const resultado = await pool.query(queryTablas);
+        res.json({
+            mensaje: "¡Conexión a Gescom exitosa! Estas son las tablas disponibles en BIDO SRL:",
+            tablas: resultado.rows
+        });
+    } catch (err) {
+        console.error("Error al consultar el esquema:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- 1. MÓDULO DE CLIENTES Y HOJA DE RUTA REAL (GESCOM - POSTGRESQL) ---
 app.get('/api/clientes/:dia', async (req, res) => {
     const diaSeleccionado = req.params.dia.toUpperCase(); // 'LU', 'MA', 'MI', 'JU', 'VI'
 
     try {
-        // Consulta SQL directa a la base de datos PostgreSQL de Gescom
         const query = `
             SELECT 
                 cliente_id AS id, 
@@ -66,8 +115,17 @@ app.get('/api/clientes/:dia', async (req, res) => {
         res.json(resultado.rows);
 
     } catch (err) {
-        console.error("Error al consultar la base de datos de Gescom:", err);
-        res.status(500).json({ error: "No se pudo conectar con la tabla de rutas de Gescom. Verifique nombres de tablas/columnas." });
+        console.warn("⚠️ La tabla 'clientes_ruta' no existe o falló. Probando esquema alternativo...");
+        
+        try {
+            const queryB = `SELECT * FROM clientes LIMIT 10`;
+            const resultadoB = await pool.query(queryB);
+            console.log("📋 Columnas encontradas en la tabla clientes:", Object.keys(resultadoB.rows[0] || {}));
+            res.json(resultadoB.rows);
+        } catch (errB) {
+            console.error("❌ Error total al consultar Gescom:", errB.message);
+            res.status(500).json({ error: errB.message });
+        }
     }
 });
 
