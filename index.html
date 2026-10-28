@@ -82,19 +82,8 @@
         #vista-login { text-align: center; padding: 20px 0; }
         .login-box { background: #0f172a; padding: 20px; border-radius: 8px; border: 1px solid #334155; margin-top: 15px; }
 
-        /* Selector de Días (Círculos LU, MA, MI, JU, VI) */
-        .dias-container { display: flex; justify-content: space-around; margin-bottom: 15px; gap: 5px; }
-        .dia-circle {
-            width: 42px; height: 42px; border-radius: 50%; background: #0f172a; border: 2px solid #475569;
-            color: #94a3b8; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: all 0.2s ease;
-        }
-        .dia-circle.active {
-            background: #2563eb; border-color: #60a5fa; color: white; box-shadow: 0 0 10px rgba(37, 99, 235, 0.6);
-        }
-
         #map-chofer { height: 300px; border-radius: 8px; margin-top: 15px; border: 1px solid #475569; }
-        .lista-clientes { margin-top: 15px; max-height: 180px; overflow-y: auto; }
+        .lista-clientes { margin-top: 15px; max-height: 220px; overflow-y: auto; }
         .cliente-card {
             background: #0f172a; padding: 10px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #334155; font-size: 0.85rem;
         }
@@ -135,14 +124,16 @@
         <h2>Panel del Chofer</h2>
     </div>
 
-    <!-- PANTALLA 0: LOGIN SIMULADO -->
+    <!-- PANTALLA 0: LOGIN CON MENÚ DESPLEGABLE DE CHOFERES -->
     <div id="vista-login" class="vista-seccion active">
-        <h3>🔐 Inicio de Sesión de Chofer</h3>
-        <p style="font-size: 0.85rem; color: #94a3b8;">Ingresá tu nombre para iniciar tu turno de reparto:</p>
+        <h3>🔐 Selección de Chofer</h3>
+        <p style="font-size: 0.85rem; color: #94a3b8;">Seleccioná tu nombre para iniciar tu turno y ver tus entregas:</p>
         <div class="login-box">
             <form id="loginForm">
-                <label for="inputUsuario">Nombre o Legajo:</label>
-                <input type="text" id="inputUsuario" required placeholder="Ej: Nazareno">
+                <label for="selectChoferLogin">Chofer:</label>
+                <select id="selectChoferLogin" required style="background: #1e293b; color: white;">
+                    <option value="">-- Cargando choferes de Gescom... --</option>
+                </select>
                 <button type="submit" style="margin-top: 15px;">Iniciar Turno</button>
             </form>
         </div>
@@ -202,26 +193,17 @@
         </form>
     </div>
 
-    <!-- SECCIÓN 3: RUTA DE HOY (GESCOM) -->
+    <!-- SECCIÓN 3: RUTA DE HOY (VENTAS Y REPARTOS DEL CHOFER) -->
     <div id="seccion-ruta" class="vista-seccion">
-        <h3>📍 Hoja de Ruta de Clientes (Gescom)</h3>
-        <p style="font-size: 0.85rem; color: #94a3b8; text-align: center;">Seleccioná el día para ver los puntos de entrega:</p>
-
-        <!-- Círculos Selectores de Días -->
-        <div class="dias-container">
-            <div class="dia-circle active" onclick="seleccionarDia('LU', this)">LU</div>
-            <div class="dia-circle" onclick="seleccionarDia('MA', this)">MA</div>
-            <div class="dia-circle" onclick="seleccionarDia('MI', this)">MI</div>
-            <div class="dia-circle" onclick="seleccionarDia('JU', this)">JU</div>
-            <div class="dia-circle" onclick="seleccionarDia('VI', this)">VI</div>
-        </div>
+        <h3>📍 Hoja de Ruta de Hoy (Reparto Real)</h3>
+        <p style="font-size: 0.85rem; color: #94a3b8; text-align: center;">Tus entregas y clientes asignados para la jornada:</p>
 
         <!-- Mapa interactivo del chofer -->
         <div id="map-chofer"></div>
 
-        <!-- Lista de Clientes del Día -->
+        <!-- Lista de Clientes del Reparto -->
         <div class="lista-clientes" id="contenedor-clientes">
-            <!-- Se carga dinámicamente desde Gescom -->
+            <p style="text-align: center; color: #94a3b8;">Cargando tu ruta del día...</p>
         </div>
     </div>
 </div>
@@ -238,11 +220,40 @@
 <script>
     let choferActual = "";
 
-    // Manejo del Login Simulado
+    // Cargar la lista de choferes en el select al abrir la app
+    async function cargarChoferesParaLogin() {
+        try {
+            const res = await fetch('/api/choferes');
+            const choferes = await res.json();
+            const select = document.getElementById('selectChoferLogin');
+            select.innerHTML = '<option value="">-- Seleccioná tu nombre --</option>';
+
+            choferes.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.nombre;
+                opt.textContent = c.nombre;
+                select.appendChild(opt);
+            });
+        } catch (err) {
+            console.error("Error al obtener choferes:", err);
+            document.getElementById('selectChoferLogin').innerHTML = '<option value="">Error al cargar choferes</option>';
+        }
+    }
+
+    // Ejecutar al iniciar
+    window.onload = () => {
+        cargarChoferesParaLogin();
+    };
+
+    // Manejo del Login con el Chofer Seleccionado
     document.getElementById('loginForm').addEventListener('submit', (e) => {
         e.preventDefault();
-        const usuario = document.getElementById('inputUsuario').value.trim();
-        if (!usuario) return;
+        const select = document.getElementById('selectChoferLogin');
+        const usuario = select.value;
+        if (!usuario) {
+            alert("Por favor seleccioná un chofer.");
+            return;
+        }
 
         choferActual = usuario;
         document.getElementById('lblChofer').innerText = choferActual;
@@ -258,7 +269,7 @@
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
         document.getElementById('vista-login').classList.add('active');
         document.getElementById('navIsland').style.display = 'none';
-        document.getElementById('inputUsuario').value = '';
+        document.getElementById('selectChoferLogin').value = '';
     }
 
     function cambiarVista(vista, btn) {
@@ -274,6 +285,7 @@
         } else if (vista === 'ruta') {
             document.getElementById('seccion-ruta').classList.add('active');
             setTimeout(() => { mapChofer.invalidateSize(); }, 200);
+            cargarRutaChoferReal(choferActual);
         }
         btn.classList.add('active');
     }
@@ -314,19 +326,11 @@
 
     let marcadoresClientes = [];
     let marcadorChoferVivo = null;
-    let diaActual = 'LU';
 
-    function seleccionarDia(dia, elemento) {
-        document.querySelectorAll('.dia-circle').forEach(c => c.classList.remove('active'));
-        elemento.classList.add('active');
-        diaActual = dia;
-        cargarClientesDesdeGescom(dia);
-    }
-
-    // Consulta al servidor los clientes del día seleccionados
-    async function cargarClientesDesdeGescom(dia) {
+    // Cargar la hoja de ruta real del chofer logueado (Ventas/Reparto de hoy)
+    async function cargarRutaChoferReal(nombreChofer) {
         try {
-            const res = await fetch(`/api/clientes/${dia}`);
+            const res = await fetch(`/api/ventas-chofer/${encodeURIComponent(nombreChofer)}`);
             const clientes = await res.json();
 
             marcadoresClientes.forEach(m => mapChofer.removeLayer(m));
@@ -336,27 +340,35 @@
             listaContainer.innerHTML = '';
 
             if (!Array.isArray(clientes) || clientes.length === 0) {
-                listaContainer.innerHTML = '<p style="text-align: center; color: #94a3b8;">No hay clientes asignados para este día o conectando a Gescom...</p>';
+                listaContainer.innerHTML = '<p style="text-align: center; color: #94a3b8;">⚠️ No hay repartos ni ventas cargadas para vos en el día de hoy.</p>';
                 return;
             }
 
             clientes.forEach(c => {
-                const marker = L.marker([c.lat, c.lon], {
-                    icon: L.divIcon({
-                        className: 'custom-pin',
-                        html: '<div style="background:#10b981; width:14px; height:14px; border-radius:50%; border:2px solid white;"></div>'
-                    })
-                }).addTo(mapChofer).bindPopup(`<b>📦 ${c.nombre}</b><br>${c.direccion}`);
-                
-                marcadoresClientes.push(marker);
+                if (c.lat && c.lon) {
+                    const marker = L.marker([c.lat, c.lon], {
+                        icon: L.divIcon({
+                            className: 'custom-pin',
+                            html: '<div style="background:#10b981; width:14px; height:14px; border-radius:50%; border:2px solid white;"></div>'
+                        })
+                    }).addTo(mapChofer).bindPopup(`<b>📦 #${c.orden || '-'} ${c.nombre}</b><br>${c.direccion || 'Sin dirección'}`);
+                    
+                    marcadoresClientes.push(marker);
+                }
 
                 const card = document.createElement('div');
                 card.className = 'cliente-card';
-                card.innerHTML = `<b>📦 ${c.nombre}</b><br><span style="color: #94a3b8;">${c.direccion}</span>`;
+                card.innerHTML = `<b>📦 Orden #${c.orden || 'S/N'} - ${c.nombre}</b><br><span style="color: #94a3b8;">${c.direccion || ''} (${c.localidad || ''})</span><br><small style="color: #38bdf8;">Reparto: ${c.reparto_codigo || 'General'}</small>`;
                 listaContainer.appendChild(card);
             });
+
+            // Centrar mapa en el primer cliente si existe
+            if (clientes.length > 0 && clientes[0].lat && clientes[0].lon) {
+                mapChofer.setView([clientes[0].lat, clientes[0].lon], 13);
+            }
         } catch (err) {
-            console.error("Error al cargar clientes de Gescom:", err);
+            console.error("Error al cargar la ruta real del chofer:", err);
+            document.getElementById('contenedor-clientes').innerHTML = '<p style="text-align: center; color: #ef4444;">Error al conectar con Gescom.</p>';
         }
     }
 
@@ -391,7 +403,6 @@
                 document.getElementById('gps-status').style.display = 'block';
                 solicitarWakeLock();
                 iniciarEnvioGPS(choferActual, dominio);
-                cargarClientesDesdeGescom('LU');
             }
         } catch (error) {
             alert("No se pudo conectar con el servidor.");

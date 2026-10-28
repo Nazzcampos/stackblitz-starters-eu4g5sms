@@ -15,7 +15,7 @@ const pool = new Pool({
     password: 'f1dqTqpo9Iwf4wTJ8ziUnDubh',
     port: 5432,
     ssl: {
-        rejectUnauthorized: false // Requerido para aceptar el certificado SSL del servidor remoto
+        rejectUnauthorized: false
     }
 });
 
@@ -49,18 +49,15 @@ async function probarConexionYListarTablas() {
     }
 }
 
-// Ejecutar el diagnóstico automáticamente al iniciar
 probarConexionYListarTablas();
 
-// Memoria temporal para el prototipo
 let choferesUbicaciones = [];
 let checkListsEnviados = [];
 let cargasCombustible = [];
-let estadisticasVehiculos = {}; // Declarado una sola vez correctamente
+let estadisticasVehiculos = {};
 
-// Función matemática de Haversine para calcular distancia en km entre dos coordenadas GPS
 function calcularDistancia(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Radio de la Tierra en kilómetros
+    const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = 
@@ -68,15 +65,13 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
         Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Retorna la distancia en kilómetros
+    return R * c;
 }
 
-// Ruta de Bienvenida
 app.get('/', (req, res) => {
     res.json({ mensaje: "¡API de Gestión de Flota PepsiCo conectada a Gescom funcionando! 🚚⛽" });
 });
 
-// --- RUTA DE DIAGNÓSTICO: Ver tablas de Gescom via Web ---
 app.get('/api/esquema', async (req, res) => {
     try {
         const queryTablas = `
@@ -95,11 +90,60 @@ app.get('/api/esquema', async (req, res) => {
     }
 });
 
-// --- 1. MÓDULO DE CLIENTES Y HOJA DE RUTA REAL (GESCOM - POSTGRESQL) ---
+// --- MÓDULO DE CHOFERES ---
+app.get('/api/choferes', async (req, res) => {
+    try {
+        const query = `
+            SELECT DISTINCT empleado_chofer_nombre AS nombre
+            FROM venta
+            WHERE empleado_chofer_nombre IS NOT NULL
+              AND TRIM(empleado_chofer_nombre) != ''
+            ORDER BY empleado_chofer_nombre ASC;
+        `;
+        const resultado = await pool.query(query);
+        res.json(resultado.rows);
+    } catch (err) {
+        console.error("❌ Error al obtener la lista de choferes:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- MÓDULO DE HOJA DE RUTA REAL DEL DÍA POR CHOFER ---
+app.get('/api/ventas-chofer/:nombre', async (req, res) => {
+    const choferNombre = decodeURIComponent(req.params.nombre);
+
+    try {
+        const query = `
+            SELECT DISTINCT
+                v.cliente_id AS id,
+                v.razon_social AS nombre,
+                c.direccion,
+                c.localidad,
+                rh.latitud AS lat,
+                rh.longitud AS lon,
+                v.orden_planeado AS orden,
+                v.reparto_codigo,
+                v.empleado_chofer_nombre AS chofer
+            FROM venta v
+            JOIN cliente_hist c ON v.cliente_id = c.id AND c.actual = true
+            LEFT JOIN cliente_ruta_hist rh ON v.cliente_id = rh.cliente_id AND rh.actual = true
+            WHERE v.empleado_chofer_nombre ILIKE $1
+              AND v.fecha_entrega::date = CURRENT_DATE
+            ORDER BY v.orden_planeado ASC;
+        `;
+
+        const resultado = await pool.query(query, [choferNombre]);
+        console.log(`📦 Se obtuvieron ${resultado.rows.length} entregas reales para el chofer: ${choferNombre}`);
+        res.json(resultado.rows);
+
+    } catch (err) {
+        console.error("❌ Error al consultar las ventas del chofer en Gescom:", err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/clientes/:dia', async (req, res) => {
-    const diaParam = req.params.dia.toUpperCase(); // 'LU', 'MA', 'MI', 'JU', 'VI'
-    
-    // Mapeo de abreviaturas a las columnas reales de la tabla cliente_ruta_hist
+    const diaParam = req.params.dia.toUpperCase();
     const mapaDias = {
         'LU': 'lunes',
         'MA': 'martes',
@@ -109,7 +153,6 @@ app.get('/api/clientes/:dia', async (req, res) => {
         'SA': 'sabado',
         'DO': 'domingo'
     };
-
     const columnaDia = mapaDias[diaParam] || 'lunes';
 
     try {
@@ -129,171 +172,73 @@ app.get('/api/clientes/:dia', async (req, res) => {
               AND rh.${columnaDia} = 1
             ORDER BY rh.orden ASC;
         `;
-
         const resultado = await pool.query(query);
-        console.log(`📦 Se obtuvieron ${resultado.rows.length} clientes reales para el día ${diaParam} (${columnaDia})`);
         res.json(resultado.rows);
-
     } catch (err) {
-        console.error("❌ Error al consultar hoja de ruta en Gescom:", err.message);
         res.status(500).json({ error: err.message });
     }
 });
 
-// --- 2. MÓDULO DE UBICACIÓN GPS Y DISTANCIA RECORRIDA ---
 app.post('/api/ubicacion', (req, res) => {
     const { chofer_id, vehiculo, latitud, longitud } = req.body;
-    
     if (!chofer_id || !latitud || !longitud) {
-        return res.status(400).json({ error: "Faltan datos obligatorios (chofer_id, latitud, longitud)" });
+        return res.status(400).json({ error: "Faltan datos obligatorios" });
     }
-
     const vehiculoKey = vehiculo || "Sin asignar";
-
     if (!estadisticasVehiculos[vehiculoKey]) {
-        estadisticasVehiculos[vehiculoKey] = {
-            chofer: chofer_id,
-            distanciaKm: 0,
-            ultimaLat: null,
-            ultimaLon: null
-        };
+        estadisticasVehiculos[vehiculoKey] = { chofer: chofer_id, distanciaKm: 0, ultimaLat: null, ultimaLon: null };
     }
-
     const vehStats = estadisticasVehiculos[vehiculoKey];
     vehStats.chofer = chofer_id;
-
     if (vehStats.ultimaLat !== null && vehStats.ultimaLon !== null) {
         const distanciaTramo = calcularDistancia(vehStats.ultimaLat, vehStats.ultimaLon, latitud, longitud);
-        
         if (distanciaTramo < 10 && distanciaTramo > 0.001) {
             vehStats.distanciaKm += distanciaTramo;
         }
     }
-
     vehStats.ultimaLat = latitud;
     vehStats.ultimaLon = longitud;
-
     const distanciaTotalRedondeada = Number(vehStats.distanciaKm.toFixed(2));
-
-    const nuevaUbicacion = {
-        chofer_id,
-        vehiculo: vehiculoKey,
-        latitud,
-        longitud,
-        distanciaTotalKm: distanciaTotalRedondeada,
-        fecha_hora: new Date()
-    };
-
-    choferesUbicaciones.push(nuevaUbicacion);
-    
-    console.log(`📍 GPS de ${chofer_id} [${vehiculoKey}] | Distancia acumulada: ${distanciaTotalRedondeada} km`);
-    res.status(201).json({ 
-        exito: true, 
-        mensaje: "Ubicación y distancia registradas", 
-        distanciaTotalKm: distanciaTotalRedondeada 
-    });
+    choferesUbicaciones.push({ chofer_id, vehiculo: vehiculoKey, latitud, longitud, distanciaTotalKm: distanciaTotalRedondeada, fecha_hora: new Date() });
+    res.status(201).json({ exito: true, distanciaTotalKm: distanciaTotalRedondeada });
 });
 
-app.get('/api/ubicaciones', (req, res) => {
-    res.json(choferesUbicaciones);
-});
-
+app.get('/api/ubicaciones', (req, res) => { res.json(choferesUbicaciones); });
 app.get('/api/estadisticas', (req, res) => {
-    const listaEstadisticas = Object.keys(estadisticasVehiculos).map(vehiculo => ({
-        vehiculo,
-        chofer: estadisticasVehiculos[vehiculo].chofer,
-        distanciaTotalKm: Number(estadisticasVehiculos[vehiculo].distanciaKm.toFixed(2)),
-        ultimaLat: estadisticasVehiculos[vehiculo].ultimaLat,
-        ultimaLon: estadisticasVehiculos[vehiculo].ultimaLon
+    const lista = Object.keys(estadisticasVehiculos).map(v => ({
+        vehiculo: v,
+        chofer: estadisticasVehiculos[v].chofer,
+        distanciaTotalKm: Number(estadisticasVehiculos[v].distanciaKm.toFixed(2))
     }));
-    res.json(listaEstadisticas);
+    res.json(lista);
 });
 
-// --- 3. MÓDULO DE CHECK-LIST OBLIGATORIO ---
 app.post('/api/checklist', (req, res) => {
-    const { dominio, chofer, tipo_vehiculo, respuestas, observaciones } = req.body;
-
-    if (!dominio || !chofer) {
-        return res.status(400).json({ error: "El dominio y el chofer son obligatorios" });
-    }
-
-    const nuevoChecklist = {
-        id: checkListsEnviados.length + 1,
-        marca_temporal: new Date(),
-        dominio,
-        chofer,
-        tipo_vehiculo: tipo_vehiculo || "Vehículo (Auto o Camioneta)",
-        respuestas: respuestas || {},
-        observaciones: observaciones || ""
-    };
-
-    checkListsEnviados.push(nuevoChecklist);
-
-    console.log(`📋 Check-list recibido de ${chofer} para el vehículo ${dominio}`);
-    res.status(201).json({ exito: true, mensaje: "Check-list guardado correctamente", id: nuevoChecklist.id });
+    const { dominio, chofer } = req.body;
+    if (!dominio || !chofer) return res.status(400).json({ error: "Faltan datos" });
+    const nuevo = { id: checkListsEnviados.length + 1, marca_temporal: new Date(), ...req.body };
+    checkListsEnviados.push(nuevo);
+    res.status(201).json({ exito: true, id: nuevo.id });
 });
 
-app.get('/api/checklists', (req, res) => {
-    res.json(checkListsEnviados);
-});
-
+app.get('/api/checklists', (req, res) => { res.json(checkListsEnviados); });
 app.delete('/api/checklist/:id', (req, res) => {
-    const id = Number(req.params.id);
-    checkListsEnviados = checkListsEnviados.filter(c => c.id !== id);
-    res.json({ exito: true, mensaje: "Check-list eliminado" });
+    checkListsEnviados = checkListsEnviados.filter(c => c.id !== Number(req.params.id));
+    res.json({ exito: true });
 });
 
-// --- 4. MÓDULO DE CONTROL DE COMBUSTIBLE ---
 app.post('/api/combustible', (req, res) => {
-    const { chofer, dominio, litros, costoTotal, odometroActual } = req.body;
-
-    if (!chofer || !dominio || !litros || !odometroActual) {
-        return res.status(400).json({ error: "Faltan datos obligatorios para registrar la carga" });
-    }
-
-    const cargasPrevias = cargasCombustible.filter(c => c.dominio === dominio);
-    let rendimientoKmLitros = 0;
-
-    if (cargasPrevias.length > 0) {
-        const ultimaCarga = cargasPrevias[cargasPrevias.length - 1];
-        const distanciaRecorrida = Number(odometroActual) - Number(ultimaCarga.odometroActual);
-        if (distanciaRecorrida > 0 && Number(litros) > 0) {
-            rendimientoKmLitros = Number((distanciaRecorrida / Number(litros)).toFixed(2));
-        }
-    }
-
-    const nuevaCarga = {
-        id: cargasCombustible.length + 1,
-        fecha: new Date(),
-        chofer,
-        dominio,
-        litros: Number(litros),
-        costoTotal: Number(costoTotal || 0),
-        odometroActual: Number(odometroActual),
-        rendimientoKmLitros
-    };
-
-    cargasCombustible.push(nuevaCarga);
-
-    console.log(`⛽ Carga registrada [${dominio}] por ${chofer}: ${litros}L | Rendimiento: ${rendimientoKmLitros} Km/L`);
-    res.status(201).json({
-        exito: true,
-        mensaje: "Carga de combustible registrada exitosamente",
-        rendimientoKmLitros
-    });
+    const nueva = { id: cargasCombustible.length + 1, fecha: new Date(), ...req.body };
+    cargasCombustible.push(nueva);
+    res.status(201).json({ exito: true });
 });
 
-app.get('/api/combustible', (req, res) => {
-    res.json(cargasCombustible);
-});
-
+app.get('/api/combustible', (req, res) => { res.json(cargasCombustible); });
 app.delete('/api/combustible/:id', (req, res) => {
-    const id = Number(req.params.id);
-    cargasCombustible = cargasCombustible.filter(c => c.id !== id);
-    res.json({ exito: true, mensaje: "Registro de combustible eliminado" });
+    cargasCombustible = cargasCombustible.filter(c => c.id !== Number(req.params.id));
+    res.json({ exito: true });
 });
 
-// Levantar el servidor
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en el puerto ${PORT}`);
 });
