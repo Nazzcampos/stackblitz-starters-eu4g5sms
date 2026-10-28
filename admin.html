@@ -12,7 +12,7 @@
             background: #0f172a; 
             margin: 0; 
             padding: 20px; 
-            padding-bottom: 90px; /* Espacio para la isla flotante */
+            padding-bottom: 90px; 
             color: #f8fafc;
         }
         .header { 
@@ -48,7 +48,6 @@
             100% { transform: scale(1); box-shadow: 0 0 10px rgba(37, 99, 235, 0.4); }
         }
 
-        /* Sistema de Vistas por Pestañas */
         .vista-seccion { display: none; }
         .vista-seccion.active { display: block; }
 
@@ -116,7 +115,6 @@
         }
         .btn-danger:hover { background: #b91c1c; }
 
-        /* Isla Flotante Inferior de Navegación */
         .nav-island {
             position: fixed;
             bottom: 15px;
@@ -172,11 +170,11 @@
     </div>
 </div>
 
-<!-- ================= PESTAÑA 1: CONTROL DE FLOTA Y GPS ================= -->
+<!-- PESTAÑA 1: CONTROL DE FLOTA Y GPS -->
 <div id="seccion-gps" class="vista-seccion active">
     <div class="grid-container">
         <div class="card" style="margin-top: 0;">
-            <h2>📍 Ubicación de Choferes en Tiempo Real</h2>
+            <h2>📍 Recorrido y Ubicación en Tiempo Real</h2>
             <div id="map"></div>
         </div>
         <div class="card" style="margin-top: 0;">
@@ -197,7 +195,7 @@
     </div>
 </div>
 
-<!-- ================= PESTAÑA 2: CHECK-LISTS ================= -->
+<!-- PESTAÑA 2: CHECK-LISTS -->
 <div id="seccion-checklists" class="vista-seccion">
     <div class="card">
         <h2>📋 Historial de Check-lists de Seguridad</h2>
@@ -212,14 +210,12 @@
                     <th>Acción</th>
                 </tr>
             </thead>
-            <tbody>
-                <!-- Se llena por JavaScript -->
-            </tbody>
+            <tbody></tbody>
         </table>
     </div>
 </div>
 
-<!-- ================= PESTAÑA 3: COMBUSTIBLE ================= -->
+<!-- PESTAÑA 3: COMBUSTIBLE -->
 <div id="seccion-combustible" class="vista-seccion">
     <div class="card">
         <h2>⛽ Auditoría de Cargas de Combustible y Rendimiento</h2>
@@ -236,9 +232,7 @@
                     <th>Acción</th>
                 </tr>
             </thead>
-            <tbody>
-                <!-- Se llena por JavaScript -->
-            </tbody>
+            <tbody></tbody>
         </table>
     </div>
 </div>
@@ -250,17 +244,15 @@
     <button type="button" class="nav-btn" onclick="cambiarVistaAdmin('combustible', this)">⛽ Combustible</button>
 </div>
 
-<!-- Script de Leaflet y Lógica -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    // Función para cambiar de pestaña en el panel administrador
     function cambiarVistaAdmin(vista, btn) {
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
 
         if (vista === 'gps') {
             document.getElementById('seccion-gps').classList.add('active');
-            setTimeout(() => { map.invalidateSize(); }, 200); // Recalcular mapa al mostrarse
+            setTimeout(() => { map.invalidateSize(); }, 200);
         } else if (vista === 'checklists') {
             document.getElementById('seccion-checklists').classList.add('active');
         } else if (vista === 'combustible') {
@@ -269,7 +261,6 @@
         btn.classList.add('active');
     }
 
-    // Inicializar el mapa
     const map = L.map('map').setView([-33.2814, -62.1785], 14);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -278,10 +269,11 @@
     }).addTo(map);
 
     let marcadores = {};
+    let lineasRecorrido = {};
+    let historicoPuntos = {};
 
     async function cargarDatos() {
         try {
-            // 1. Cargar Ubicaciones y Kilometraje
             const resUbicaciones = await fetch('/api/ubicaciones');
             const ubicaciones = await resUbicaciones.json();
 
@@ -289,8 +281,19 @@
             tablaKmBody.innerHTML = '';
 
             let vehiculosUnicos = {};
+
             ubicaciones.forEach(u => {
                 vehiculosUnicos[u.vehiculo] = u;
+
+                if (!historicoPuntos[u.vehiculo]) {
+                    historicoPuntos[u.vehiculo] = [];
+                }
+                
+                // Agregar las coordenadas para dibujar el trazo del recorrido
+                const ultimaCoord = historicoPuntos[u.vehiculo][historicoPuntos[u.vehiculo].length - 1];
+                if (!ultimaCoord || ultimaCoord[0] !== u.latitud || ultimaCoord[1] !== u.longitud) {
+                    historicoPuntos[u.vehiculo].push([u.latitud, u.longitud]);
+                }
             });
 
             const listaVehiculos = Object.values(vehiculosUnicos);
@@ -299,12 +302,24 @@
                 tablaKmBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #94a3b8;">Sin registros de movimiento aún</td></tr>';
             } else {
                 listaVehiculos.forEach(v => {
+                    // Actualizar marcador
                     if (marcadores[v.vehiculo]) {
                         marcadores[v.vehiculo].setLatLng([v.latitud, v.longitud])
                             .bindPopup(`<b>${v.vehiculo}</b><br>Chofer: ${v.chofer_id}<br><b>${v.distanciaTotalKm} km</b>`);
                     } else {
                         marcadores[v.vehiculo] = L.marker([v.latitud, v.longitud]).addTo(map)
                             .bindPopup(`<b>${v.vehiculo}</b><br>Chofer: ${v.chofer_id}<br><b>${v.distanciaTotalKm} km</b>`);
+                    }
+
+                    // Trazar línea de recorrido en azul
+                    if (lineasRecorrido[v.vehiculo]) {
+                        lineasRecorrido[v.vehiculo].setLatLngs(historicoPuntos[v.vehiculo]);
+                    } else {
+                        lineasRecorrido[v.vehiculo] = L.polyline(historicoPuntos[v.vehiculo], {
+                            color: '#3b82f6',
+                            weight: 5,
+                            opacity: 0.8
+                        }).addTo(map);
                     }
 
                     const tr = document.createElement('tr');
@@ -317,10 +332,9 @@
                 });
             }
 
-            // 2. Cargar Auditoría de Combustible
+            // Combustible
             const resCombustible = await fetch('/api/combustible');
             const listaCombustible = await resCombustible.json();
-
             const tablaCombustibleBody = document.querySelector('#tabla-combustible tbody');
             tablaCombustibleBody.innerHTML = '';
 
@@ -347,10 +361,9 @@
                 });
             }
 
-            // 3. Cargar Checklists
+            // Checklists
             const resChecklists = await fetch('/api/checklists');
             const checklists = await resChecklists.json();
-
             const tablaChecklistBody = document.querySelector('#tabla-checklists tbody');
             tablaChecklistBody.innerHTML = '';
 
@@ -376,36 +389,22 @@
         }
     }
 
-    // Funciones para eliminar registros mediante el botón interactivo
     async function eliminarChecklist(id) {
         if (!confirm("¿Estás seguro de eliminar este check-list?")) return;
         try {
             const res = await fetch(`/api/checklist/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                cargarDatos();
-            } else {
-                alert("No se pudo eliminar el registro.");
-            }
-        } catch (err) {
-            alert("Error de conexión al eliminar.");
-        }
+            if (res.ok) cargarDatos();
+        } catch (err) {}
     }
 
     async function eliminarCombustible(id) {
         if (!confirm("¿Estás seguro de eliminar este registro de combustible?")) return;
         try {
             const res = await fetch(`/api/combustible/${id}`, { method: 'DELETE' });
-            if (res.ok) {
-                cargarDatos();
-            } else {
-                alert("No se pudo eliminar el registro.");
-            }
-        } catch (err) {
-            alert("Error de conexión al eliminar.");
-        }
+            if (res.ok) cargarDatos();
+        } catch (err) {}
     }
 
-    // Cargar datos al abrir y actualizar automáticamente cada 10 segundos
     cargarDatos();
     setInterval(cargarDatos, 10000);
 </script>
