@@ -193,17 +193,22 @@
         </form>
     </div>
 
-    <!-- SECCIÓN 3: RUTA DE HOY (VENTAS Y REPARTOS DEL CHOFER) -->
+    <!-- SECCIÓN 3: RUTA Y REPARTOS (GESCOM) -->
     <div id="seccion-ruta" class="vista-seccion">
-        <h3>📍 Hoja de Ruta de Hoy (Reparto Real)</h3>
-        <p style="font-size: 0.85rem; color: #94a3b8; text-align: center;">Tus entregas y clientes asignados para la jornada:</p>
+        <h3>📍 Hoja de Ruta (Reparto Real)</h3>
+        
+        <!-- Selector de Fecha -->
+        <div style="margin-top: 10px;">
+            <label for="inputFechaRuta" style="font-size: 0.85rem; color: #94a3b8; margin-top: 5px;">📅 Seleccionar Fecha de Reparto:</label>
+            <input type="date" id="inputFechaRuta" style="background: #1e293b; color: white;" onchange="cambiarFechaRuta()">
+        </div>
 
         <!-- Mapa interactivo del chofer -->
         <div id="map-chofer"></div>
 
         <!-- Lista de Clientes del Reparto -->
         <div class="lista-clientes" id="contenedor-clientes">
-            <p style="text-align: center; color: #94a3b8;">Cargando tu ruta del día...</p>
+            <p style="text-align: center; color: #94a3b8;">Cargando tu ruta...</p>
         </div>
     </div>
 </div>
@@ -240,10 +245,19 @@
         }
     }
 
-    // Ejecutar al iniciar
+    // Ejecutar al iniciar y setear fecha de hoy en el input
     window.onload = () => {
         cargarChoferesParaLogin();
+        const hoy = new Date().toISOString().split('T')[0];
+        const inputFecha = document.getElementById('inputFechaRuta');
+        if (inputFecha) inputFecha.value = hoy;
     };
+
+    function cambiarFechaRuta() {
+        if (choferActual) {
+            cargarRutaChoferReal(choferActual);
+        }
+    }
 
     // Manejo del Login con el Chofer Seleccionado
     document.getElementById('loginForm').addEventListener('submit', (e) => {
@@ -327,10 +341,16 @@
     let marcadoresClientes = [];
     let marcadorChoferVivo = null;
 
-    // Cargar la hoja de ruta real del chofer logueado (Ventas/Reparto de hoy)
+    // Cargar la hoja de ruta real del chofer considerando la fecha elegida
     async function cargarRutaChoferReal(nombreChofer) {
+        const fechaInput = document.getElementById('inputFechaRuta').value;
+        let url = `/api/ventas-chofer/${encodeURIComponent(nombreChofer)}`;
+        if (fechaInput) {
+            url += `?fecha=${fechaInput}`;
+        }
+
         try {
-            const res = await fetch(`/api/ventas-chofer/${encodeURIComponent(nombreChofer)}`);
+            const res = await fetch(url);
             const clientes = await res.json();
 
             marcadoresClientes.forEach(m => mapChofer.removeLayer(m));
@@ -340,7 +360,7 @@
             listaContainer.innerHTML = '';
 
             if (!Array.isArray(clientes) || clientes.length === 0) {
-                listaContainer.innerHTML = '<p style="text-align: center; color: #94a3b8;">⚠️ No hay repartos ni ventas cargadas para vos en el día de hoy.</p>';
+                listaContainer.innerHTML = `<p style="text-align: center; color: #94a3b8;">⚠️ No hay repartos ni ventas cargadas para la fecha ${fechaInput || 'de hoy'}.</p>`;
                 return;
             }
 
@@ -362,7 +382,6 @@
                 listaContainer.appendChild(card);
             });
 
-            // Centrar mapa en el primer cliente si existe
             if (clientes.length > 0 && clientes[0].lat && clientes[0].lon) {
                 mapChofer.setView([clientes[0].lat, clientes[0].lon], 13);
             }

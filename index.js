@@ -108,12 +108,13 @@ app.get('/api/choferes', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE HOJA DE RUTA REAL DEL DÍA POR CHOFER ---
+// --- MÓDULO DE HOJA DE RUTA REAL POR CHOFER Y FECHA ---
 app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     const choferNombre = decodeURIComponent(req.params.nombre);
+    const fechaSeleccionada = req.query.fecha; // Recibe ?YYYY-MM-DD si el usuario elige otra fecha
 
     try {
-        const query = `
+        let query = `
             SELECT DISTINCT
                 v.cliente_id AS id,
                 v.razon_social AS nombre,
@@ -123,17 +124,27 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
                 rh.longitud AS lon,
                 v.orden_planeado AS orden,
                 v.reparto_codigo,
-                v.empleado_chofer_nombre AS chofer
+                v.empleado_chofer_nombre AS chofer,
+                v.fecha_entrega
             FROM venta v
             JOIN cliente_hist c ON v.cliente_id = c.id AND c.actual = true
             LEFT JOIN cliente_ruta_hist rh ON v.cliente_id = rh.cliente_id AND rh.actual = true
             WHERE v.empleado_chofer_nombre ILIKE $1
-              AND v.fecha_entrega::date = CURRENT_DATE
-            ORDER BY v.orden_planeado ASC;
         `;
 
-        const resultado = await pool.query(query, [choferNombre]);
-        console.log(`📦 Se obtuvieron ${resultado.rows.length} entregas reales para el chofer: ${choferNombre}`);
+        let params = [choferNombre];
+
+        if (fechaSeleccionada) {
+            query += ` AND v.fecha_entrega::date = $2 `;
+            params.push(fechaSeleccionada);
+        } else {
+            query += ` AND v.fecha_entrega::date = CURRENT_DATE `;
+        }
+
+        query += ` ORDER BY v.orden_planeado ASC;`;
+
+        const resultado = await pool.query(query, params);
+        console.log(`📦 Se obtuvieron ${resultado.rows.length} entregas para ${choferNombre} (Fecha: ${fechaSeleccionada || 'Hoy'})`);
         res.json(resultado.rows);
 
     } catch (err) {
