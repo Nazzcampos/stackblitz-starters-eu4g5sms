@@ -22,12 +22,38 @@
             margin: auto; 
             border: 1px solid #334155;
         }
-        h2 { 
-            color: #f8fafc; 
-            text-align: center; 
+        
+        /* Estilos del Encabezado con Logo Animado */
+        .app-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
             border-bottom: 2px solid #334155;
             padding-bottom: 12px;
-            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .logo-container {
+            width: 45px;
+            height: 45px;
+            background: #2563eb;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px rgba(37, 99, 235, 0.6);
+            animation: pulseLogo 2s infinite ease-in-out;
+        }
+        @keyframes pulseLogo {
+            0% { transform: scale(1); box-shadow: 0 0 10px rgba(37, 99, 235, 0.4); }
+            50% { transform: scale(1.08); box-shadow: 0 0 20px rgba(59, 130, 246, 0.8); }
+            100% { transform: scale(1); box-shadow: 0 0 10px rgba(37, 99, 235, 0.4); }
+        }
+
+        h2 { 
+            color: #f8fafc; 
+            margin: 0;
+            font-size: 1.4rem;
         }
         h3 {
             color: #93c5fd;
@@ -135,7 +161,18 @@
 <body>
 
 <div class="container">
-    <h2>🚚 Panel del Chofer</h2>
+    <!-- Encabezado con Logo Animado de Camión -->
+    <div class="app-header">
+        <div class="logo-container">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 3h15v13H1z"></path>
+                <path d="M16 8h4l3 3v5h-7V8z"></path>
+                <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                <circle cx="18.5" cy="18.5" r="2.5"></circle>
+            </svg>
+        </div>
+        <h2>Panel del Chofer</h2>
+    </div>
 
     <!-- SECCIÓN 1: CHECK-LIST -->
     <div id="seccion-checklist" class="vista-seccion active">
@@ -235,7 +272,7 @@
         div.className = 'checklist-item';
         div.innerHTML = `
             <span>${item}</span>
-            <select name="item_${index}" style="width: 100px; margin: 0; background: #1e293b; color: white;">
+            <select name="item_${index}" style="width: 100px; margin: 0; background: #0f172a; color: white;">
                 <option value="OK">OK</option>
                 <option value="Falla">Falla</option>
                 <option value="N/A">N/A</option>
