@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>App Chofer - Gestión de Flota</title>
+    <!-- Librería de Mapas Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { 
             font-family: Arial, sans-serif; 
@@ -111,12 +113,8 @@
         }
         button:hover { background: #1d4ed8; }
         
-        .btn-danger {
-            background: #dc2626;
-        }
-        .btn-danger:hover {
-            background: #b91c1c;
-        }
+        .btn-danger { background: #dc2626; }
+        .btn-danger:hover { background: #b91c1c; }
 
         #gps-status { 
             margin-top: 15px; 
@@ -127,6 +125,56 @@
             font-size: 14px; 
             text-align: center; 
             color: #a7f3d0;
+        }
+
+        /* Selector de Días (Círculos LU, MA, MI, JU, VI) */
+        .dias-container {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 15px;
+            gap: 5px;
+        }
+        .dia-circle {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #0f172a;
+            border: 2px solid #475569;
+            color: #94a3b8;
+            font-weight: bold;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .dia-circle.active {
+            background: #2563eb;
+            border-color: #60a5fa;
+            color: white;
+            box-shadow: 0 0 10px rgba(37, 99, 235, 0.6);
+        }
+
+        #map-chofer {
+            height: 300px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border: 1px solid #475569;
+        }
+
+        .lista-clientes {
+            margin-top: 15px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        .cliente-card {
+            background: #0f172a;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            border: 1px solid #334155;
+            font-size: 0.85rem;
         }
         
         /* Sistema de Pestañas */
@@ -144,7 +192,7 @@
             border-radius: 30px;
             box-shadow: 0 6px 20px rgba(0,0,0,0.6);
             display: flex;
-            gap: 10px;
+            gap: 8px;
             z-index: 1000;
             border: 1px solid #334155;
         }
@@ -152,9 +200,9 @@
             background: transparent;
             color: #94a3b8;
             border: none;
-            padding: 8px 16px;
+            padding: 8px 12px;
             border-radius: 20px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
             cursor: pointer;
             width: auto;
@@ -208,8 +256,8 @@
         </form>
 
         <div id="gps-status" style="display:none;">
-            📍 <b>GPS Activo (Pantalla Protegida):</b> Transmitiendo en vivo... <span id="coords">Esperando señal...</span>
-            <button type="button" class="btn-danger" onclick="finalizarTurno()">🛑 Finalizar Turno / Detener GPS</button>
+            📍 <b>GPS Activo:</b> Transmitiendo en vivo... <span id="coords">Esperando señal...</span>
+            <button type="button" class="btn-danger" onclick="finalizarTurno()" style="margin-top: 10px;">🛑 Finalizar Turno / Detener GPS</button>
         </div>
     </div>
 
@@ -226,7 +274,7 @@
             <input type="text" id="dominio_combustible" required placeholder="Ej: AF 189 LD">
 
             <label for="litros">Litros Cargados:</label>
-            <input type="number" step="0.01" id="litros" required placeholder="Ej: 45.5">
+            <input type="number" step="0.01" id="litros" required placeholder="Ej: F: 45.5">
 
             <label for="costoTotal">Costo Total ($):</label>
             <input type="number" step="0.01" id="costoTotal" required placeholder="Ej: 35000">
@@ -237,14 +285,40 @@
             <button type="submit">Registrar Carga de Combustible</button>
         </form>
     </div>
+
+    <!-- SECCIÓN 3: RUTA DE HOY (CLIENTES + MAPA) -->
+    <div id="seccion-ruta" class="vista-seccion">
+        <h3>📍 Hoja de Ruta de Clientes (Gescom)</h3>
+        <p style="font-size: 0.85rem; color: #94a3b8; text-align: center;">Seleccioná el día para ver los puntos de entrega asignados:</p>
+
+        <!-- Círculos Selectores de Días -->
+        <div class="dias-container">
+            <div class="dia-circle active" onclick="seleccionarDia('LU', this)">LU</div>
+            <div class="dia-circle" onclick="seleccionarDia('MA', this)">MA</div>
+            <div class="dia-circle" onclick="seleccionarDia('MI', this)">MI</div>
+            <div class="dia-circle" onclick="seleccionarDia('JU', this)">JU</div>
+            <div class="dia-circle" onclick="seleccionarDia('VI', this)">VI</div>
+        </div>
+
+        <!-- Mapa interactivo del chofer -->
+        <div id="map-chofer"></div>
+
+        <!-- Lista de Clientes del Día -->
+        <div class="lista-clientes" id="contenedor-clientes">
+            <!-- Se carga dinámicamente -->
+        </div>
+    </div>
 </div>
 
-<!-- ISLA INTERACTIVA INFERIOR (SOLAPAS) -->
+<!-- ISLA INTERACTIVA INFERIOR (3 SOLAPAS) -->
 <div class="nav-island">
     <button type="button" class="nav-btn active" onclick="cambiarVista('checklist', this)">📋 Check-list</button>
     <button type="button" class="nav-btn" onclick="cambiarVista('combustible', this)">⛽ Combustible</button>
+    <button type="button" class="nav-btn" onclick="cambiarVista('ruta', this)">📍 Ruta de Hoy</button>
 </div>
 
+<!-- Script de Leaflet -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     function cambiarVista(vista, btn) {
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
@@ -254,6 +328,9 @@
             document.getElementById('seccion-checklist').classList.add('active');
         } else if (vista === 'combustible') {
             document.getElementById('seccion-combustible').classList.add('active');
+        } else if (vista === 'ruta') {
+            document.getElementById('seccion-ruta').classList.add('active');
+            setTimeout(() => { mapChofer.invalidateSize(); }, 200); // Recalcular mapa
         }
         btn.classList.add('active');
     }
@@ -285,25 +362,91 @@
         container.appendChild(div);
     });
 
+    // Base de datos simulada de clientes por día (extraíbles desde Gescom)
+    const clientesGescom = {
+        'LU': [
+            { nombre: 'Supermercado El Ahorro', direccion: 'San Martín 450', lat: -33.2800, lon: -62.1750 },
+            { nombre: 'Kiosco La Estación', direccion: 'Belgrano 120', lat: -33.2830, lon: -62.1800 }
+        ],
+        'MA': [
+            { nombre: 'Almacén Don Juan', direccion: 'Rivadavia 890', lat: -33.2750, lon: -62.1720 },
+            { nombre: 'Minimercado Central', direccion: 'Sarmiento 330', lat: -33.2820, lon: -62.1760 }
+        ],
+        'MI': [
+            { nombre: 'Maxikiosco 24hs', direccion: 'Mitre 550', lat: -33.2780, lon: -62.1820 }
+        ],
+        'JU': [
+            { nombre: 'Autoservicio Los Amigos', direccion: 'Colon 210', lat: -33.2810, lon: -62.1740 },
+            { nombre: 'Despensa Sol', direccion: 'Urquiza 780', lat: -33.2850, lon: -62.1790 }
+        ],
+        'VI': [
+            { nombre: 'Supermercado Mayorista Sur', direccion: 'Ruta 11 Km 1400', lat: -33.2740, lon: -62.1700 }
+        ]
+    };
+
+    // Inicializar mapa del chofer
+    const mapChofer = L.map('map-chofer').setView([-33.2814, -62.1785], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    }).addTo(mapChofer);
+
+    let marcadoresClientes = [];
+    let marcadorChoferVivo = null;
+
+    function seleccionarDia(dia, elemento) {
+        document.querySelectorAll('.dia-circle').forEach(c => c.classList.remove('active'));
+        elemento.classList.add('active');
+        cargarClientesEnMapa(dia);
+    }
+
+    function cargarClientesEnMapa(dia) {
+        // Limpiar marcadores anteriores de clientes
+        marcadoresClientes.forEach(m => mapChofer.removeLayer(m));
+        marcadoresClientes = [];
+
+        const listaContainer = document.getElementById('contenedor-clientes');
+        listaContainer.innerHTML = '';
+
+        const clientes = clientesGescom[dia] || [];
+
+        if (clientes.length === 0) {
+            listaContainer.innerHTML = '<p style="text-align: center; color: #94a3b8;">No hay clientes asignados para este día.</p>';
+            return;
+        }
+
+        clientes.forEach(c => {
+            // Agregar marcador verde para cliente
+            const marker = L.marker([c.lat, c.lon], {
+                icon: L.divIcon({
+                    className: 'custom-pin',
+                    html: '<div style="background:#10b981; width:14px; height:14px; border-radius:50%; border:2px solid white;"></div>'
+                })
+            }).addTo(mapChofer).bindPopup(`<b>${c.nombre}</b><br>${c.direccion}`);
+            
+            marcadoresClientes.push(marker);
+
+            // Agregar tarjeta a la lista
+            const card = document.createElement('div');
+            card.className = 'cliente-card';
+            card.innerHTML = `<b>📦 ${c.nombre}</b><br><span style="color: #94a3b8;">${c.direccion}</span>`;
+            listaContainer.appendChild(card);
+        });
+    }
+
     let intervaloGPS = null;
     let wakeLock = null;
 
-    // Activar Wake Lock para que la pantalla no se apague nunca
     async function solicitarWakeLock() {
         if ('wakeLock' in navigator) {
             try {
                 wakeLock = await navigator.wakeLock.request('screen');
-                console.log("💡 Wake Lock activado: La pantalla no se suspenderá.");
-            } catch (err) {
-                console.warn(`${err.name}, ${err.message}`);
-            }
+            } catch (err) {}
         }
     }
 
-    // Enviar el Check-list al Servidor Backend
     document.getElementById('checklistForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-
         const chofer = document.getElementById('chofer').value;
         const dominio = document.getElementById('dominio').value;
         const tipo_vehiculo = document.getElementById('tipo_vehiculo').value;
@@ -320,22 +463,18 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chofer, dominio, tipo_vehiculo, respuestas, observaciones })
             });
-
-            const resultado = await respuesta.json();
             if (respuesta.ok) {
-                alert("¡Check-list enviado con éxito! GPS y modo de pantalla activa iniciados.");
+                alert("¡Check-list enviado con éxito! GPS y hoja de ruta activados.");
                 document.getElementById('gps-status').style.display = 'block';
                 solicitarWakeLock();
                 iniciarEnvioGPS(chofer, dominio);
-            } else {
-                alert("Error: " + resultado.error);
+                cargarClientesEnMapa('LU'); // Cargar Lunes por defecto
             }
         } catch (error) {
             alert("No se pudo conectar con el servidor.");
         }
     });
 
-    // Registrar Carga de Combustible
     document.getElementById('combustibleForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const datosCarga = {
@@ -352,22 +491,18 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(datosCarga)
             });
-            const resultado = await respuesta.json();
             if (respuesta.ok) {
                 alert("⛽ ¡Carga registrada con éxito!");
                 document.getElementById('combustibleForm').reset();
-            } else {
-                alert("Error: " + resultado.error);
             }
         } catch (error) {
-            alert("No se pudo conectar con el servidor.");
+            alert("Error de conexión.");
         }
     });
 
     function iniciarEnvioGPS(chofer, vehiculo) {
         if (!navigator.geolocation) return;
         if (intervaloGPS) clearInterval(intervaloGPS);
-
         enviarCoordenadas(chofer, vehiculo);
         intervaloGPS = setInterval(() => enviarCoordenadas(chofer, vehiculo), 30000);
     }
@@ -377,6 +512,18 @@
             const latitud = position.coords.latitude;
             const longitud = position.coords.longitude;
             document.getElementById('coords').innerText = `Lat: ${latitud.toFixed(4)}, Lon: ${longitud.toFixed(4)}`;
+
+            // Actualizar marcador en vivo del chofer en su propio mapa
+            if (marcadorChoferVivo) {
+                marcadorChoferVivo.setLatLng([latitud, longitud]);
+            } else {
+                marcadorChoferVivo = L.marker([latitud, longitud], {
+                    icon: L.divIcon({
+                        className: 'custom-pin',
+                        html: '<div style="background:#2563eb; width:16px; height:16px; border-radius:50%; border:3px solid white; box-shadow:0 0 10px blue;"></div>'
+                    })
+                }).addTo(mapChofer).bindPopup("<b>¡Estás acá! (Ubicación en vivo)</b>");
+            }
 
             try {
                 await fetch('/api/ubicacion', {
@@ -388,18 +535,15 @@
         });
     }
 
-    // Botón para Finalizar Turno y cortar el GPS manualmente
     function finalizarTurno() {
-        if (intervaloGPS) {
-            clearInterval(intervaloGPS);
-            intervaloGPS = null;
-        }
-        if (wakeLock !== null) {
-            wakeLock.release().then(() => { wakeLock = null; });
-        }
+        if (intervaloGPS) { clearInterval(intervaloGPS); intervaloGPS = null; }
+        if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); }
         document.getElementById('gps-status').style.display = 'none';
-        alert("🛑 Turno finalizado. El seguimiento GPS ha sido detenido.");
+        alert("🛑 Turno finalizado.");
     }
+
+    // Cargar lunes por defecto al iniciar
+    cargarClientesEnMapa('LU');
 </script>
 
 </body>
