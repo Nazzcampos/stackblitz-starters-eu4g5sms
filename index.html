@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App Chofer - Gestión de Flota</title>
+    <title>App Chofer - Gestión de Flota PepsiCo</title>
     <!-- Librería de Mapas Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -52,173 +52,77 @@
             100% { transform: scale(1); box-shadow: 0 0 10px rgba(37, 99, 235, 0.4); }
         }
 
-        h2 { 
-            color: #f8fafc; 
-            margin: 0;
-            font-size: 1.4rem;
-        }
-        h3 {
-            color: #93c5fd;
-            font-size: 1.1rem;
-            margin-top: 25px;
-            border-bottom: 1px solid #334155;
-            padding-bottom: 6px;
-        }
-        label { 
-            font-weight: bold; 
-            display: block; 
-            margin-top: 15px; 
-            color: #cbd5e1;
-            font-size: 0.95rem;
-        }
+        h2 { color: #f8fafc; margin: 0; font-size: 1.4rem; text-align: center; }
+        h3 { color: #93c5fd; font-size: 1.1rem; margin-top: 25px; border-bottom: 1px solid #334155; padding-bottom: 6px; }
+        label { font-weight: bold; display: block; margin-top: 15px; color: #cbd5e1; font-size: 0.95rem; }
         input, select, textarea { 
-            width: 100%; 
-            padding: 10px; 
-            margin-top: 5px; 
-            background: #0f172a;
-            border: 1px solid #475569; 
-            border-radius: 6px; 
-            box-sizing: border-box; 
-            color: #f8fafc;
-            font-size: 0.95rem;
+            width: 100%; padding: 10px; margin-top: 5px; background: #0f172a;
+            border: 1px solid #475569; border-radius: 6px; box-sizing: border-box; color: #f8fafc; font-size: 0.95rem;
         }
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
-        }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3); }
+        
         .checklist-item { 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            margin-top: 10px; 
-            padding: 10px; 
-            background: #0f172a; 
-            border: 1px solid #334155; 
-            border-radius: 6px; 
-            font-size: 0.9rem;
+            display: flex; justify-content: space-between; align-items: center; margin-top: 10px; 
+            padding: 10px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; font-size: 0.9rem;
         }
         button { 
-            background: #2563eb; 
-            color: white; 
-            border: none; 
-            padding: 12px; 
-            width: 100%; 
-            font-size: 16px; 
-            font-weight: bold;
-            border-radius: 6px; 
-            cursor: pointer; 
-            margin-top: 20px; 
-            transition: background 0.2s;
+            background: #2563eb; color: white; border: none; padding: 12px; width: 100%; 
+            font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-top: 20px; transition: background 0.2s;
         }
         button:hover { background: #1d4ed8; }
-        
         .btn-danger { background: #dc2626; }
         .btn-danger:hover { background: #b91c1c; }
 
         #gps-status { 
-            margin-top: 15px; 
-            padding: 12px; 
-            background: #064e3b; 
-            border: 1px solid #059669;
-            border-radius: 6px; 
-            font-size: 14px; 
-            text-align: center; 
-            color: #a7f3d0;
+            margin-top: 15px; padding: 12px; background: #064e3b; border: 1px solid #059669;
+            border-radius: 6px; font-size: 14px; text-align: center; color: #a7f3d0;
         }
+
+        /* Pantalla de Login */
+        #vista-login { text-align: center; padding: 20px 0; }
+        .login-box { background: #0f172a; padding: 20px; border-radius: 8px; border: 1px solid #334155; margin-top: 15px; }
 
         /* Selector de Días (Círculos LU, MA, MI, JU, VI) */
-        .dias-container {
-            display: flex;
-            justify-content: space-around;
-            margin-bottom: 15px;
-            gap: 5px;
-        }
+        .dias-container { display: flex; justify-content: space-around; margin-bottom: 15px; gap: 5px; }
         .dia-circle {
-            width: 42px;
-            height: 42px;
-            border-radius: 50%;
-            background: #0f172a;
-            border: 2px solid #475569;
-            color: #94a3b8;
-            font-weight: bold;
-            font-size: 0.9rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
+            width: 42px; height: 42px; border-radius: 50%; background: #0f172a; border: 2px solid #475569;
+            color: #94a3b8; font-weight: bold; font-size: 0.9rem; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s ease;
         }
         .dia-circle.active {
-            background: #2563eb;
-            border-color: #60a5fa;
-            color: white;
-            box-shadow: 0 0 10px rgba(37, 99, 235, 0.6);
+            background: #2563eb; border-color: #60a5fa; color: white; box-shadow: 0 0 10px rgba(37, 99, 235, 0.6);
         }
 
-        #map-chofer {
-            height: 300px;
-            border-radius: 8px;
-            margin-top: 15px;
-            border: 1px solid #475569;
-        }
-
-        .lista-clientes {
-            margin-top: 15px;
-            max-height: 180px;
-            overflow-y: auto;
-        }
+        #map-chofer { height: 300px; border-radius: 8px; margin-top: 15px; border: 1px solid #475569; }
+        .lista-clientes { margin-top: 15px; max-height: 180px; overflow-y: auto; }
         .cliente-card {
-            background: #0f172a;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 8px;
-            border: 1px solid #334155;
-            font-size: 0.85rem;
+            background: #0f172a; padding: 10px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #334155; font-size: 0.85rem;
         }
         
-        /* Sistema de Pestañas */
         .vista-seccion { display: none; }
         .vista-seccion.active { display: block; }
 
-        /* Isla Flotante Inferior */
+        /* Isla Flotante Inferior (Oculta hasta hacer login) */
         .nav-island {
-            position: fixed;
-            bottom: 15px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #0f172a;
-            padding: 8px 12px;
-            border-radius: 30px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
-            display: flex;
-            gap: 8px;
-            z-index: 1000;
-            border: 1px solid #334155;
+            position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%);
+            background: #0f172a; padding: 8px 12px; border-radius: 30px; box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            display: none; gap: 8px; z-index: 1000; border: 1px solid #334155;
         }
         .nav-btn {
-            background: transparent;
-            color: #94a3b8;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: bold;
-            cursor: pointer;
-            width: auto;
-            transition: all 0.2s ease;
+            background: transparent; color: #94a3b8; border: none; padding: 8px 12px; border-radius: 20px;
+            font-size: 13px; font-weight: bold; cursor: pointer; width: auto; transition: all 0.2s ease;
         }
-        .nav-btn.active {
-            background: #2563eb;
-            color: white;
-            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+        .nav-btn.active { background: #2563eb; color: white; box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4); }
+        
+        .user-welcome {
+            background: #0f172a; padding: 10px; border-radius: 6px; margin-bottom: 15px;
+            border: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <!-- Encabezado con Logo Animado -->
     <div class="app-header">
         <div class="logo-container">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -231,13 +135,28 @@
         <h2>Panel del Chofer</h2>
     </div>
 
-    <!-- SECCIÓN 1: CHECK-LIST -->
-    <div id="seccion-checklist" class="vista-seccion active">
-        <form id="checklistForm">
-            <label for="chofer">Nombre del Chofer:</label>
-            <input type="text" id="chofer" required placeholder="Ej: Gustavo Mercado">
+    <!-- PANTALLA 0: LOGIN SIMULADO -->
+    <div id="vista-login" class="vista-seccion active">
+        <h3>🔐 Inicio de Sesión de Chofer</h3>
+        <p style="font-size: 0.85rem; color: #94a3b8;">Ingresá tu nombre para iniciar tu turno de reparto:</p>
+        <div class="login-box">
+            <form id="loginForm">
+                <label for="inputUsuario">Nombre o Legajo:</label>
+                <input type="text" id="inputUsuario" required placeholder="Ej: Nazareno">
+                <button type="submit" style="margin-top: 15px;">Iniciar Turno</button>
+            </form>
+        </div>
+    </div>
 
-            <label for="dominio">Dominio / Patente:</label>
+    <!-- SECCIÓN 1: CHECK-LIST -->
+    <div id="seccion-checklist" class="vista-seccion">
+        <div class="user-welcome">
+            <span>👤 Chofer: <b id="lblChofer" style="color: #60a5fa;">-</b></span>
+            <button type="button" onclick="cerrarSesion()" style="width: auto; margin: 0; padding: 5px 10px; font-size: 12px; background: #475569;">Cambiar</button>
+        </div>
+
+        <form id="checklistForm">
+            <label for="dominio">Dominio / Patente del Vehículo:</label>
             <input type="text" id="dominio" required placeholder="Ej: AF 189 LD">
 
             <label for="tipo_vehiculo">Tipo de Vehículo:</label>
@@ -263,18 +182,15 @@
 
     <!-- SECCIÓN 2: CARGA DE COMBUSTIBLE -->
     <div id="seccion-combustible" class="vista-seccion">
+        <h3>⛽ Carga y Gasto de Combustible</h3>
+        <p style="font-size: 0.85rem; color: #94a3b8; text-align: center;">Registrá tu carga para calcular automáticamente el rendimiento en Km/L.</p>
+
         <form id="combustibleForm">
-            <h3>⛽ Carga y Gasto de Combustible</h3>
-            <p style="font-size: 0.85rem; color: #94a3b8; text-align: center;">Registrá tu carga para calcular automáticamente el rendimiento en Km/L.</p>
-
-            <label for="chofer_combustible">Nombre del Chofer:</label>
-            <input type="text" id="chofer_combustible" required placeholder="Ej: Gustavo Mercado">
-
             <label for="dominio_combustible">Dominio / Patente:</label>
             <input type="text" id="dominio_combustible" required placeholder="Ej: AF 189 LD">
 
             <label for="litros">Litros Cargados:</label>
-            <input type="number" step="0.01" id="litros" required placeholder="Ej: F: 45.5">
+            <input type="number" step="0.01" id="litros" required placeholder="Ej: 45.5">
 
             <label for="costoTotal">Costo Total ($):</label>
             <input type="number" step="0.01" id="costoTotal" required placeholder="Ej: 35000">
@@ -286,10 +202,10 @@
         </form>
     </div>
 
-    <!-- SECCIÓN 3: RUTA DE HOY (CLIENTES + MAPA) -->
+    <!-- SECCIÓN 3: RUTA DE HOY (GESCOM) -->
     <div id="seccion-ruta" class="vista-seccion">
         <h3>📍 Hoja de Ruta de Clientes (Gescom)</h3>
-        <p style="font-size: 0.85rem; color: #94a3b8; text-align: center;">Seleccioná el día para ver los puntos de entrega asignados:</p>
+        <p style="font-size: 0.85rem; color: #94a3b8; text-align: center;">Seleccioná el día para ver los puntos de entrega:</p>
 
         <!-- Círculos Selectores de Días -->
         <div class="dias-container">
@@ -305,13 +221,13 @@
 
         <!-- Lista de Clientes del Día -->
         <div class="lista-clientes" id="contenedor-clientes">
-            <!-- Se carga dinámicamente -->
+            <!-- Se carga dinámicamente desde Gescom -->
         </div>
     </div>
 </div>
 
 <!-- ISLA INTERACTIVA INFERIOR (3 SOLAPAS) -->
-<div class="nav-island">
+<div class="nav-island" id="navIsland">
     <button type="button" class="nav-btn active" onclick="cambiarVista('checklist', this)">📋 Check-list</button>
     <button type="button" class="nav-btn" onclick="cambiarVista('combustible', this)">⛽ Combustible</button>
     <button type="button" class="nav-btn" onclick="cambiarVista('ruta', this)">📍 Ruta de Hoy</button>
@@ -320,8 +236,35 @@
 <!-- Script de Leaflet -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    function cambiarVista(vista, btn) {
+    let choferActual = "";
+
+    // Manejo del Login Simulado
+    document.getElementById('loginForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const usuario = document.getElementById('inputUsuario').value.trim();
+        if (!usuario) return;
+
+        choferActual = usuario;
+        document.getElementById('lblChofer').innerText = choferActual;
+
+        // Ocultar login y mostrar solapas y check-list
+        document.getElementById('vista-login').classList.remove('active');
+        document.getElementById('seccion-checklist').classList.add('active');
+        document.getElementById('navIsland').style.display = 'flex';
+    });
+
+    function cerrarSesion() {
+        choferActual = "";
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
+        document.getElementById('vista-login').classList.add('active');
+        document.getElementById('navIsland').style.display = 'none';
+        document.getElementById('inputUsuario').value = '';
+    }
+
+    function cambiarVista(vista, btn) {
+        document.querySelectorAll('.vista-seccion').forEach(s => {
+            if (s.id !== 'vista-login') s.classList.remove('active');
+        });
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
 
         if (vista === 'checklist') {
@@ -330,7 +273,7 @@
             document.getElementById('seccion-combustible').classList.add('active');
         } else if (vista === 'ruta') {
             document.getElementById('seccion-ruta').classList.add('active');
-            setTimeout(() => { mapChofer.invalidateSize(); }, 200); // Recalcular mapa
+            setTimeout(() => { mapChofer.invalidateSize(); }, 200);
         }
         btn.classList.add('active');
     }
@@ -362,28 +305,6 @@
         container.appendChild(div);
     });
 
-    // Base de datos simulada de clientes por día (extraíbles desde Gescom)
-    const clientesGescom = {
-        'LU': [
-            { nombre: 'Supermercado El Ahorro', direccion: 'San Martín 450', lat: -33.2800, lon: -62.1750 },
-            { nombre: 'Kiosco La Estación', direccion: 'Belgrano 120', lat: -33.2830, lon: -62.1800 }
-        ],
-        'MA': [
-            { nombre: 'Almacén Don Juan', direccion: 'Rivadavia 890', lat: -33.2750, lon: -62.1720 },
-            { nombre: 'Minimercado Central', direccion: 'Sarmiento 330', lat: -33.2820, lon: -62.1760 }
-        ],
-        'MI': [
-            { nombre: 'Maxikiosco 24hs', direccion: 'Mitre 550', lat: -33.2780, lon: -62.1820 }
-        ],
-        'JU': [
-            { nombre: 'Autoservicio Los Amigos', direccion: 'Colon 210', lat: -33.2810, lon: -62.1740 },
-            { nombre: 'Despensa Sol', direccion: 'Urquiza 780', lat: -33.2850, lon: -62.1790 }
-        ],
-        'VI': [
-            { nombre: 'Supermercado Mayorista Sur', direccion: 'Ruta 11 Km 1400', lat: -33.2740, lon: -62.1700 }
-        ]
-    };
-
     // Inicializar mapa del chofer
     const mapChofer = L.map('map-chofer').setView([-33.2814, -62.1785], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -393,45 +314,50 @@
 
     let marcadoresClientes = [];
     let marcadorChoferVivo = null;
+    let diaActual = 'LU';
 
     function seleccionarDia(dia, elemento) {
         document.querySelectorAll('.dia-circle').forEach(c => c.classList.remove('active'));
         elemento.classList.add('active');
-        cargarClientesEnMapa(dia);
+        diaActual = dia;
+        cargarClientesDesdeGescom(dia);
     }
 
-    function cargarClientesEnMapa(dia) {
-        // Limpiar marcadores anteriores de clientes
-        marcadoresClientes.forEach(m => mapChofer.removeLayer(m));
-        marcadoresClientes = [];
+    // Consulta al servidor los clientes del día seleccionados
+    async function cargarClientesDesdeGescom(dia) {
+        try {
+            const res = await fetch(`/api/clientes/${dia}`);
+            const clientes = await res.json();
 
-        const listaContainer = document.getElementById('contenedor-clientes');
-        listaContainer.innerHTML = '';
+            marcadoresClientes.forEach(m => mapChofer.removeLayer(m));
+            marcadoresClientes = [];
 
-        const clientes = clientesGescom[dia] || [];
+            const listaContainer = document.getElementById('contenedor-clientes');
+            listaContainer.innerHTML = '';
 
-        if (clientes.length === 0) {
-            listaContainer.innerHTML = '<p style="text-align: center; color: #94a3b8;">No hay clientes asignados para este día.</p>';
-            return;
+            if (!Array.isArray(clientes) || clientes.length === 0) {
+                listaContainer.innerHTML = '<p style="text-align: center; color: #94a3b8;">No hay clientes asignados para este día o conectando a Gescom...</p>';
+                return;
+            }
+
+            clientes.forEach(c => {
+                const marker = L.marker([c.lat, c.lon], {
+                    icon: L.divIcon({
+                        className: 'custom-pin',
+                        html: '<div style="background:#10b981; width:14px; height:14px; border-radius:50%; border:2px solid white;"></div>'
+                    })
+                }).addTo(mapChofer).bindPopup(`<b>📦 ${c.nombre}</b><br>${c.direccion}`);
+                
+                marcadoresClientes.push(marker);
+
+                const card = document.createElement('div');
+                card.className = 'cliente-card';
+                card.innerHTML = `<b>📦 ${c.nombre}</b><br><span style="color: #94a3b8;">${c.direccion}</span>`;
+                listaContainer.appendChild(card);
+            });
+        } catch (err) {
+            console.error("Error al cargar clientes de Gescom:", err);
         }
-
-        clientes.forEach(c => {
-            // Agregar marcador verde para cliente
-            const marker = L.marker([c.lat, c.lon], {
-                icon: L.divIcon({
-                    className: 'custom-pin',
-                    html: '<div style="background:#10b981; width:14px; height:14px; border-radius:50%; border:2px solid white;"></div>'
-                })
-            }).addTo(mapChofer).bindPopup(`<b>${c.nombre}</b><br>${c.direccion}`);
-            
-            marcadoresClientes.push(marker);
-
-            // Agregar tarjeta a la lista
-            const card = document.createElement('div');
-            card.className = 'cliente-card';
-            card.innerHTML = `<b>📦 ${c.nombre}</b><br><span style="color: #94a3b8;">${c.direccion}</span>`;
-            listaContainer.appendChild(card);
-        });
     }
 
     let intervaloGPS = null;
@@ -439,15 +365,12 @@
 
     async function solicitarWakeLock() {
         if ('wakeLock' in navigator) {
-            try {
-                wakeLock = await navigator.wakeLock.request('screen');
-            } catch (err) {}
+            try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
         }
     }
 
     document.getElementById('checklistForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const chofer = document.getElementById('chofer').value;
         const dominio = document.getElementById('dominio').value;
         const tipo_vehiculo = document.getElementById('tipo_vehiculo').value;
         const observaciones = document.getElementById('observaciones').value;
@@ -461,14 +384,14 @@
             const respuesta = await fetch('/api/checklist', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chofer, dominio, tipo_vehiculo, respuestas, observaciones })
+                body: JSON.stringify({ chofer: choferActual, dominio, tipo_vehiculo, respuestas, observaciones })
             });
             if (respuesta.ok) {
                 alert("¡Check-list enviado con éxito! GPS y hoja de ruta activados.");
                 document.getElementById('gps-status').style.display = 'block';
                 solicitarWakeLock();
-                iniciarEnvioGPS(chofer, dominio);
-                cargarClientesEnMapa('LU'); // Cargar Lunes por defecto
+                iniciarEnvioGPS(choferActual, dominio);
+                cargarClientesDesdeGescom('LU');
             }
         } catch (error) {
             alert("No se pudo conectar con el servidor.");
@@ -478,7 +401,7 @@
     document.getElementById('combustibleForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const datosCarga = {
-            chofer: document.getElementById('chofer_combustible').value,
+            chofer: choferActual,
             dominio: document.getElementById('dominio_combustible').value,
             litros: document.getElementById('litros').value,
             costoTotal: document.getElementById('costoTotal').value,
@@ -513,7 +436,6 @@
             const longitud = position.coords.longitude;
             document.getElementById('coords').innerText = `Lat: ${latitud.toFixed(4)}, Lon: ${longitud.toFixed(4)}`;
 
-            // Actualizar marcador en vivo del chofer en su propio mapa
             if (marcadorChoferVivo) {
                 marcadorChoferVivo.setLatLng([latitud, longitud]);
             } else {
@@ -541,9 +463,6 @@
         document.getElementById('gps-status').style.display = 'none';
         alert("🛑 Turno finalizado.");
     }
-
-    // Cargar lunes por defecto al iniciar
-    cargarClientesEnMapa('LU');
 </script>
 
 </body>
