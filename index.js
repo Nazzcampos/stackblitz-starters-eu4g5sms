@@ -97,35 +97,46 @@ app.get('/api/esquema', async (req, res) => {
 
 // --- 1. MÓDULO DE CLIENTES Y HOJA DE RUTA REAL (GESCOM - POSTGRESQL) ---
 app.get('/api/clientes/:dia', async (req, res) => {
-    const diaSeleccionado = req.params.dia.toUpperCase(); // 'LU', 'MA', 'MI', 'JU', 'VI'
+    const diaParam = req.params.dia.toUpperCase(); // 'LU', 'MA', 'MI', 'JU', 'VI'
+    
+    // Mapeo de abreviaturas a las columnas reales de la tabla cliente_ruta_hist
+    const mapaDias = {
+        'LU': 'lunes',
+        'MA': 'martes',
+        'MI': 'miercoles',
+        'JU': 'jueves',
+        'VI': 'viernes',
+        'SA': 'sabado',
+        'DO': 'domingo'
+    };
+
+    const columnaDia = mapaDias[diaParam] || 'lunes';
 
     try {
         const query = `
             SELECT 
-                cliente_id AS id, 
-                razon_social AS nombre, 
-                direccion, 
-                latitud AS lat, 
-                longitud AS lon 
-            FROM clientes_ruta 
-            WHERE dia_visita = $1
+                c.id AS id,
+                c.razon_social AS nombre,
+                c.direccion,
+                c.localidad,
+                rh.latitud AS lat,
+                rh.longitud AS lon,
+                rh.ruta_codigo,
+                rh.orden
+            FROM cliente_ruta_hist rh
+            JOIN cliente_hist c ON rh.cliente_id = c.id AND c.actual = true
+            WHERE rh.actual = true 
+              AND rh.${columnaDia} = 1
+            ORDER BY rh.orden ASC;
         `;
 
-        const resultado = await pool.query(query, [diaSeleccionado]);
+        const resultado = await pool.query(query);
+        console.log(`📦 Se obtuvieron ${resultado.rows.length} clientes reales para el día ${diaParam} (${columnaDia})`);
         res.json(resultado.rows);
 
     } catch (err) {
-        console.warn("⚠️ La tabla 'clientes_ruta' no existe o falló. Probando esquema alternativo...");
-        
-        try {
-            const queryB = `SELECT * FROM clientes LIMIT 10`;
-            const resultadoB = await pool.query(queryB);
-            console.log("📋 Columnas encontradas en la tabla clientes:", Object.keys(resultadoB.rows[0] || {}));
-            res.json(resultadoB.rows);
-        } catch (errB) {
-            console.error("❌ Error total al consultar Gescom:", errB.message);
-            res.status(500).json({ error: errB.message });
-        }
+        console.error("❌ Error al consultar hoja de ruta en Gescom:", err.message);
+        res.status(500).json({ error: err.message });
     }
 });
 
