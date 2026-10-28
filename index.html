@@ -23,7 +23,7 @@
             border: 1px solid #334155;
         }
         
-        /* Estilos del Encabezado con Logo Animado */
+        /* Encabezado con Logo Animado */
         .app-header {
             display: flex;
             align-items: center;
@@ -110,6 +110,14 @@
             transition: background 0.2s;
         }
         button:hover { background: #1d4ed8; }
+        
+        .btn-danger {
+            background: #dc2626;
+        }
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
         #gps-status { 
             margin-top: 15px; 
             padding: 12px; 
@@ -121,7 +129,11 @@
             color: #a7f3d0;
         }
         
-        /* Estilos de la isla flotante inferior (Solapas) */
+        /* Sistema de Pestañas */
+        .vista-seccion { display: none; }
+        .vista-seccion.active { display: block; }
+
+        /* Isla Flotante Inferior */
         .nav-island {
             position: fixed;
             bottom: 15px;
@@ -130,7 +142,7 @@
             background: #0f172a;
             padding: 8px 12px;
             border-radius: 30px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
             display: flex;
             gap: 10px;
             z-index: 1000;
@@ -145,7 +157,6 @@
             font-size: 14px;
             font-weight: bold;
             cursor: pointer;
-            margin: 0;
             width: auto;
             transition: all 0.2s ease;
         }
@@ -154,14 +165,12 @@
             color: white;
             box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
         }
-        .vista-seccion { display: none; }
-        .vista-seccion.active { display: block; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <!-- Encabezado con Logo Animado de Camión -->
+    <!-- Encabezado con Logo Animado -->
     <div class="app-header">
         <div class="logo-container">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -190,15 +199,18 @@
             </select>
 
             <h3>📋 Check-list Diario de Seguridad</h3>
-            <div id="checklist-container">
-                <!-- Se generará dinámicamente -->
-            </div>
+            <div id="checklist-container"></div>
 
             <label for="observaciones">Observaciones generales:</label>
             <textarea id="observaciones" rows="3" placeholder="Detalles o novedades..."></textarea>
 
-            <button type="submit">Enviar Check-list y Activar GPS</button>
+            <button type="submit" id="btnEnviar">Enviar Check-list y Activar GPS</button>
         </form>
+
+        <div id="gps-status" style="display:none;">
+            📍 <b>GPS Activo (Pantalla Protegida):</b> Transmitiendo en vivo... <span id="coords">Esperando señal...</span>
+            <button type="button" class="btn-danger" onclick="finalizarTurno()">🛑 Finalizar Turno / Detener GPS</button>
+        </div>
     </div>
 
     <!-- SECCIÓN 2: CARGA DE COMBUSTIBLE -->
@@ -225,10 +237,6 @@
             <button type="submit">Registrar Carga de Combustible</button>
         </form>
     </div>
-
-    <div id="gps-status" style="display:none;">
-        📍 <b>GPS Activo:</b> Enviando ubicación en segundo plano... <span id="coords">Esperando señal...</span>
-    </div>
 </div>
 
 <!-- ISLA INTERACTIVA INFERIOR (SOLAPAS) -->
@@ -238,7 +246,6 @@
 </div>
 
 <script>
-    // Función para alternar entre solapas de la isla interactiva
     function cambiarVista(vista, btn) {
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -251,7 +258,6 @@
         btn.classList.add('active');
     }
 
-    // Ítems basados en tu planilla de Excel original
     const itemsChecklist = [
         "Documentación Completa (Licencia, Cédula, Seguro, ITV, etc.)",
         "Cinturón de seguridad",
@@ -265,14 +271,12 @@
     ];
 
     const container = document.getElementById('checklist-container');
-
-    // Generar los ítems en pantalla con botones OK / Falla
     itemsChecklist.forEach((item, index) => {
         const div = document.createElement('div');
         div.className = 'checklist-item';
         div.innerHTML = `
             <span>${item}</span>
-            <select name="item_${index}" style="width: 100px; margin: 0; background: #1e293b; color: white;">
+            <select name="item_${index}" style="width: 100px; margin: 0; background: #0f172a; color: white;">
                 <option value="OK">OK</option>
                 <option value="Falla">Falla</option>
                 <option value="N/A">N/A</option>
@@ -282,6 +286,19 @@
     });
 
     let intervaloGPS = null;
+    let wakeLock = null;
+
+    // Activar Wake Lock para que la pantalla no se apague nunca
+    async function solicitarWakeLock() {
+        if ('wakeLock' in navigator) {
+            try {
+                wakeLock = await navigator.wakeLock.request('screen');
+                console.log("💡 Wake Lock activado: La pantalla no se suspenderá.");
+            } catch (err) {
+                console.warn(`${err.name}, ${err.message}`);
+            }
+        }
+    }
 
     // Enviar el Check-list al Servidor Backend
     document.getElementById('checklistForm').addEventListener('submit', async (e) => {
@@ -294,44 +311,40 @@
 
         const respuestas = {};
         itemsChecklist.forEach((item, index) => {
-            const selectVal = document.querySelector(`[name="item_${index}"]`).value;
-            respuestas[item] = selectVal;
+            respuestas[item] = document.querySelector(`[name="item_${index}"]`).value;
         });
-
-        const datosEnvio = { chofer, dominio, tipo_vehiculo, respuestas, observaciones };
 
         try {
             const respuesta = await fetch('/api/checklist', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(datosEnvio)
+                body: JSON.stringify({ chofer, dominio, tipo_vehiculo, respuestas, observaciones })
             });
 
             const resultado = await respuesta.json();
             if (respuesta.ok) {
-                alert("¡Check-list enviado con éxito! GPS activado en segundo plano.");
+                alert("¡Check-list enviado con éxito! GPS y modo de pantalla activa iniciados.");
                 document.getElementById('gps-status').style.display = 'block';
+                solicitarWakeLock();
                 iniciarEnvioGPS(chofer, dominio);
             } else {
                 alert("Error: " + resultado.error);
             }
         } catch (error) {
-            console.error("Error al enviar:", error);
             alert("No se pudo conectar con el servidor.");
         }
     });
 
-    // Enviar Registro de Combustible al Servidor Backend
+    // Registrar Carga de Combustible
     document.getElementById('combustibleForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-
-        const chofer = document.getElementById('chofer_combustible').value;
-        const dominio = document.getElementById('dominio_combustible').value;
-        const litros = document.getElementById('litros').value;
-        const costoTotal = document.getElementById('costoTotal').value;
-        const odometroActual = document.getElementById('odometroActual').value;
-
-        const datosCarga = { chofer, dominio, litros, costoTotal, odometroActual };
+        const datosCarga = {
+            chofer: document.getElementById('chofer_combustible').value,
+            dominio: document.getElementById('dominio_combustible').value,
+            litros: document.getElementById('litros').value,
+            costoTotal: document.getElementById('costoTotal').value,
+            odometroActual: document.getElementById('odometroActual').value
+        };
 
         try {
             const respuesta = await fetch('/api/combustible', {
@@ -339,43 +352,30 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(datosCarga)
             });
-
             const resultado = await respuesta.json();
             if (respuesta.ok) {
-                const rendimientoMsg = resultado.rendimientoKmLitros > 0 
-                    ? `\nRendimiento calculado: ${resultado.rendimientoKmLitros} Km/L` 
-                    : `\n(Primer registro base guardado)`;
-                alert("⛽ ¡Carga de combustible registrada con éxito!" + rendimientoMsg);
+                alert("⛽ ¡Carga registrada con éxito!");
                 document.getElementById('combustibleForm').reset();
             } else {
                 alert("Error: " + resultado.error);
             }
         } catch (error) {
-            console.error("Error al registrar combustible:", error);
             alert("No se pudo conectar con el servidor.");
         }
     });
 
-    // Función para enviar el GPS de forma continua cada 30 segundos
     function iniciarEnvioGPS(chofer, vehiculo) {
-        if (!navigator.geolocation) {
-            alert("Tu navegador no soporta geolocalización");
-            return;
-        }
-
+        if (!navigator.geolocation) return;
         if (intervaloGPS) clearInterval(intervaloGPS);
 
         enviarCoordenadas(chofer, vehiculo);
-        intervaloGPS = setInterval(() => {
-            enviarCoordenadas(chofer, vehiculo);
-        }, 30000);
+        intervaloGPS = setInterval(() => enviarCoordenadas(chofer, vehiculo), 30000);
     }
 
     function enviarCoordenadas(chofer_id, vehiculo) {
         navigator.geolocation.getCurrentPosition(async (position) => {
             const latitud = position.coords.latitude;
             const longitud = position.coords.longitude;
-
             document.getElementById('coords').innerText = `Lat: ${latitud.toFixed(4)}, Lon: ${longitud.toFixed(4)}`;
 
             try {
@@ -384,14 +384,21 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chofer_id, vehiculo, latitud, longitud })
                 });
-                console.log("📍 Ubicación GPS enviada automáticamente al servidor.");
-            } catch (err) {
-                console.error("Error enviando GPS:", err);
-            }
-        }, (error) => {
-            console.warn("No se pudo obtener la ubicación GPS:", error.message);
-            document.getElementById('coords').innerText = "⚠️ Activa el GPS del dispositivo.";
-        }, { enableHighAccuracy: true });
+            } catch (err) {}
+        });
+    }
+
+    // Botón para Finalizar Turno y cortar el GPS manualmente
+    function finalizarTurno() {
+        if (intervaloGPS) {
+            clearInterval(intervaloGPS);
+            intervaloGPS = null;
+        }
+        if (wakeLock !== null) {
+            wakeLock.release().then(() => { wakeLock = null; });
+        }
+        document.getElementById('gps-status').style.display = 'none';
+        alert("🛑 Turno finalizado. El seguimiento GPS ha sido detenido.");
     }
 </script>
 
