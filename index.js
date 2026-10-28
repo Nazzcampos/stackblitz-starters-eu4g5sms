@@ -1,4 +1,5 @@
 const express = require('express');
+const { Pool } = require('pg');
 const app = express();
 app.use(express.static('.'));
 const PORT = process.env.PORT || 3000;
@@ -6,12 +7,24 @@ const PORT = process.env.PORT || 3000;
 // Middleware para entender JSON
 app.use(express.json());
 
+// --- CONFIGURACIÓN DE CONEXIÓN A GESCOM (PostgreSQL) ---
+const pool = new Pool({
+    user: 'gcw-bido',
+    host: 'bi.data.gescom.online',
+    database: 'gcwbi',
+    password: 'f1dqTqpo9Iwf4wTJ8ziUnDubh', // Contraseña corregida con comillas
+    port: 5432,
+    ssl: {
+        rejectUnauthorized: false // Requerido para aceptar el certificado SSL del servidor remoto
+    }
+});
+
 // Memoria temporal para el prototipo
 let choferesUbicaciones = [];
 let checkListsEnviados = [];
 let cargasCombustible = [];
 
-// Objeto para llevar el registro de kilometraje por vehículo
+// Objeto para llevar le registro de kilometraje por vehículo
 let estadisticasVehiculos = {};
 
 // Función matemática de Haversine para calcular distancia en km entre dos coordenadas GPS
@@ -29,10 +42,36 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
 
 // Ruta de Bienvenida
 app.get('/', (req, res) => {
-    res.json({ mensaje: "¡API de Gestión de Flota con Odómetro y Combustible funcionando! 🚚⛽" });
+    res.json({ mensaje: "¡API de Gestión de Flota PepsiCo conectada a Gescom funcionando! 🚚⛽" });
 });
 
-// --- 1. MÓDULO DE UBICACIÓN GPS Y DISTANCIA RECORRIDA ---
+// --- 1. MÓDULO DE CLIENTES Y HOJA DE RUTA REAL (GESCOM - POSTGRESQL) ---
+app.get('/api/clientes/:dia', async (req, res) => {
+    const diaSeleccionado = req.params.dia.toUpperCase(); // 'LU', 'MA', 'MI', 'JU', 'VI'
+
+    try {
+        // Consulta SQL directa a la base de datos PostgreSQL de Gescom
+        const query = `
+            SELECT 
+                cliente_id AS id, 
+                razon_social AS nombre, 
+                direccion, 
+                latitud AS lat, 
+                longitud AS lon 
+            FROM clientes_ruta 
+            WHERE dia_visita = $1
+        `;
+
+        const resultado = await pool.query(query, [diaSeleccionado]);
+        res.json(resultado.rows);
+
+    } catch (err) {
+        console.error("Error al consultar la base de datos de Gescom:", err);
+        res.status(500).json({ error: "No se pudo conectar con la tabla de rutas de Gescom. Verifique nombres de tablas/columnas." });
+    }
+});
+
+// --- 2. MÓDULO DE UBICACIÓN GPS Y DISTANCIA RECORRIDA ---
 app.post('/api/ubicacion', (req, res) => {
     const { chofer_id, vehiculo, latitud, longitud } = req.body;
     
@@ -42,7 +81,6 @@ app.post('/api/ubicacion', (req, res) => {
 
     const vehiculoKey = vehiculo || "Sin asignar";
 
-    // Si el vehículo no tiene registro previo, lo inicializamos
     if (!estadisticasVehiculos[vehiculoKey]) {
         estadisticasVehiculos[vehiculoKey] = {
             chofer: chofer_id,
@@ -53,19 +91,16 @@ app.post('/api/ubicacion', (req, res) => {
     }
 
     const vehStats = estadisticasVehiculos[vehiculoKey];
-    vehStats.chofer = chofer_id; // Actualizamos el chofer actual
+    vehStats.chofer = chofer_id;
 
-    // Si hay una ubicación anterior registrada, calculamos el tramo recorrido
     if (vehStats.ultimaLat !== null && vehStats.ultimaLon !== null) {
         const distanciaTramo = calcularDistancia(vehStats.ultimaLat, vehStats.ultimaLon, latitud, longitud);
         
-        // Filtro de seguridad: descartar saltos erróneos de GPS mayores a 10 km o micro-saltos menores a 1 metro
         if (distanciaTramo < 10 && distanciaTramo > 0.001) {
             vehStats.distanciaKm += distanciaTramo;
         }
     }
 
-    // Actualizamos la última posición conocida del vehículo
     vehStats.ultimaLat = latitud;
     vehStats.ultimaLon = longitud;
 
@@ -90,12 +125,10 @@ app.post('/api/ubicacion', (req, res) => {
     });
 });
 
-// El Admin consulta las ubicaciones actuales
 app.get('/api/ubicaciones', (req, res) => {
     res.json(choferesUbicaciones);
 });
 
-// Endpoint consolidado para consultar estadísticas de kilometraje por vehículo en formato array
 app.get('/api/estadisticas', (req, res) => {
     const listaEstadisticas = Object.keys(estadisticasVehiculos).map(vehiculo => ({
         vehiculo,
@@ -107,8 +140,7 @@ app.get('/api/estadisticas', (req, res) => {
     res.json(listaEstadisticas);
 });
 
-
-// --- 2. MÓDULO DE CHECK-LIST OBLIGATORIO ---
+// --- 3. MÓDULO DE CHECK-LIST OBLIGATORIO ---
 app.post('/api/checklist', (req, res) => {
     const { dominio, chofer, tipo_vehiculo, respuestas, observaciones } = req.body;
 
@@ -136,8 +168,13 @@ app.get('/api/checklists', (req, res) => {
     res.json(checkListsEnviados);
 });
 
+app.delete('/api/checklist/:id', (req, res) => {
+    const id = Number(req.params.id);
+    checkListsEnviados = checkListsEnviados.filter(c => c.id !== id);
+    res.json({ exito: true, mensaje: "Check-list eliminado" });
+});
 
-// --- 3. MÓDULO DE CONTROL DE COMBUSTIBLE ---
+// --- 4. MÓDULO DE CONTROL DE COMBUSTIBLE ---
 app.post('/api/combustible', (req, res) => {
     const { chofer, dominio, litros, costoTotal, odometroActual } = req.body;
 
@@ -145,7 +182,6 @@ app.post('/api/combustible', (req, res) => {
         return res.status(400).json({ error: "Faltan datos obligatorios para registrar la carga" });
     }
 
-    // Buscamos cargas previas de este vehículo para calcular el rendimiento
     const cargasPrevias = cargasCombustible.filter(c => c.dominio === dominio);
     let rendimientoKmLitros = 0;
 
@@ -182,7 +218,13 @@ app.get('/api/combustible', (req, res) => {
     res.json(cargasCombustible);
 });
 
-// Levantar el servidor (compatible con puertos locales y de la nube como Render)
+app.delete('/api/combustible/:id', (req, res) => {
+    const id = Number(req.params.id);
+    cargasCombustible = cargasCombustible.filter(c => c.id !== id);
+    res.json({ exito: true, mensaje: "Registro de combustible eliminado" });
+});
+
+// Levantar el servidor
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en el puerto ${PORT}`);
 });

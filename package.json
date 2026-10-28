@@ -3,7 +3,8 @@
   "private": true,
   "dependencies": {
     "express": "^4.22.3",
-    "localtunnel": "^2.0.2"
+    "localtunnel": "^2.0.2",
+    "pg": "^8.23.1"
   },
   "scripts": {
     "start": "node index.js"
