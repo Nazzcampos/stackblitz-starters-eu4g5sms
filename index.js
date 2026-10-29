@@ -108,7 +108,7 @@ app.get('/api/choferes', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE HOJA DE RUTA REAL POR CHOFER Y FECHA ---
+// --- MÓDULO DE HOJA DE RUTA REAL POR CHOFER Y FECHA (FILTRANDO PUNTOS FANTASMA) ---
 app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     const choferNombre = decodeURIComponent(req.params.nombre);
     const fechaSeleccionada = req.query.fecha; // Recibe ?YYYY-MM-DD si el usuario elige otra fecha
@@ -128,8 +128,12 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
                 v.fecha_entrega
             FROM venta v
             JOIN cliente_hist c ON v.cliente_id = c.id AND c.actual = true
-            LEFT JOIN cliente_ruta_hist rh ON v.cliente_id = rh.cliente_id AND rh.actual = true
+            JOIN cliente_ruta_hist rh ON v.cliente_id = rh.cliente_id AND rh.actual = true
             WHERE v.empleado_chofer_nombre ILIKE $1
+              AND rh.latitud IS NOT NULL 
+              AND rh.latitud != 0 
+              AND rh.longitud IS NOT NULL 
+              AND rh.longitud != 0
         `;
 
         let params = [choferNombre];
@@ -144,7 +148,7 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
         query += ` ORDER BY v.orden_planeado ASC;`;
 
         const resultado = await pool.query(query, params);
-        console.log(`📦 Se obtuvieron ${resultado.rows.length} entregas para ${choferNombre} (Fecha: ${fechaSeleccionada || 'Hoy'})`);
+        console.log(`📦 Se obtuvieron ${resultado.rows.length} entregas válidas para ${choferNombre} (Fecha: ${fechaSeleccionada || 'Hoy'})`);
         res.json(resultado.rows);
 
     } catch (err) {
