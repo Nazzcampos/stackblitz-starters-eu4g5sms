@@ -371,14 +371,23 @@
                             className: 'custom-pin',
                             html: '<div style="background:#10b981; width:14px; height:14px; border-radius:50%; border:2px solid white;"></div>'
                         })
-                    }).addTo(mapChofer).bindPopup(`<b>📦 #${c.orden || '-'} ${c.nombre}</b><br>${c.direccion || 'Sin dirección'}`);
+                    }).addTo(mapChofer).bindPopup(`<b>📦 #${c.orden || '-'} ${c.nombre}</b><br>${c.direccion || 'Sin dirección'}<br><button onclick="verCuentaCorriente(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')" style="margin-top:5px; background:#059669; padding:4px 8px; font-size:0.75rem;">Ver Cta. Cte 💰</button>`);
                     
                     marcadoresClientes.push(marker);
                 }
 
                 const card = document.createElement('div');
                 card.className = 'cliente-card';
-                card.innerHTML = `<b>📦 Orden #${c.orden || 'S/N'} - ${c.nombre}</b><br><span style="color: #94a3b8;">${c.direccion || ''} (${c.localidad || ''})</span><br><small style="color: #38bdf8;">Reparto: ${c.reparto_codigo || 'General'}</small>`;
+                card.innerHTML = `
+                    <b>📦 Orden #${c.orden || 'S/N'} - ${c.nombre}</b><br>
+                    <span style="color: #94a3b8;">${c.direccion || ''} (${c.localidad || ''})</span><br>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                        <small style="color: #38bdf8;">Reparto: ${c.reparto_codigo || 'General'}</small>
+                        <button onclick="verCuentaCorriente(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')" style="background:#059669; padding:5px 10px; font-size:0.75rem; width:auto; margin:0;">
+                            Ver Cta. Cte 💰
+                        </button>
+                    </div>
+                `;
                 listaContainer.appendChild(card);
             });
 
@@ -388,6 +397,65 @@
         } catch (err) {
             console.error("Error al cargar la ruta real del chofer:", err);
             document.getElementById('contenedor-clientes').innerHTML = '<p style="text-align: center; color: #ef4444;">Error al conectar con Gescom.</p>';
+        }
+    }
+
+    // --- NUEVA FUNCIÓN: CONSULTAR Y MOSTRAR LA CUENTA CORRIENTE DEL CLIENTE ---
+    async function verCuentaCorriente(clienteId, nombreCliente) {
+        try {
+            const response = await fetch(`/api/cta-cte/${clienteId}`);
+            const deudas = await response.json();
+
+            let detalleHtml = `
+                <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); display:flex; justify-content:center; align-items:center; z-index:2000;">
+                    <div style="background:#1e293b; padding:20px; border-radius:12px; width:90%; max-width:450px; border:1px solid #334155; max-height:80vh; overflow-y:auto;">
+                        <h3 style="color:#93c5fd; margin-top:0;">💳 Cta. Cte: ${nombreCliente}</h3>
+            `;
+
+            if (deudas.length === 0) {
+                detalleHtml += `<p style="color:#10b981; text-align:center; padding:20px;">¡Excelente! El cliente no registra deudas pendientes.</p>`;
+            } else {
+                let totalDeuda = 0;
+                detalleHtml += `<table style="width:100%; font-size:0.85rem; margin-top:10px; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #475569; text-align: left;">
+                            <th style="padding: 5px;">Comprobante</th>
+                            <th style="padding: 5px;">Vencimiento</th>
+                            <th style="padding: 5px; text-align: right;">Saldo</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+
+                deudas.forEach(d => {
+                    totalDeuda += parseFloat(d.saldo_pendiente);
+                    const fechaVto = d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString() : 'S/F';
+                    detalleHtml += `
+                        <tr style="border-bottom: 1px solid #334155;">
+                            <td style="padding: 6px 5px;">${d.tipo_comprobante_codigo || ''} ${d.punto_venta_codigo || ''}-${d.numero_comprobante || ''}</td>
+                            <td style="padding: 6px 5px;">${fechaVto}</td>
+                            <td style="padding: 6px 5px; color:#f87171; font-weight:bold; text-align: right;">$${parseFloat(d.saldo_pendiente).toLocaleString()}</td>
+                        </tr>`;
+                });
+
+                detalleHtml += `</tbody></table>`;
+                detalleHtml += `
+                    <div style="margin-top:15px; padding:10px; background:#0f172a; border-radius:6px; display:flex; justify-content:space-between; align-items:center; font-weight:bold; color:#f8fafc;">
+                        <span>Total a Cobrar:</span> 
+                        <span style="color:#ef4444; font-size:1.1rem;">$${totalDeuda.toLocaleString()}</span>
+                    </div>`;
+            }
+
+            detalleHtml += `
+                        <button onclick="this.closest('div').parentElement.remove()" style="margin-top:15px; background:#475569;">Cerrar</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', detalleHtml);
+
+        } catch (error) {
+            console.error("Error al obtener la cuenta corriente:", error);
+            alert("No se pudo cargar la cuenta corriente en este momento.");
         }
     }
 
