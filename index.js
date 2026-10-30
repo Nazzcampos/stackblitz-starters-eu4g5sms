@@ -131,7 +131,8 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
                     FROM cta_cte_cliente cc 
                     WHERE cc.cliente_id = v.cliente_id 
                       AND cc.importe > 0
-                      AND (cc.tipo_comprobante_codigo ILIKE 'FAC%' OR cc.tipo_comprobante_codigo ILIKE 'NDB%')
+                      AND cc.tipo_comprobante_codigo NOT ILIKE 'COB%'
+                      AND cc.tipo_comprobante_codigo NOT ILIKE 'REC%'
                 ), 0) AS saldo_deuda
             FROM venta v
             JOIN cliente_hist c ON v.cliente_id = c.id AND c.actual = true
@@ -163,7 +164,7 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE CUENTA CORRIENTE DESDE CTA_CTE_CLIENTE (SOLO FACTURAS PENDIENTES) ---
+// --- MÓDULO DE CUENTA CORRIENTE DESDE CTA_CTE_CLIENTE (EXCLUYENDO COBROS) ---
 app.get('/api/cta-cte/:cliente_id', async (req, res) => {
     const clienteId = req.params.cliente_id;
 
@@ -181,7 +182,8 @@ app.get('/api/cta-cte/:cliente_id', async (req, res) => {
             FROM cta_cte_cliente
             WHERE cliente_id = $1
               AND importe > 0
-              AND (tipo_comprobante_codigo ILIKE 'FAC%' OR tipo_comprobante_codigo ILIKE 'NDB%')
+              AND tipo_comprobante_codigo NOT ILIKE 'COB%'
+              AND tipo_comprobante_codigo NOT ILIKE 'REC%'
             ORDER BY fecha_vencimiento ASC;
         `;
 
