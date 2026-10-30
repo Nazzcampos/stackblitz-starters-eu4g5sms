@@ -108,7 +108,7 @@ app.get('/api/choferes', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE HOJA DE RUTA REAL POR CHOFER Y FECHA CON SALDO REAL FILTRADO (FAC/NDB) ---
+// --- MÓDULO DE HOJA DE RUTA REAL POR CHOFER Y FECHA CON SALDO REAL DE CTA CTE ---
 app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     const choferNombre = decodeURIComponent(req.params.nombre);
     const fechaSeleccionada = req.query.fecha;
@@ -131,7 +131,6 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
                     FROM cta_cte_cliente cc 
                     WHERE cc.cliente_id = v.cliente_id 
                       AND cc.importe > 0
-                      AND (cc.tipo_comprobante_codigo ILIKE 'FAC%' OR cc.tipo_comprobante_codigo ILIKE 'NDB%')
                 ), 0) AS saldo_deuda
             FROM venta v
             JOIN cliente_hist c ON v.cliente_id = c.id AND c.actual = true
@@ -163,7 +162,7 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE CUENTA CORRIENTE FILTRADO (SOLO COMPROBANTES DE DEUDA ABIERTOS) ---
+// --- MÓDULO DE CUENTA CORRIENTE (DETALLE EXACTO DE COMPROBANTES ABIERTOS) ---
 app.get('/api/cta-cte/:cliente_id', async (req, res) => {
     const clienteId = req.params.cliente_id;
 
@@ -181,7 +180,6 @@ app.get('/api/cta-cte/:cliente_id', async (req, res) => {
             FROM cta_cte_cliente
             WHERE cliente_id = $1
               AND importe > 0
-              AND (tipo_comprobante_codigo ILIKE 'FAC%' OR tipo_comprobante_codigo ILIKE 'NDB%')
             ORDER BY fecha_vencimiento ASC;
         `;
 
