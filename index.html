@@ -365,13 +365,20 @@
             }
 
             clientes.forEach(c => {
+                const tieneDeuda = parseFloat(c.saldo_deuda) > 0;
+
                 if (c.lat && c.lon) {
+                    let popupHtml = `<b>📦 #${c.orden || '-'} ${c.nombre}</b><br>${c.direccion || 'Sin dirección'}`;
+                    if (tieneDeuda) {
+                        popupHtml += `<br><button onclick="verCuentaCorriente(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')" style="margin-top:5px; background:#059669; padding:4px 8px; font-size:0.75rem;">Ver Cta. Cte 💰 ($${parseFloat(c.saldo_deuda).toLocaleString()})</button>`;
+                    }
+
                     const marker = L.marker([c.lat, c.lon], {
                         icon: L.divIcon({
                             className: 'custom-pin',
-                            html: '<div style="background:#10b981; width:14px; height:14px; border-radius:50%; border:2px solid white;"></div>'
+                            html: `<div style="background:${tieneDeuda ? '#ef4444' : '#10b981'}; width:14px; height:14px; border-radius:50%; border:2px solid white;"></div>`
                         })
-                    }).addTo(mapChofer).bindPopup(`<b>📦 #${c.orden || '-'} ${c.nombre}</b><br>${c.direccion || 'Sin dirección'}<br><button onclick="verCuentaCorriente(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')" style="margin-top:5px; background:#059669; padding:4px 8px; font-size:0.75rem;">Ver Cta. Cte 💰</button>`);
+                    }).addTo(mapChofer).bindPopup(popupHtml);
                     
                     marcadoresClientes.push(marker);
                 }
@@ -383,9 +390,10 @@
                     <span style="color: #94a3b8;">${c.direccion || ''} (${c.localidad || ''})</span><br>
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
                         <small style="color: #38bdf8;">Reparto: ${c.reparto_codigo || 'General'}</small>
-                        <button onclick="verCuentaCorriente(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')" style="background:#059669; padding:5px 10px; font-size:0.75rem; width:auto; margin:0;">
-                            Ver Cta. Cte 💰
-                        </button>
+                        ${tieneDeuda ? `
+                            <button onclick="verCuentaCorriente(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')" style="background:#059669; padding:5px 10px; font-size:0.75rem; width:auto; margin:0;">
+                                Ver Cta. Cte 💰 ($${parseFloat(c.saldo_deuda).toLocaleString()})
+                            </button>` : `<span style="color: #10b981; font-size: 0.75rem;">✔ Al día (Contado)</span>`}
                     </div>
                 `;
                 listaContainer.appendChild(card);
@@ -400,7 +408,7 @@
         }
     }
 
-    // --- NUEVA FUNCIÓN: CONSULTAR Y MOSTRAR LA CUENTA CORRIENTE DEL CLIENTE ---
+    // --- FUNCIÓN: CONSULTAR Y MOSTRAR LA CUENTA CORRIENTE DEL CLIENTE ---
     async function verCuentaCorriente(clienteId, nombreCliente) {
         try {
             const response = await fetch(`/api/cta-cte/${clienteId}`);

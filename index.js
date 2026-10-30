@@ -40,7 +40,7 @@ async function probarConexionYListarTablas() {
             console.log("⚠️ La conexión fue exitosa, pero el esquema 'public' no devolvió tablas.");
         } else {
             resultado.rows.forEach((row, index) => {
-                console.log(`   ${index + 1}. ${row.table_name}`);
+                console.log(`    ${index + 1}. ${row.table_name}`);
             });
         }
         console.log("--------------------------------------------------");
@@ -108,10 +108,10 @@ app.get('/api/choferes', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE HOJA DE RUTA REAL POR CHOFER Y FECHA (FILTRANDO PUNTOS FANTASMA) ---
+// --- MÓDULO DE HOJA DE RUTA REAL POR CHOFER Y FECHA CON SALDO DE CTA CTE ---
 app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     const choferNombre = decodeURIComponent(req.params.nombre);
-    const fechaSeleccionada = req.query.fecha; // Recibe ?YYYY-MM-DD si el usuario elige otra fecha
+    const fechaSeleccionada = req.query.fecha;
 
     try {
         let query = `
@@ -125,7 +125,12 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
                 v.orden_planeado AS orden,
                 v.reparto_codigo,
                 v.empleado_chofer_nombre AS chofer,
-                v.fecha_entrega
+                v.fecha_entrega,
+                COALESCE((
+                    SELECT SUM(cc.importe) 
+                    FROM cta_cte_cliente cc 
+                    WHERE cc.cliente_id = v.cliente_id AND cc.importe > 0
+                ), 0) AS saldo_deuda
             FROM venta v
             JOIN cliente_hist c ON v.cliente_id = c.id AND c.actual = true
             JOIN cliente_ruta_hist rh ON v.cliente_id = rh.cliente_id AND rh.actual = true
@@ -148,12 +153,41 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
         query += ` ORDER BY v.orden_planeado ASC;`;
 
         const resultado = await pool.query(query, params);
-        console.log(`📦 Se obtuvieron ${resultado.rows.length} entregas válidas para ${choferNombre} (Fecha: ${fechaSeleccionada || 'Hoy'})`);
         res.json(resultado.rows);
 
     } catch (err) {
         console.error("❌ Error al consultar las ventas del chofer en Gescom:", err.message);
         res.status(500).json({ error: err.message });
+    }
+});
+
+// --- MÓDULO DE CUENTA CORRIENTE (GESCOM - CTA_CTE_CLIENTE) ---
+app.get('/api/cta-cte/:cliente_id', async (req, res) => {
+    const clienteId = req.params.cliente_id;
+
+    try {
+        const query = `
+            SELECT 
+                tipo_comprobante_codigo,
+                punto_venta_codigo,
+                numero_comprobante,
+                fecha_comprobante,
+                fecha_vencimiento,
+                importe_original,
+                importe AS saldo_pendiente,
+                detalle
+            FROM cta_cte_cliente
+            WHERE cliente_id = $1
+              AND importe > 0
+            ORDER BY fecha_vencimiento ASC;
+        `;
+
+        const resultado = await pool.query(query, [clienteId]);
+        res.json(resultado.rows);
+
+    } catch (err) {
+        console.error("Error al consultar la cuenta corriente en Gescom:", err);
+        res.status(500).json({ error: "Error interno al obtener la cuenta corriente" });
     }
 });
 
@@ -230,7 +264,7 @@ app.get('/api/estadisticas', (req, res) => {
 
 app.post('/api/checklist', (req, res) => {
     const { dominio, chofer } = req.body;
-    if (!dominio || !chofer) return res.status(400).json({ error: "Faltan datos" });
+    if (!dominio || !chofer) return res.status(400).json({ error: "Faltan datos obligatorios" });
     const nuevo = { id: checkListsEnviados.length + 1, marca_temporal: new Date(), ...req.body };
     checkListsEnviados.push(nuevo);
     res.status(201).json({ exito: true, id: nuevo.id });
