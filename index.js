@@ -108,7 +108,7 @@ app.get('/api/choferes', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE HOJA DE RUTA CON SALDO LIMPIO (SIN DUPLICADOS DE SINCRONIZACIÓN) ---
+// --- MÓDULO DE HOJA DE RUTA CON SALDO LIMPIO (ESTRICTAMENTE FACTURAS 'FAC%') ---
 app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     const choferNombre = decodeURIComponent(req.params.nombre);
     const fechaSeleccionada = req.query.fecha;
@@ -133,8 +133,7 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
                         FROM cta_cte_cliente cc 
                         WHERE cc.cliente_id = v.cliente_id 
                           AND cc.importe > 0
-                          AND cc.tipo_comprobante_codigo NOT ILIKE 'COB%'
-                          AND cc.tipo_comprobante_codigo NOT ILIKE 'REC%'
+                          AND cc.tipo_comprobante_codigo ILIKE 'FAC%'
                         ORDER BY cc.tipo_comprobante_codigo, cc.punto_venta_codigo, cc.numero_comprobante, cc.fecha_sync DESC
                     ) sub
                 ), 0) AS saldo_deuda
@@ -168,7 +167,7 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE CUENTA CORRIENTE DETALLADA (SIN DUPLICADOS) ---
+// --- MÓDULO DE CUENTA CORRIENTE DETALLADA (SOLO FACTURAS VIVAS SIN DUPLICADOS) ---
 app.get('/api/cta-cte/:cliente_id', async (req, res) => {
     const clienteId = req.params.cliente_id;
 
@@ -186,8 +185,7 @@ app.get('/api/cta-cte/:cliente_id', async (req, res) => {
             FROM cta_cte_cliente
             WHERE cliente_id = $1
               AND importe > 0
-              AND tipo_comprobante_codigo NOT ILIKE 'COB%'
-              AND tipo_comprobante_codigo NOT ILIKE 'REC%'
+              AND tipo_comprobante_codigo ILIKE 'FAC%'
             ORDER BY tipo_comprobante_codigo, punto_venta_codigo, numero_comprobante, fecha_sync DESC;
         `;
 
