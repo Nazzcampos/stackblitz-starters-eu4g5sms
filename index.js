@@ -108,7 +108,7 @@ app.get('/api/choferes', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE HOJA DE RUTA REAL POR CHOFER Y FECHA CON SALDO DE CTA CTE ---
+// --- MÓDULO DE HOJA DE RUTA REAL POR CHOFER Y FECHA CON SALDO REAL DE CTA CTE ---
 app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     const choferNombre = decodeURIComponent(req.params.nombre);
     const fechaSeleccionada = req.query.fecha;
@@ -129,7 +129,7 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
                 COALESCE((
                     SELECT SUM(cc.importe) 
                     FROM cta_cte_cliente cc 
-                    WHERE cc.cliente_id = v.cliente_id AND cc.importe > 0
+                    WHERE cc.cliente_id = v.cliente_id
                 ), 0) AS saldo_deuda
             FROM venta v
             JOIN cliente_hist c ON v.cliente_id = c.id AND c.actual = true
