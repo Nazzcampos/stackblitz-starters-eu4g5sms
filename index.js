@@ -108,7 +108,7 @@ app.get('/api/choferes', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE HOJA DE RUTA REAL POR CHOFER Y FECHA CON SALDO REAL DE CTA CTE ---
+// --- MÓDULO DE HOJA DE RUTA REAL CON SALDO DE ASIENTO_MOVIMIENTO (CERRADO = 0) ---
 app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     const choferNombre = decodeURIComponent(req.params.nombre);
     const fechaSeleccionada = req.query.fecha;
@@ -127,10 +127,10 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
                 v.empleado_chofer_nombre AS chofer,
                 v.fecha_entrega,
                 COALESCE((
-                    SELECT SUM(cc.importe) 
-                    FROM cta_cte_cliente cc 
-                    WHERE cc.cliente_id = v.cliente_id 
-                      AND cc.importe > 0
+                    SELECT SUM(CASE WHEN am.debe_haber = 'd' THEN am.valor ELSE -am.valor END) 
+                    FROM asiento_movimiento am 
+                    WHERE am.entity_id = v.cliente_id 
+                      AND am.cerrado = 0
                 ), 0) AS saldo_deuda
             FROM venta v
             JOIN cliente_hist c ON v.cliente_id = c.id AND c.actual = true
@@ -162,32 +162,32 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE CUENTA CORRIENTE (DETALLE EXACTO DE COMPROBANTES ABIERTOS) ---
+// --- MÓDULO DE CUENTA CORRIENTE DESDE ASIENTO_MOVIMIENTO ---
 app.get('/api/cta-cte/:cliente_id', async (req, res) => {
     const clienteId = req.params.cliente_id;
 
     try {
         const query = `
             SELECT 
-                tipo_comprobante_codigo,
-                punto_venta_codigo,
-                numero_comprobante,
-                fecha_comprobante,
-                fecha_vencimiento,
-                importe_original,
-                importe AS saldo_pendiente,
-                detalle
-            FROM cta_cte_cliente
-            WHERE cliente_id = $1
-              AND importe > 0
-            ORDER BY fecha_vencimiento ASC;
+                entity_desc AS tipo_comprobante_codigo,
+                '' AS punto_venta_codigo,
+                '' AS numero_comprobante,
+                fecha AS fecha_comprobante,
+                fecha AS fecha_vencimiento,
+                valor AS importe_original,
+                CASE WHEN debe_haber = 'd' THEN valor ELSE -valor END AS saldo_pendiente,
+                asiento_comentario AS detalle
+            FROM asiento_movimiento
+            WHERE entity_id = $1
+              AND cerrado = 0
+            ORDER BY fecha ASC;
         `;
 
         const resultado = await pool.query(query, [clienteId]);
         res.json(resultado.rows);
 
     } catch (err) {
-        console.error("Error al consultar la cuenta corriente en Gescom:", err);
+        console.error("Error al consultar la cuenta corriente contable:", err);
         res.status(500).json({ error: "Error interno al obtener la cuenta corriente" });
     }
 });
