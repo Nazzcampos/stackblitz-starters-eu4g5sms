@@ -432,7 +432,8 @@
             <div class="user-chip" id="userChip">
                 <span class="avatar" id="avatarChofer">--</span>
                 <span class="user-name" id="lblChofer">-</span>
-                <button type="button" class="btn-chip" onclick="cerrarSesion()">Cambiar</button>
+                <button type="button" class="btn-chip" onclick="abrirCambioPin()" title="Cambiar mi PIN">🔑 PIN</button>
+                <button type="button" class="btn-chip" onclick="cerrarSesion()">Salir</button>
             </div>
         </div>
     </div>
@@ -452,13 +453,19 @@
                 </svg>
             </div>
             <h2 class="login-title">Bienvenido a bordo</h2>
-            <p class="login-sub">Seleccioná tu nombre para iniciar tu turno y ver tus entregas.</p>
-            <form id="loginForm">
+            <p class="login-sub">Elegí tu nombre e ingresá tu PIN para ver tu reparto.</p>
+            <form id="loginForm" autocomplete="off">
                 <label for="selectChoferLogin">Chofer</label>
                 <select id="selectChoferLogin" required>
                     <option value="">Cargando choferes de Gescom...</option>
                 </select>
-                <button type="submit">Iniciar Turno</button>
+
+                <label for="pinLogin">Tu PIN</label>
+                <input type="password" id="pinLogin" inputmode="numeric" pattern="[0-9]*" maxlength="8" required
+                       placeholder="••••" autocomplete="off" style="text-align: center; letter-spacing: 8px; font-size: 1.3rem;">
+
+                <button type="submit" id="btnLogin">Iniciar Turno</button>
+                <p class="login-sub" style="margin-top: 14px; font-size: .76rem;">¿No sabés tu PIN? Pedíselo al administrador.</p>
             </form>
         </div>
     </div>
@@ -594,6 +601,31 @@
     let choferActual = "";
     let clientesPorId = {};
 
+    // ---------- Sesión: el token se guarda en el dispositivo y viaja en cada pedido ----------
+    function leerTokenGuardado() { try { return localStorage.getItem('flota_token'); } catch (e) { return null; } }
+    function guardarTokenSesion(t) { try { localStorage.setItem('flota_token', t); } catch (e) {} }
+    function borrarTokenGuardado() { try { localStorage.removeItem('flota_token'); } catch (e) {} }
+
+    // Igual que fetch, pero con la sesión del chofer. Si el servidor la rechaza (401), se vuelve al login.
+    async function apiFetch(url, opciones) {
+        const token = leerTokenGuardado();
+        const cfg = Object.assign({}, opciones || {});
+        cfg.headers = Object.assign({}, cfg.headers || {});
+        if (token) cfg.headers['Authorization'] = 'Bearer ' + token;
+        const res = await fetch(url, cfg);
+        if (res.status === 401 && token) {
+            let mensaje = '';
+            try { mensaje = (await res.clone().json()).error || ''; } catch (e) {}
+            sesionVencida(mensaje);
+        }
+        return res;
+    }
+    function sesionVencida(mensaje) {
+        const habiaSesion = !!choferActual;
+        cerrarSesion();
+        if (habiaSesion) mostrarToast(mensaje || "Tu sesión venció. Volvé a ingresar con tu PIN.", 'error');
+    }
+
     function escapeHtml(t) {
         return String(t == null ? '' : t).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     }
@@ -646,11 +678,23 @@
         }
     }
 
-    // Ejecutar al iniciar y setear fecha de hoy en el input
-    window.onload = () => {
+    // Ejecutar al iniciar: lista de choferes, fecha de hoy y, si hay una sesión guardada, entrar directo
+    window.onload = async () => {
         cargarChoferesParaLogin();
         const inputFecha = document.getElementById('inputFechaRuta');
         if (inputFecha) inputFecha.value = fechaLocalHoy();
+
+        if (leerTokenGuardado()) {
+            try {
+                const res = await apiFetch('/api/me');
+                if (res.ok) {
+                    const datos = await res.json();
+                    entrarComoChofer(datos.nombre);
+                } else {
+                    borrarTokenGuardado();
+                }
+            } catch (err) { /* sin conexión: queda el login */ }
+        }
     };
 
     function cambiarFechaRuta() {
@@ -659,43 +703,134 @@
         }
     }
 
-    // Manejo del Login con el Chofer Seleccionado
-    document.getElementById('loginForm').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const select = document.getElementById('selectChoferLogin');
-        const usuario = select.value;
-        if (!usuario) {
-            mostrarToast("Por favor seleccioná un chofer.", 'error');
-            return;
-        }
-
-        choferActual = usuario;
+    // Pasa de la pantalla de login a la app, ya con el chofer autenticado
+    function entrarComoChofer(nombre) {
+        choferActual = nombre;
         document.getElementById('lblChofer').innerText = choferActual;
         document.getElementById('avatarChofer').innerText = iniciales(choferActual);
         document.getElementById('userChip').classList.add('on');
 
-        // Ocultar login y mostrar solapas y check-list
         document.getElementById('vista-login').classList.remove('active');
+        document.querySelectorAll('.vista-seccion').forEach(sec => { if (sec.id !== 'vista-login') sec.classList.remove('active'); });
         document.querySelectorAll('.nav-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
         document.getElementById('seccion-checklist').classList.add('active');
         document.getElementById('navIsland').style.display = 'flex';
         window.scrollTo({ top: 0 });
+    }
+
+    // Login: nombre + PIN. El servidor devuelve una sesión que solo da acceso al reparto de ese chofer
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nombre = document.getElementById('selectChoferLogin').value;
+        const campoPin = document.getElementById('pinLogin');
+        const pin = campoPin.value.trim();
+        if (!nombre) {
+            mostrarToast("Por favor seleccioná un chofer.", 'error');
+            return;
+        }
+        if (!/^\d{4,8}$/.test(pin)) {
+            mostrarToast("Ingresá tu PIN (entre 4 y 8 números).", 'error');
+            return;
+        }
+
+        const boton = document.getElementById('btnLogin');
+        boton.disabled = true;
+        try {
+            const res = await fetch('/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre, pin })
+            });
+            const datos = await res.json().catch(() => ({}));
+            campoPin.value = '';
+            if (!res.ok) {
+                mostrarToast(datos.error || "No se pudo iniciar sesión.", 'error');
+                return;
+            }
+            guardarTokenSesion(datos.token);
+            entrarComoChofer(datos.nombre);
+        } catch (err) {
+            mostrarToast("No se pudo conectar con el servidor.", 'error');
+        } finally {
+            boton.disabled = false;
+        }
     });
 
+    // ---------- Cambiar mi PIN ----------
+    function abrirCambioPin() {
+        if (!choferActual || document.getElementById('modalCambioPin')) return;
+        const cont = document.createElement('div');
+        cont.id = 'modalCambioPin';
+        cont.className = 'modal-overlay';
+        cont.innerHTML = `
+            <form class="modal-card" autocomplete="off" style="text-align:center;">
+                <h3 class="modal-title">🔑 Cambiar mi PIN</h3>
+                <p class="modal-sub">${escapeHtml(choferActual)}</p>
+                <label for="pinActual">PIN actual</label>
+                <input type="password" id="pinActual" inputmode="numeric" pattern="[0-9]*" maxlength="8" required
+                       style="text-align:center; letter-spacing:6px; font-size:1.2rem;">
+                <label for="pinNuevo" style="margin-top:10px; display:block;">PIN nuevo (4 a 8 números)</label>
+                <input type="password" id="pinNuevo" inputmode="numeric" pattern="[0-9]*" maxlength="8" required
+                       style="text-align:center; letter-spacing:6px; font-size:1.2rem;">
+                <label for="pinNuevo2" style="margin-top:10px; display:block;">Repetí el PIN nuevo</label>
+                <input type="password" id="pinNuevo2" inputmode="numeric" pattern="[0-9]*" maxlength="8" required
+                       style="text-align:center; letter-spacing:6px; font-size:1.2rem;">
+                <p class="login-sub" style="margin-top:12px; font-size:.76rem;">Evitá números fáciles como 1234 o 0000. Al cambiarlo, tu sesión en otros dispositivos se cierra.</p>
+                <div style="display:grid; gap:8px; margin-top:12px;">
+                    <button type="submit" id="btnGuardarPinNuevo">Guardar PIN</button>
+                    <button type="button" class="btn-ghost" id="btnCancelarPin">Cancelar</button>
+                </div>
+            </form>`;
+        document.body.appendChild(cont);
+        const cerrar = () => cont.remove();
+        cont.addEventListener('click', (ev) => { if (ev.target === cont) cerrar(); });
+        cont.querySelector('#btnCancelarPin').onclick = cerrar;
+        cont.querySelectorAll('input').forEach(i => i.addEventListener('input', () => { i.value = i.value.replace(/\D/g, ''); }));
+        cont.querySelector('form').addEventListener('submit', async (ev) => {
+            ev.preventDefault();
+            const pinActual = cont.querySelector('#pinActual').value.trim();
+            const pinNuevo = cont.querySelector('#pinNuevo').value.trim();
+            const pinNuevo2 = cont.querySelector('#pinNuevo2').value.trim();
+            if (!/^\d{4,8}$/.test(pinNuevo)) { mostrarToast("El PIN nuevo debe tener entre 4 y 8 números.", 'error'); return; }
+            if (pinNuevo !== pinNuevo2) { mostrarToast("Los dos PIN nuevos no coinciden.", 'error'); return; }
+            const boton = cont.querySelector('#btnGuardarPinNuevo');
+            boton.disabled = true;
+            try {
+                const res = await apiFetch('/api/cambiar-pin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pinActual, pinNuevo })
+                });
+                const datos = await res.json().catch(() => ({}));
+                if (!res.ok) { mostrarToast(datos.error || "No se pudo cambiar el PIN.", 'error'); return; }
+                guardarTokenSesion(datos.token);
+                mostrarToast("✅ PIN cambiado. Usalo la próxima vez que ingreses.", 'ok');
+                cerrar();
+            } catch (err) {
+                mostrarToast("No se pudo conectar con el servidor.", 'error');
+            } finally {
+                boton.disabled = false;
+            }
+        });
+        setTimeout(() => { const c = cont.querySelector('#pinActual'); if (c) c.focus(); }, 50);
+    }
+
     function cerrarSesion() {
-        // Si se cambia de chofer, se corta el turno y el GPS para no enviar ubicaciones con el nombre equivocado
+        // Al salir se corta el turno y el GPS, y se borra la sesión del dispositivo
         enviarAlServidor = false;
         detenerSeguimientoGPS();
         if (wakeLock !== null) { wakeLock.release().catch(() => {}); wakeLock = null; }
+        borrarTokenGuardado();
         document.getElementById('gps-status').style.display = 'none';
         document.getElementById('avisoWrap').innerHTML = '';
         clientesPorId = {};
         choferActual = "";
-        document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.vista-seccion').forEach(sec => sec.classList.remove('active'));
         document.getElementById('vista-login').classList.add('active');
         document.getElementById('navIsland').style.display = 'none';
         document.getElementById('userChip').classList.remove('on');
         document.getElementById('selectChoferLogin').value = '';
+        document.getElementById('pinLogin').value = '';
     }
 
     function cambiarVista(vista, btn) {
@@ -772,7 +907,7 @@
         }
 
         try {
-            const res = await fetch(url);
+            const res = await apiFetch(url);
             const clientes = await res.json();
 
             marcadoresClientes.forEach(m => mapChofer.removeLayer(m));
@@ -854,7 +989,11 @@
         const cliente = clientesPorId[clienteId];
         const nombreCliente = cliente ? cliente.nombre : 'Cliente';
         try {
-            const response = await fetch(`/api/cta-cte/${clienteId}`);
+            const response = await apiFetch(`/api/cta-cte/${clienteId}`);
+            if (response.status === 403) {
+                mostrarToast("Ese cliente no figura en tu reparto actual. Actualizá la hoja de ruta.", 'error');
+                return;
+            }
             if (!response.ok) throw new Error('HTTP ' + response.status);
             const movimientos = await response.json();
 
@@ -1064,7 +1203,7 @@
         // Informar al servidor (máx. una vez cada 30 s y solo con buena precisión)
         if (enviarAlServidor && !MODO_PRUEBA && precision <= PRECISION_MAX_ENVIO_M && Date.now() - ultimoEnvio >= INTERVALO_ENVIO_MS) {
             ultimoEnvio = Date.now();
-            fetch('/api/ubicacion', {
+            apiFetch('/api/ubicacion', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chofer_id: choferActual, vehiculo: vehiculoActual, latitud: lat, longitud: lon })
@@ -1174,7 +1313,7 @@
         });
 
         try {
-            const respuesta = await fetch('/api/checklist', {
+            const respuesta = await apiFetch('/api/checklist', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chofer: choferActual, dominio, tipo_vehiculo, respuestas, observaciones })
@@ -1210,7 +1349,7 @@
         };
 
         try {
-            const respuesta = await fetch('/api/combustible', {
+            const respuesta = await apiFetch('/api/combustible', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(datosCarga)

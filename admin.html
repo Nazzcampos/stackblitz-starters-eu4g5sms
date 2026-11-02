@@ -238,6 +238,62 @@
         .nav-btn:hover { filter: none; transform: none; color: var(--text); background: rgba(255,255,255,.05); }
         .nav-btn.active { color: #fff; background: linear-gradient(135deg, var(--violet), var(--violet-2)); box-shadow: 0 8px 22px rgba(124, 92, 255, .5); }
 
+        /* ---------- Acceso del administrador ---------- */
+        .login-overlay {
+            position: fixed; inset: 0; z-index: 3000; display: none; align-items: center; justify-content: center; padding: 16px;
+            background: rgba(2, 3, 12, .86); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+        }
+        .login-overlay.on { display: flex; animation: fadeUp .3s ease both; }
+        .login-card {
+            width: 100%; max-width: 400px; padding: 28px 24px; text-align: center;
+            background: var(--surface-solid); border: 1px solid var(--border-strong);
+            border-radius: var(--radius-xl); box-shadow: var(--shadow), var(--glow);
+        }
+        .login-orb {
+            width: 78px; height: 78px; margin: 0 auto 14px; border-radius: 50%; display: grid; place-items: center;
+            background: radial-gradient(circle at 30% 25%, #9b86ff, var(--violet) 55%, #3b2bb8);
+            box-shadow: var(--glow), inset 0 0 0 1px rgba(255,255,255,.25);
+        }
+        .login-card h2 { margin: 0; font-size: 1.3rem; font-weight: 800; }
+        .login-card p { margin: 6px 0 16px; font-size: .86rem; color: var(--muted); }
+        .campo {
+            width: 100%; padding: 13px 14px; font-size: 1rem; font-family: inherit; text-align: center;
+            color: var(--text); background: rgba(4, 6, 20, .55); border: 1px solid var(--border); border-radius: var(--radius-md);
+            color-scheme: dark; transition: border-color .2s, box-shadow .2s;
+        }
+        .campo:focus { outline: none; border-color: var(--violet); box-shadow: 0 0 0 4px rgba(124, 92, 255, .22); }
+        .login-card button[type="submit"] { width: 100%; margin-top: 14px; padding: 13px 16px; border-radius: var(--radius-md); font-size: 1rem; }
+        .login-error { min-height: 20px; margin-top: 10px; font-size: .82rem; font-weight: 700; color: var(--danger); }
+        .busqueda { display: flex; gap: 10px; margin-bottom: 12px; }
+        .busqueda .campo { text-align: left; }
+        .pin-badge {
+            display: inline-block; padding: 5px 14px; border-radius: 12px; font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 1.05rem; font-weight: 800; letter-spacing: 4px; color: var(--cyan);
+            background: rgba(34, 211, 238, .1); border: 1px solid rgba(34, 211, 238, .3);
+        }
+        .btn-suave {
+            padding: 6px 12px; font-size: .75rem; color: var(--text); background: rgba(255,255,255,.08);
+            border: 1px solid var(--border); box-shadow: none;
+        }
+        .btn-suave:hover { background: rgba(255,255,255,.16); filter: none; }
+        .badge-warn { color: var(--warn); background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .4); }
+        .acciones { display: flex; gap: 6px; flex-wrap: wrap; }
+        .pin-nota { display: block; margin-top: 4px; font-size: .68rem; color: var(--muted); }
+        .fila-inactiva td { opacity: .55; }
+        .fila-inactiva td:last-child { opacity: 1; }
+        .pill-db { color: var(--muted); background: rgba(255,255,255,.06); border-color: var(--border); }
+        .pill-db .live-dot { background: var(--muted); animation: none; }
+        .pill-db.ok { color: var(--ok); background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
+        .pill-db.ok .live-dot { background: var(--ok); animation: ping 1.6s infinite; }
+        .pill-db.mal { color: var(--danger); background: rgba(251, 113, 133, .12); border-color: rgba(251, 113, 133, .4); }
+        .pill-db.mal .live-dot { background: var(--danger); animation: none; }
+        .modal-pin-fila { display: flex; gap: 8px; margin-top: 4px; }
+        .modal-pin-fila button { flex: 1; padding: 11px 10px; border-radius: var(--radius-md); font-size: .85rem; }
+        .modal-pin-opciones { display: grid; gap: 8px; margin-top: 12px; }
+        .modal-pin-opciones button { width: 100%; padding: 11px 14px; border-radius: var(--radius-md); font-size: .85rem; }
+        .pin-grande { margin: 14px 0 4px; font-family: 'Consolas', 'Courier New', monospace; font-size: 2.2rem; font-weight: 800; letter-spacing: 8px; color: var(--cyan); }
+        .modal-aviso { font-size: .78rem; color: var(--warn); margin: 0 0 12px; }
+
         @media (max-width: 960px) {
             .grid-container { grid-template-columns: 1fr; }
             .kpis { grid-template-columns: repeat(2, 1fr); }
@@ -253,6 +309,46 @@
     </style>
 </head>
 <body>
+
+<!-- ACCESO DEL ADMINISTRADOR -->
+<div class="login-overlay" id="loginAdmin">
+    <form class="login-card" id="formLoginAdmin" autocomplete="off">
+        <div class="login-orb">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h2>Acceso de administración</h2>
+        <p>Ingresá la clave para ver la flota, los check-lists y los PIN de los choferes.</p>
+        <input type="password" class="campo" id="claveAdmin" placeholder="Clave de administrador" autocomplete="current-password" required>
+        <div class="login-error" id="errorLoginAdmin"></div>
+        <button type="submit" id="btnLoginAdmin">Ingresar</button>
+    </form>
+</div>
+
+<!-- CAMBIO DE PIN DE UN CHOFER -->
+<div class="login-overlay" id="modalPin">
+    <div class="login-card">
+        <h2 id="modalPinTitulo">PIN del chofer</h2>
+        <div id="modalPinFormulario">
+            <p>Elegí un PIN de 4 a 8 números o generá uno al azar. Al guardarlo se cierran las sesiones abiertas de ese chofer.</p>
+            <input type="text" class="campo" id="modalPinInput" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Nuevo PIN (4 a 8 números)" autocomplete="off">
+            <div class="login-error" id="modalPinError"></div>
+            <div class="modal-pin-opciones">
+                <button type="button" id="btnGuardarPin">Guardar este PIN</button>
+                <button type="button" class="btn-suave" id="btnGenerarPin">🎲 Generar uno al azar</button>
+                <button type="button" class="btn-suave" id="btnRestablecerPin">↩ Volver al PIN inicial</button>
+                <button type="button" class="btn-suave" onclick="cerrarModalPin()">Cancelar</button>
+            </div>
+        </div>
+        <div id="modalPinResultado" style="display:none">
+            <p class="modal-aviso">Anotalo o pasáselo al chofer ahora: después de cerrar esta ventana no se vuelve a mostrar.</p>
+            <div class="pin-grande" id="modalPinValor"></div>
+            <div class="modal-pin-opciones">
+                <button type="button" id="btnCopiarNuevoPin">📋 Copiar PIN</button>
+                <button type="button" class="btn-suave" onclick="cerrarModalPin()">Listo</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- BARRA SUPERIOR -->
 <header class="topbar">
@@ -273,8 +369,10 @@
         </div>
         <div class="topbar-right">
             <span class="live-pill"><span class="live-dot"></span><span class="txt" id="lblActualizado">En vivo · cada 10 s</span></span>
+            <span class="live-pill pill-db" id="pillDb" title="Estado de la base de datos (Supabase)"><span class="live-dot"></span><span class="txt" id="lblDb">Base de datos…</span></span>
             <a class="link-chip" href="/index.html">📱 App Chofer</a>
             <button type="button" onclick="cargarDatos()">Actualizar</button>
+            <button type="button" class="btn-suave" onclick="cerrarSesionAdmin()">Salir</button>
         </div>
     </div>
 </header>
@@ -394,13 +492,46 @@
             </div>
         </div>
     </div>
+
+    <!-- PESTAÑA 4: CHOFERES Y PIN -->
+    <div id="seccion-choferes" class="vista-seccion">
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div>
+                    <h2 class="section-title">Choferes y PIN de acceso</h2>
+                    <p class="section-sub">Cada chofer entra con su nombre y su PIN y solo ve su reparto. Podés cambiarle el PIN o desactivarlo.</p>
+                </div>
+            </div>
+            <div class="busqueda">
+                <input type="search" class="campo" id="buscarChofer" placeholder="Buscar chofer..." oninput="dibujarChoferes()">
+                <button type="button" class="btn-suave" onclick="cargarChoferes()">Actualizar</button>
+            </div>
+            <div class="table-wrap">
+                <table id="tabla-choferes">
+                    <thead>
+                        <tr>
+                            <th>Chofer</th>
+                            <th>Estado</th>
+                            <th>PIN</th>
+                            <th>Último ingreso</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </main>
 
 <!-- DOCK DE NAVEGACIÓN (3 SOLAPAS) -->
 <nav class="nav-island">
     <button type="button" class="nav-btn active" onclick="cambiarVistaAdmin('gps', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><path d="M8 2v16"/><path d="M16 6v16"/></svg>
-        Control de flota
+        Flota
     </button>
     <button type="button" class="nav-btn" onclick="cambiarVistaAdmin('checklists', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -409,6 +540,10 @@
     <button type="button" class="nav-btn" onclick="cambiarVistaAdmin('combustible', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18"/><path d="M3 22h12"/><path d="M15 12h2a2 2 0 0 1 2 2v3a2 2 0 0 0 4 0V9l-3-3"/><path d="M6 8h6"/></svg>
         Combustible
+    </button>
+    <button type="button" class="nav-btn" onclick="cambiarVistaAdmin('choferes', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Choferes
     </button>
 </nav>
 
@@ -436,6 +571,218 @@
         return isNaN(d) ? '-' : d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
     }
 
+    // ---------- Sesión del administrador ----------
+    function leerTokenAdmin() { try { return localStorage.getItem('flota_admin_token'); } catch (e) { return null; } }
+    function guardarTokenAdmin(t) { try { localStorage.setItem('flota_admin_token', t); } catch (e) {} }
+    function borrarTokenAdmin() { try { localStorage.removeItem('flota_admin_token'); } catch (e) {} }
+
+    function mostrarLoginAdmin() {
+        document.getElementById('loginAdmin').classList.add('on');
+        setTimeout(() => document.getElementById('claveAdmin').focus(), 50);
+    }
+    function ocultarLoginAdmin() {
+        document.getElementById('loginAdmin').classList.remove('on');
+        document.getElementById('errorLoginAdmin').innerText = '';
+    }
+    function cerrarSesionAdmin() {
+        borrarTokenAdmin();
+        mostrarLoginAdmin();
+    }
+
+    // Igual que fetch, pero con la clave de administrador. Si el servidor la rechaza, se pide ingresar de nuevo.
+    async function adminFetch(url, opciones) {
+        const cfg = Object.assign({}, opciones || {});
+        cfg.headers = Object.assign({}, cfg.headers || {});
+        const token = leerTokenAdmin();
+        if (token) cfg.headers['Authorization'] = 'Bearer ' + token;
+        const res = await fetch(url, cfg);
+        if (res.status === 401) {
+            borrarTokenAdmin();
+            mostrarLoginAdmin();
+            throw new Error('SESION');
+        }
+        return res;
+    }
+
+    document.getElementById('formLoginAdmin').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const campo = document.getElementById('claveAdmin');
+        const boton = document.getElementById('btnLoginAdmin');
+        const error = document.getElementById('errorLoginAdmin');
+        boton.disabled = true;
+        error.innerText = '';
+        try {
+            const res = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: campo.value })
+            });
+            const datos = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                error.innerText = datos.error || 'No se pudo ingresar.';
+                campo.select();
+                return;
+            }
+            guardarTokenAdmin(datos.token);
+            campo.value = '';
+            ocultarLoginAdmin();
+            cargarDatos();
+        } catch (err) {
+            error.innerText = 'No se pudo conectar con el servidor.';
+        } finally {
+            boton.disabled = false;
+        }
+    });
+
+    // ---------- Choferes y PIN ----------
+    let listaChoferes = [];
+    async function cargarChoferes() {
+        try {
+            const res = await adminFetch('/api/admin/choferes');
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            listaChoferes = await res.json();
+            dibujarChoferes();
+        } catch (err) {
+            if (err.message === 'SESION') return;
+            document.querySelector('#tabla-choferes tbody').innerHTML = '<tr><td colspan="5" class="empty-row">No se pudo obtener la lista de choferes. Revisá que la base de datos esté conectada.</td></tr>';
+        }
+    }
+    function dibujarChoferes() {
+        const filtro = document.getElementById('buscarChofer').value.trim().toUpperCase();
+        const cuerpo = document.querySelector('#tabla-choferes tbody');
+        const filas = listaChoferes.filter(c => c.nombre.toUpperCase().includes(filtro));
+        if (filas.length === 0) {
+            cuerpo.innerHTML = '<tr><td colspan="5" class="empty-row">No hay choferes para mostrar</td></tr>';
+            return;
+        }
+        cuerpo.innerHTML = '';
+        filas.forEach(c => {
+            const tr = document.createElement('tr');
+            if (!c.activo) tr.className = 'fila-inactiva';
+            const pinHtml = c.pinPersonalizado
+                ? '<span class="badge badge-info">Personalizado</span><span class="pin-nota">Solo lo conoce el chofer</span>'
+                : `<span class="pin-badge">${escapeHtml(c.pin)}</span><span class="pin-nota">PIN inicial</span>`;
+            tr.innerHTML = `
+                <td><b>${escapeHtml(c.nombre)}</b></td>
+                <td>${c.activo ? '<span class="badge badge-ok">Activo</span>' : '<span class="badge badge-falla">Desactivado</span>'}</td>
+                <td>${pinHtml}</td>
+                <td>${c.ultimoIngreso ? escapeHtml(formatoFechaHora(c.ultimoIngreso)) : '<span style="color: var(--muted);">Nunca</span>'}</td>
+                <td><div class="acciones"></div></td>
+            `;
+            const acc = tr.querySelector('.acciones');
+            if (!c.pinPersonalizado && c.pin) {
+                const bCopiar = document.createElement('button');
+                bCopiar.type = 'button'; bCopiar.className = 'btn-suave'; bCopiar.textContent = '📋 Copiar';
+                bCopiar.onclick = (ev) => copiarPin(c.pin, ev.currentTarget);
+                acc.appendChild(bCopiar);
+            }
+            const bPin = document.createElement('button');
+            bPin.type = 'button'; bPin.className = 'btn-suave'; bPin.textContent = '🔑 Cambiar PIN';
+            bPin.onclick = () => abrirModalPin(c);
+            acc.appendChild(bPin);
+            const bEstado = document.createElement('button');
+            bEstado.type = 'button';
+            bEstado.className = c.activo ? 'btn-danger' : 'btn-suave';
+            bEstado.textContent = c.activo ? '⏸ Desactivar' : '▶ Activar';
+            bEstado.onclick = () => cambiarActivo(c, !c.activo);
+            acc.appendChild(bEstado);
+            cuerpo.appendChild(tr);
+        });
+    }
+    async function copiarPin(pin, boton) {
+        try {
+            await navigator.clipboard.writeText(pin);
+            const original = boton.innerText;
+            boton.innerText = '✔ Copiado';
+            setTimeout(() => { boton.innerText = original; }, 1500);
+        } catch (e) { /* el navegador no permite copiar: el PIN igual está a la vista */ }
+    }
+
+    async function cambiarActivo(chofer, activo) {
+        if (!activo && !confirm('¿Desactivar a ' + chofer.nombre + '? Se cierra su sesión y no podrá ingresar hasta que lo actives de nuevo.')) return;
+        try {
+            const res = await adminFetch('/api/admin/chofer/activo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre: chofer.nombre, activo })
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            cargarChoferes();
+        } catch (err) {
+            if (err.message !== 'SESION') alert('No se pudo actualizar el chofer. Probá de nuevo.');
+        }
+    }
+
+    // ---------- Ventana para cambiar el PIN ----------
+    let choferEnModal = null;
+    function abrirModalPin(chofer) {
+        choferEnModal = chofer;
+        document.getElementById('modalPinTitulo').innerText = 'PIN de ' + chofer.nombre;
+        document.getElementById('modalPinInput').value = '';
+        document.getElementById('modalPinError').innerText = '';
+        document.getElementById('modalPinFormulario').style.display = '';
+        document.getElementById('modalPinResultado').style.display = 'none';
+        document.getElementById('btnRestablecerPin').style.display = chofer.pinPersonalizado ? '' : 'none';
+        document.getElementById('modalPin').classList.add('on');
+        setTimeout(() => document.getElementById('modalPinInput').focus(), 50);
+    }
+    function cerrarModalPin() {
+        document.getElementById('modalPin').classList.remove('on');
+        document.getElementById('modalPinValor').innerText = '';
+        choferEnModal = null;
+        cargarChoferes();
+    }
+    async function enviarPin(cuerpo) {
+        const error = document.getElementById('modalPinError');
+        error.innerText = '';
+        const botones = document.querySelectorAll('#modalPinFormulario button');
+        botones.forEach(b => b.disabled = true);
+        try {
+            const res = await adminFetch('/api/admin/chofer/pin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(Object.assign({ nombre: choferEnModal.nombre }, cuerpo))
+            });
+            const datos = await res.json().catch(() => ({}));
+            if (!res.ok) { error.innerText = datos.error || 'No se pudo guardar el PIN.'; return; }
+            document.getElementById('modalPinValor').innerText = datos.pin;
+            document.getElementById('modalPinFormulario').style.display = 'none';
+            document.getElementById('modalPinResultado').style.display = '';
+        } catch (err) {
+            if (err.message !== 'SESION') error.innerText = 'No se pudo conectar con el servidor.';
+            else document.getElementById('modalPin').classList.remove('on');
+        } finally {
+            botones.forEach(b => b.disabled = false);
+        }
+    }
+    document.getElementById('btnGuardarPin').onclick = () => {
+        const pin = document.getElementById('modalPinInput').value.trim();
+        if (!/^\d{4,8}$/.test(pin)) { document.getElementById('modalPinError').innerText = 'El PIN debe tener entre 4 y 8 números.'; return; }
+        enviarPin({ pin });
+    };
+    document.getElementById('btnGenerarPin').onclick = () => enviarPin({ generar: true });
+    document.getElementById('btnRestablecerPin').onclick = () => enviarPin({ restablecer: true });
+    document.getElementById('btnCopiarNuevoPin').onclick = (ev) => copiarPin(document.getElementById('modalPinValor').innerText, ev.currentTarget);
+    document.getElementById('modalPinInput').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, ''); });
+    document.getElementById('modalPinInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('btnGuardarPin').click(); });
+
+    // ---------- Estado de la base de datos ----------
+    async function revisarBaseDatos() {
+        const pill = document.getElementById('pillDb');
+        const txt = document.getElementById('lblDb');
+        try {
+            const res = await fetch('/api/estado');
+            const d = await res.json();
+            if (d.db === 'ok') { pill.className = 'live-pill pill-db ok'; txt.innerText = 'Base de datos OK'; }
+            else if (d.db === 'conectando') { pill.className = 'live-pill pill-db mal'; txt.innerText = 'Base de datos conectando…'; }
+            else { pill.className = 'live-pill pill-db mal'; txt.innerText = 'Falta DATABASE_URL'; }
+        } catch (e) {
+            pill.className = 'live-pill pill-db mal'; txt.innerText = 'Servidor sin respuesta';
+        }
+    }
+    revisarBaseDatos();
+    setInterval(revisarBaseDatos, 30000);
+
     function cambiarVistaAdmin(vista, btn) {
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -447,6 +794,9 @@
             document.getElementById('seccion-checklists').classList.add('active');
         } else if (vista === 'combustible') {
             document.getElementById('seccion-combustible').classList.add('active');
+        } else if (vista === 'choferes') {
+            document.getElementById('seccion-choferes').classList.add('active');
+            cargarChoferes();
         }
         btn.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -490,9 +840,10 @@
     }
 
     async function cargarDatos() {
+        if (!leerTokenAdmin()) { mostrarLoginAdmin(); return; }
         try {
             // ---------- Ubicaciones / odómetro ----------
-            const resUbicaciones = await fetch('/api/ubicaciones');
+            const resUbicaciones = await adminFetch('/api/ubicaciones');
             const ubicaciones = await resUbicaciones.json();
 
             const tablaKmBody = document.querySelector('#tabla-kilometraje tbody');
@@ -561,7 +912,7 @@
             }
 
             // ---------- Combustible ----------
-            const resCombustible = await fetch('/api/combustible');
+            const resCombustible = await adminFetch('/api/combustible');
             const listaCombustible = await resCombustible.json();
             const tablaCombustibleBody = document.querySelector('#tabla-combustible tbody');
             tablaCombustibleBody.innerHTML = '';
@@ -595,7 +946,7 @@
             }
 
             // ---------- Check-lists ----------
-            const resChecklists = await fetch('/api/checklists');
+            const resChecklists = await adminFetch('/api/checklists');
             const checklists = await resChecklists.json();
             const tablaChecklistBody = document.querySelector('#tabla-checklists tbody');
             tablaChecklistBody.innerHTML = '';
@@ -637,6 +988,7 @@
             document.getElementById('lblActualizado').innerText = 'En vivo · ' + formatoHora(new Date());
 
         } catch (error) {
+            if (error.message === 'SESION') return; // la sesión venció: ya se pidió la clave de nuevo
             console.error("Error al actualizar datos del panel:", error);
             document.getElementById('lblActualizado').innerText = 'Sin conexión con el servidor';
         }
@@ -645,7 +997,7 @@
     async function eliminarChecklist(id) {
         if (!confirm("¿Estás seguro de eliminar este check-list?")) return;
         try {
-            const res = await fetch(`/api/checklist/${id}`, { method: 'DELETE' });
+            const res = await adminFetch(`/api/checklist/${id}`, { method: 'DELETE' });
             if (res.ok) cargarDatos();
         } catch (err) {}
     }
@@ -653,7 +1005,7 @@
     async function eliminarCombustible(id) {
         if (!confirm("¿Estás seguro de eliminar este registro de combustible?")) return;
         try {
-            const res = await fetch(`/api/combustible/${id}`, { method: 'DELETE' });
+            const res = await adminFetch(`/api/combustible/${id}`, { method: 'DELETE' });
             if (res.ok) cargarDatos();
         } catch (err) {}
     }
