@@ -397,6 +397,8 @@
         .aviso.ok .aviso-msg { color: #b8f5dc; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .35); }
         .aviso.reciente { border-left-color: var(--warn); }
         .aviso.reciente .aviso-msg { color: #fde9a8; background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .4); }
+        .aviso-exh { margin-top: 8px; padding: 8px 12px; font-size: .84rem; font-weight: 700; color: var(--cyan); background: rgba(34, 211, 238, .08); border: 1px solid rgba(34, 211, 238, .3); border-radius: 12px; }
+        .cliente-exh { margin-top: 6px; font-size: .78rem; font-weight: 700; color: var(--cyan); }
         .chip-warn { color: var(--warn); background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .4); }
         .aviso-actions { display: flex; gap: 8px; margin-top: 12px; }
         .aviso-actions button { margin: 0; padding: 11px 12px; font-size: .85rem; }
@@ -578,8 +580,8 @@
                     </button>
                 </div>
                 <div class="map-status" id="mapStatus">Ubicación apagada · tocá ◎ para verla en vivo</div>
-                <div class="map-status" id="alertasStatus" style="margin-top:6px;"></div>
             </div>
+            <div id="alertasStatus" style="margin-top:8px; padding:8px 12px; font-size:.78rem; font-weight:700; color: var(--muted); background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 12px;"></div>
 
             <!-- Lista de Clientes del Reparto -->
             <div class="lista-clientes" id="contenedor-clientes">
@@ -927,6 +929,14 @@
         return { total, cobrar, reciente, dias: c.dias_reciente || 7 };
     }
 
+    // Exhibidores que el cliente tiene hoy en comodato (REME entregados menos REMI devueltos). null = dato no disponible
+    function resumenExhibidores(c) {
+        if (!Array.isArray(c.exhibidores)) return null;
+        if (c.exhibidores.length === 0) return 'Sin exhibidores en comodato';
+        const cant = n => Number.isInteger(Number(n)) ? String(Number(n)) : Number(n).toFixed(2);
+        return c.exhibidores.map(e => `${cant(e.cantidad)} × ${e.descripcion}`).join(' · ');
+    }
+
     // Cargar la hoja de ruta real del chofer considerando la fecha elegida
     async function cargarRutaChoferReal(nombreChofer) {
         const fechaInput = document.getElementById('inputFechaRuta').value;
@@ -967,6 +977,7 @@
                         popupHtml += `<br><button class="btn-deuda" onclick="verCuentaCorriente('${idSeguro}')">${textoBoton}</button>`;
                     }
                     if (d.reciente > 0) popupHtml += `<br>🕓 Pedido reciente: ${formatoPesos(d.reciente)}`;
+                    if (resumenExhibidores(c)) popupHtml += `<br>🧊 ${escapeHtml(resumenExhibidores(c))}`;
 
                     const marker = L.marker([c.lat, c.lon], {
                         icon: L.divIcon({
@@ -1000,6 +1011,7 @@
                     <div class="cliente-body">
                         <div class="cliente-nombre">${codigoHtml}${nombreSeguro}</div>
                         <div class="cliente-dir">${escapeHtml(c.direccion)} (${escapeHtml(c.localidad)})</div>
+                        ${resumenExhibidores(c) ? `<div class="cliente-exh">🧊 ${escapeHtml(resumenExhibidores(c))}</div>` : ''}
                         <div class="cliente-foot">
                             <span class="chip">Reparto ${escapeHtml(c.reparto_codigo || 'General')}</span>
                             ${estadoCuenta}
@@ -1339,6 +1351,7 @@
     function mostrarAvisoCliente(c, idSeguro, distancia) {
         const d = deudaDe(c);
         const { clase, texto } = textoDeudaCliente(d);
+        const exhibidoresTxt = resumenExhibidores(c);
         const codigo = c.cliente_codigo ? `${c.cliente_codigo}, ` : '';
         const titulo = `Estás llegando al cliente ${codigo}${c.nombre}`;
         const metros = Math.max(10, Math.round(distancia / 10) * 10);
@@ -1354,6 +1367,7 @@
                 </div>
             </div>
             <div class="aviso-msg">${escapeHtml(texto)}</div>
+            ${exhibidoresTxt ? `<div class="aviso-exh">🧊 Exhibidores: ${escapeHtml(exhibidoresTxt)}</div>` : ''}
             <div class="aviso-actions">
                 ${d.total > 0 ? `<button type="button" class="btn-deuda" data-accion="cc" style="flex:1;">Ver Cta. Cte</button>` : ''}
                 <button type="button" class="btn-ghost" data-accion="cerrar" style="flex:1;">Entendido</button>
@@ -1367,7 +1381,7 @@
         // Llamar la atención aunque el chofer esté mirando el camino: vibración, sonido y, si se permitió, notificación del sistema
         try { if (navigator.vibrate) navigator.vibrate([250, 120, 250]); } catch (e) {}
         sonarAviso();
-        notificarSistema(titulo, `${texto}`, idSeguro);
+        notificarSistema(titulo, exhibidoresTxt ? `${texto} Exhibidores: ${exhibidoresTxt}.` : texto, idSeguro);
     }
 
     function sonarAviso() {

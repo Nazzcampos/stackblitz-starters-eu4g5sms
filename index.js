@@ -397,6 +397,60 @@ async function obtenerDeudas() {
     return cacheDeudas.pendiente;
 }
 
+// --- EXHIBIDORES EN COMODATO ---
+// Se registran como remitos en ventas: REME = se entregó el exhibidor (+cantidad), REMI = se devolvió (-cantidad).
+// Lo que tiene hoy cada cliente es la suma por ítem. Se consulta solo para los clientes de la hoja de ruta y se guarda 10 minutos.
+// Opcional en Render: EXHIBIDOR_EXCLUIR_RECHAZADAS=1 ignora los remitos marcados como rechazados.
+const cacheExhibidores = new Map(); // cliente_id -> { items, ts }
+let promesaFiltroRemitos = null;
+function filtroRemitos() {
+    if (!promesaFiltroRemitos) {
+        promesaFiltroRemitos = pool.query(`
+            SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'venta' AND column_name IN ('anulada', 'anulado')
+        `).then(r => {
+            // no_entregada = 1 significa que el remito no se llegó a entregar; los anulados tampoco cuentan
+            let filtro = ' AND COALESCE(v.no_entregada::int, 0) = 0';
+            r.rows.forEach(c => { filtro += ` AND COALESCE(v.${c.column_name}::int, 0) = 0`; });
+            if (/^(1|true|si)$/i.test(process.env.EXHIBIDOR_EXCLUIR_RECHAZADAS || '')) filtro += ' AND COALESCE(v.rechazada::int, 0) = 0';
+            return filtro;
+        }).catch(err => {
+            console.error('⚠️ No se pudieron detectar las columnas de venta:', err.message);
+            promesaFiltroRemitos = null;
+            return ' AND COALESCE(v.no_entregada::int, 0) = 0';
+        });
+    }
+    return promesaFiltroRemitos;
+}
+async function obtenerExhibidores(ids) {
+    const unicos = [...new Set(ids.map(String).filter(id => /^\d+$/.test(id)))];
+    const ahora = Date.now();
+    const faltan = unicos.filter(id => { const c = cacheExhibidores.get(id); return !c || ahora - c.ts > TTL_DEUDAS_MS; });
+    if (faltan.length) {
+        const filtro = await filtroRemitos();
+        const r = await pool.query(`
+            SELECT v.cliente_id::text AS cliente_id, vi.item_codigo,
+                   COALESCE(it.descripcion, vi.item_codigo) AS descripcion,
+                   SUM(CASE WHEN v.tipo_comprobante_codigo = 'REME' THEN vi.cantidad ELSE -vi.cantidad END) AS cantidad
+            FROM venta v
+            JOIN venta_item vi ON vi.venta_id = v.id AND vi.tenant_id = v.tenant_id
+            LEFT JOIN item it ON it.id = vi.item_id AND it.tenant_id = vi.tenant_id
+            WHERE v.cliente_id = ANY($1::bigint[])
+              AND v.tipo_comprobante_codigo IN ('REME', 'REMI')${filtro}
+            GROUP BY v.cliente_id, vi.item_codigo, COALESCE(it.descripcion, vi.item_codigo)
+            HAVING SUM(CASE WHEN v.tipo_comprobante_codigo = 'REME' THEN vi.cantidad ELSE -vi.cantidad END) > 0
+            ORDER BY 3
+        `, [faltan]);
+        const porCliente = new Map();
+        r.rows.forEach(f => {
+            if (!porCliente.has(f.cliente_id)) porCliente.set(f.cliente_id, []);
+            porCliente.get(f.cliente_id).push({ codigo: f.item_codigo, descripcion: f.descripcion, cantidad: Number(f.cantidad) });
+        });
+        faltan.forEach(id => cacheExhibidores.set(id, { items: porCliente.get(id) || [], ts: ahora }));
+    }
+    return new Map(unicos.map(id => [id, cacheExhibidores.get(id).items]));
+}
+
 // --- CÓDIGO DE CLIENTE (el "Número" que se ve en Gescom) ---
 // Se detecta una sola vez qué columnas existen, para no romper la hoja de ruta si cambia el esquema.
 let promesaColumnasCodigo = null;
@@ -735,6 +789,14 @@ app.get('/api/ventas-chofer/:nombre', requireChofer, async (req, res) => {
 
         // orden_planeado de Gescom llega siempre en 1, así que se numera según
         // la secuencia de la ruta del cliente (cliente_ruta_hist.orden)
+        // Exhibidores en comodato de cada cliente (si falla la consulta, la ruta sale igual y sin ese dato)
+        let mapaExhibidores = null;
+        try {
+            mapaExhibidores = await obtenerExhibidores(resultado.rows.map(f => f.id));
+        } catch (errExh) {
+            console.error("⚠️ No se pudieron obtener los exhibidores:", errExh.message);
+        }
+
         // saldo_deuda = total de la cuenta corriente; deuda_cobrar = lo que ya corresponde cobrar;
         // deuda_reciente = pedidos de los últimos días que todavía no se cobran (se descuentan los créditos de lo más viejo primero)
         const filas = resultado.rows.map((f, i) => {
@@ -748,7 +810,8 @@ app.get('/api/ventas-chofer/:nombre', requireChofer, async (req, res) => {
                 saldo_deuda: redondear(total),
                 deuda_cobrar: total > 0 ? redondear(Math.max(0, total - reciente)) : 0,
                 deuda_reciente: total > 0 ? redondear(Math.min(reciente, total)) : 0,
-                dias_reciente: DIAS_DEUDA_RECIENTE
+                dias_reciente: DIAS_DEUDA_RECIENTE,
+                exhibidores: mapaExhibidores ? (mapaExhibidores.get(String(f.id)) || []) : null
             };
         });
 
