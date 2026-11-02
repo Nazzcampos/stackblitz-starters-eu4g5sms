@@ -51,7 +51,7 @@
             50% { transform: scale(1.08); box-shadow: 0 0 20px rgba(59, 130, 246, 0.8); }
             100% { transform: scale(1); box-shadow: 0 0 10px rgba(37, 99, 235, 0.4); }
         }
-
+ 
         h2 { color: #f8fafc; margin: 0; font-size: 1.4rem; text-align: center; }
         h3 { color: #93c5fd; font-size: 1.1rem; margin-top: 25px; border-bottom: 1px solid #334155; padding-bottom: 6px; }
         label { font-weight: bold; display: block; margin-top: 15px; color: #cbd5e1; font-size: 0.95rem; }
@@ -72,16 +72,16 @@
         button:hover { background: #1d4ed8; }
         .btn-danger { background: #dc2626; }
         .btn-danger:hover { background: #b91c1c; }
-
+ 
         #gps-status { 
             margin-top: 15px; padding: 12px; background: #064e3b; border: 1px solid #059669;
             border-radius: 6px; font-size: 14px; text-align: center; color: #a7f3d0;
         }
-
+ 
         /* Pantalla de Login */
         #vista-login { text-align: center; padding: 20px 0; }
         .login-box { background: #0f172a; padding: 20px; border-radius: 8px; border: 1px solid #334155; margin-top: 15px; }
-
+ 
         #map-chofer { height: 300px; border-radius: 8px; margin-top: 15px; border: 1px solid #475569; }
         .lista-clientes { margin-top: 15px; max-height: 220px; overflow-y: auto; }
         .cliente-card {
@@ -90,7 +90,7 @@
         
         .vista-seccion { display: none; }
         .vista-seccion.active { display: block; }
-
+ 
         /* Isla Flotante Inferior (Oculta hasta hacer login) */
         .nav-island {
             position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%);
@@ -110,7 +110,7 @@
     </style>
 </head>
 <body>
-
+ 
 <div class="container">
     <div class="app-header">
         <div class="logo-container">
@@ -123,7 +123,7 @@
         </div>
         <h2>Panel del Chofer</h2>
     </div>
-
+ 
     <!-- PANTALLA 0: LOGIN CON MENÚ DESPLEGABLE DE CHOFERES -->
     <div id="vista-login" class="vista-seccion active">
         <h3>🔐 Selección de Chofer</h3>
@@ -138,61 +138,61 @@
             </form>
         </div>
     </div>
-
+ 
     <!-- SECCIÓN 1: CHECK-LIST -->
     <div id="seccion-checklist" class="vista-seccion">
         <div class="user-welcome">
             <span>👤 Chofer: <b id="lblChofer" style="color: #60a5fa;">-</b></span>
             <button type="button" onclick="cerrarSesion()" style="width: auto; margin: 0; padding: 5px 10px; font-size: 12px; background: #475569;">Cambiar</button>
         </div>
-
+ 
         <form id="checklistForm">
             <label for="dominio">Dominio / Patente del Vehículo:</label>
             <input type="text" id="dominio" required placeholder="Ej: AF 189 LD">
-
+ 
             <label for="tipo_vehiculo">Tipo de Vehículo:</label>
             <select id="tipo_vehiculo">
                 <option value="Vehiculo (Auto o Camioneta)">Vehículo (Auto o Camioneta)</option>
                 <option value="Camión">Camión</option>
             </select>
-
+ 
             <h3>📋 Check-list Diario de Seguridad</h3>
             <div id="checklist-container"></div>
-
+ 
             <label for="observaciones">Observaciones generales:</label>
             <textarea id="observaciones" rows="3" placeholder="Detalles o novedades..."></textarea>
-
+ 
             <button type="submit" id="btnEnviar">Enviar Check-list y Activar GPS</button>
         </form>
-
+ 
         <div id="gps-status" style="display:none;">
             📍 <b>GPS Activo:</b> Transmitiendo en vivo... <span id="coords">Esperando señal...</span>
             <button type="button" class="btn-danger" onclick="finalizarTurno()" style="margin-top: 10px;">🛑 Finalizar Turno / Detener GPS</button>
         </div>
     </div>
-
+ 
     <!-- SECCIÓN 2: CARGA DE COMBUSTIBLE -->
     <div id="seccion-combustible" class="vista-seccion">
         <h3>⛽ Carga y Gasto de Combustible</h3>
         <p style="font-size: 0.85rem; color: #94a3b8; text-align: center;">Registrá tu carga para calcular automáticamente el rendimiento en Km/L.</p>
-
+ 
         <form id="combustibleForm">
             <label for="dominio_combustible">Dominio / Patente:</label>
             <input type="text" id="dominio_combustible" required placeholder="Ej: AF 189 LD">
-
+ 
             <label for="litros">Litros Cargados:</label>
             <input type="number" step="0.01" id="litros" required placeholder="Ej: 45.5">
-
+ 
             <label for="costoTotal">Costo Total ($):</label>
             <input type="number" step="0.01" id="costoTotal" required placeholder="Ej: 35000">
-
+ 
             <label for="odometroActual">Kilometraje Actual del Tablero:</label>
             <input type="number" id="odometroActual" required placeholder="Ej: 12450">
-
+ 
             <button type="submit">Registrar Carga de Combustible</button>
         </form>
     </div>
-
+ 
     <!-- SECCIÓN 3: RUTA Y REPARTOS (GESCOM) -->
     <div id="seccion-ruta" class="vista-seccion">
         <h3>📍 Hoja de Ruta (Reparto Real)</h3>
@@ -202,29 +202,47 @@
             <label for="inputFechaRuta" style="font-size: 0.85rem; color: #94a3b8; margin-top: 5px;">📅 Seleccionar Fecha de Reparto:</label>
             <input type="date" id="inputFechaRuta" style="background: #1e293b; color: white;" onchange="cambiarFechaRuta()">
         </div>
-
+ 
         <!-- Mapa interactivo del chofer -->
         <div id="map-chofer"></div>
-
+ 
         <!-- Lista de Clientes del Reparto -->
         <div class="lista-clientes" id="contenedor-clientes">
             <p style="text-align: center; color: #94a3b8;">Cargando tu ruta...</p>
         </div>
     </div>
 </div>
-
+ 
 <!-- ISLA INTERACTIVA INFERIOR (3 SOLAPAS) -->
 <div class="nav-island" id="navIsland">
     <button type="button" class="nav-btn active" onclick="cambiarVista('checklist', this)">📋 Check-list</button>
     <button type="button" class="nav-btn" onclick="cambiarVista('combustible', this)">⛽ Combustible</button>
     <button type="button" class="nav-btn" onclick="cambiarVista('ruta', this)">📍 Ruta de Hoy</button>
 </div>
-
+ 
 <!-- Script de Leaflet -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     let choferActual = "";
-
+    let clientesPorId = {};
+ 
+    function escapeHtml(t) {
+        return String(t == null ? '' : t).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    }
+    function formatoPesos(n) {
+        return (n < 0 ? '-$' : '$') + Math.abs(Number(n)).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    // Las fechas llegan como AAAA-MM-DD; se formatean a mano para evitar corrimientos por zona horaria
+    function formatoFecha(f) {
+        if (!f) return 'S/F';
+        const [y, m, d] = String(f).slice(0, 10).split('-');
+        return `${d}/${m}/${y}`;
+    }
+    function fechaLocalHoy() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+ 
     // Cargar la lista de choferes en el select al abrir la app
     async function cargarChoferesParaLogin() {
         try {
@@ -232,7 +250,7 @@
             const choferes = await res.json();
             const select = document.getElementById('selectChoferLogin');
             select.innerHTML = '<option value="">-- Seleccioná tu nombre --</option>';
-
+ 
             choferes.forEach(c => {
                 const opt = document.createElement('option');
                 opt.value = c.nombre;
@@ -244,21 +262,21 @@
             document.getElementById('selectChoferLogin').innerHTML = '<option value="">Error al cargar choferes</option>';
         }
     }
-
+ 
     // Ejecutar al iniciar y setear fecha de hoy en el input
     window.onload = () => {
         cargarChoferesParaLogin();
-        const hoy = new Date().toISOString().split('T')[0];
+        const hoy = fechaLocalHoy();
         const inputFecha = document.getElementById('inputFechaRuta');
         if (inputFecha) inputFecha.value = hoy;
     };
-
+ 
     function cambiarFechaRuta() {
         if (choferActual) {
             cargarRutaChoferReal(choferActual);
         }
     }
-
+ 
     // Manejo del Login con el Chofer Seleccionado
     document.getElementById('loginForm').addEventListener('submit', (e) => {
         e.preventDefault();
@@ -268,16 +286,16 @@
             alert("Por favor seleccioná un chofer.");
             return;
         }
-
+ 
         choferActual = usuario;
         document.getElementById('lblChofer').innerText = choferActual;
-
+ 
         // Ocultar login y mostrar solapas y check-list
         document.getElementById('vista-login').classList.remove('active');
         document.getElementById('seccion-checklist').classList.add('active');
         document.getElementById('navIsland').style.display = 'flex';
     });
-
+ 
     function cerrarSesion() {
         choferActual = "";
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
@@ -285,13 +303,13 @@
         document.getElementById('navIsland').style.display = 'none';
         document.getElementById('selectChoferLogin').value = '';
     }
-
+ 
     function cambiarVista(vista, btn) {
         document.querySelectorAll('.vista-seccion').forEach(s => {
             if (s.id !== 'vista-login') s.classList.remove('active');
         });
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-
+ 
         if (vista === 'checklist') {
             document.getElementById('seccion-checklist').classList.add('active');
         } else if (vista === 'combustible') {
@@ -303,7 +321,7 @@
         }
         btn.classList.add('active');
     }
-
+ 
     const itemsChecklist = [
         "Documentación Completa (Licencia, Cédula, Seguro, ITV, etc.)",
         "Cinturón de seguridad",
@@ -315,7 +333,7 @@
         "Bocina",
         "Limpieza"
     ];
-
+ 
     const container = document.getElementById('checklist-container');
     itemsChecklist.forEach((item, index) => {
         const div = document.createElement('div');
@@ -330,17 +348,17 @@
         `;
         container.appendChild(div);
     });
-
+ 
     // Inicializar mapa del chofer
     const mapChofer = L.map('map-chofer').setView([-33.2814, -62.1785], 14);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '© OpenStreetMap'
     }).addTo(mapChofer);
-
+ 
     let marcadoresClientes = [];
     let marcadorChoferVivo = null;
-
+ 
     // Cargar la hoja de ruta real del chofer considerando la fecha elegida
     async function cargarRutaChoferReal(nombreChofer) {
         const fechaInput = document.getElementById('inputFechaRuta').value;
@@ -348,57 +366,69 @@
         if (fechaInput) {
             url += `?fecha=${fechaInput}`;
         }
-
+ 
         try {
             const res = await fetch(url);
             const clientes = await res.json();
-
+ 
             marcadoresClientes.forEach(m => mapChofer.removeLayer(m));
             marcadoresClientes = [];
-
+ 
             const listaContainer = document.getElementById('contenedor-clientes');
             listaContainer.innerHTML = '';
-
+ 
             if (!Array.isArray(clientes) || clientes.length === 0) {
                 listaContainer.innerHTML = `<p style="text-align: center; color: #94a3b8;">⚠️ No hay repartos ni ventas cargadas para la fecha ${fechaInput || 'de hoy'}.</p>`;
                 return;
             }
-
+ 
+            clientesPorId = {};
             clientes.forEach(c => {
-                const tieneDeuda = parseFloat(c.saldo_deuda) > 0;
-
+                const idSeguro = String(c.id).replace(/\D/g, '');
+                clientesPorId[idSeguro] = c;
+                const saldo = parseFloat(c.saldo_deuda) || 0;
+                const tieneDeuda = saldo > 0;
+                const nombreSeguro = escapeHtml(c.nombre);
+                const textoBoton = `Ver Cta. Cte 💰 (${formatoPesos(saldo)})`;
+ 
                 if (c.lat && c.lon) {
-                    let popupHtml = `<b>📦 #${c.orden || '-'} ${c.nombre}</b><br>${c.direccion || 'Sin dirección'}`;
+                    let popupHtml = `<b>📦 #${c.orden || '-'} ${nombreSeguro}</b><br>${escapeHtml(c.direccion) || 'Sin dirección'}`;
                     if (tieneDeuda) {
-                        popupHtml += `<br><button onclick="verCuentaCorriente(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')" style="margin-top:5px; background:#059669; padding:4px 8px; font-size:0.75rem;">Ver Cta. Cte 💰 ($${parseFloat(c.saldo_deuda).toLocaleString()})</button>`;
+                        popupHtml += `<br><button onclick="verCuentaCorriente('${idSeguro}')" style="margin-top:5px; background:#059669; padding:4px 8px; font-size:0.75rem;">${textoBoton}</button>`;
                     }
-
+ 
                     const marker = L.marker([c.lat, c.lon], {
                         icon: L.divIcon({
                             className: 'custom-pin',
                             html: `<div style="background:${tieneDeuda ? '#ef4444' : '#10b981'}; width:14px; height:14px; border-radius:50%; border:2px solid white;"></div>`
                         })
                     }).addTo(mapChofer).bindPopup(popupHtml);
-                    
+ 
                     marcadoresClientes.push(marker);
                 }
-
+ 
+                let estadoCuenta;
+                if (tieneDeuda) {
+                    estadoCuenta = `<button onclick="verCuentaCorriente('${idSeguro}')" style="background:#059669; padding:5px 10px; font-size:0.75rem; width:auto; margin:0;">${textoBoton}</button>`;
+                } else if (saldo < 0) {
+                    estadoCuenta = `<span style="color: #10b981; font-size: 0.75rem;">✔ Saldo a favor (${formatoPesos(saldo)})</span>`;
+                } else {
+                    estadoCuenta = `<span style="color: #10b981; font-size: 0.75rem;">✔ Al día</span>`;
+                }
+ 
                 const card = document.createElement('div');
                 card.className = 'cliente-card';
                 card.innerHTML = `
-                    <b>📦 Orden #${c.orden || 'S/N'} - ${c.nombre}</b><br>
-                    <span style="color: #94a3b8;">${c.direccion || ''} (${c.localidad || ''})</span><br>
+                    <b>📦 Orden #${c.orden || 'S/N'} - ${nombreSeguro}</b><br>
+                    <span style="color: #94a3b8;">${escapeHtml(c.direccion)} (${escapeHtml(c.localidad)})</span><br>
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                        <small style="color: #38bdf8;">Reparto: ${c.reparto_codigo || 'General'}</small>
-                        ${tieneDeuda ? `
-                            <button onclick="verCuentaCorriente(${c.id}, '${c.nombre.replace(/'/g, "\\'")}')" style="background:#059669; padding:5px 10px; font-size:0.75rem; width:auto; margin:0;">
-                                Ver Cta. Cte 💰 ($${parseFloat(c.saldo_deuda).toLocaleString()})
-                            </button>` : `<span style="color: #10b981; font-size: 0.75rem;">✔ Al día (Contado)</span>`}
+                        <small style="color: #38bdf8;">Reparto: ${escapeHtml(c.reparto_codigo || 'General')}</small>
+                        ${estadoCuenta}
                     </div>
                 `;
                 listaContainer.appendChild(card);
             });
-
+ 
             if (clientes.length > 0 && clientes[0].lat && clientes[0].lon) {
                 mapChofer.setView([clientes[0].lat, clientes[0].lon], 13);
             }
@@ -407,86 +437,103 @@
             document.getElementById('contenedor-clientes').innerHTML = '<p style="text-align: center; color: #ef4444;">Error al conectar con Gescom.</p>';
         }
     }
-
+ 
     // --- FUNCIÓN: CONSULTAR Y MOSTRAR LA CUENTA CORRIENTE DEL CLIENTE ---
-    async function verCuentaCorriente(clienteId, nombreCliente) {
+    // Muestra comprobantes a cobrar y créditos (notas de crédito, recibos a cuenta) y el total neto
+    async function verCuentaCorriente(clienteId) {
+        const cliente = clientesPorId[clienteId];
+        const nombreCliente = cliente ? cliente.nombre : 'Cliente';
         try {
             const response = await fetch(`/api/cta-cte/${clienteId}`);
-            const deudas = await response.json();
-
-            let detalleHtml = `
-                <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); display:flex; justify-content:center; align-items:center; z-index:2000;">
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const movimientos = await response.json();
+ 
+            const debitos = movimientos.filter(m => !m.es_credito);
+            const creditos = movimientos.filter(m => m.es_credito);
+            const totalDebitos = debitos.reduce((a, m) => a + parseFloat(m.saldo_pendiente), 0);
+            const totalCreditos = creditos.reduce((a, m) => a + parseFloat(m.saldo_pendiente), 0); // ya viene negativo
+            const total = totalDebitos + totalCreditos;
+            const hoy = fechaLocalHoy();
+ 
+            const fila = m => {
+                const importe = parseFloat(m.saldo_pendiente);
+                const vencido = !m.es_credito && m.fecha_vencimiento && String(m.fecha_vencimiento).slice(0, 10) < hoy;
+                const cuota = m.numero_cuota > 1 ? ` (cuota ${m.numero_cuota})` : '';
+                return `
+                    <tr style="border-bottom: 1px solid #334155;">
+                        <td style="padding: 6px 5px;">${escapeHtml(m.tipo_comprobante_codigo)} ${escapeHtml(m.punto_venta_codigo)}-${escapeHtml(m.numero_comprobante)}${cuota}</td>
+                        <td style="padding: 6px 5px; color:${vencido ? '#f87171' : '#cbd5e1'};">${m.es_credito ? '-' : formatoFecha(m.fecha_vencimiento)}</td>
+                        <td style="padding: 6px 5px; color:${m.es_credito ? '#34d399' : '#f87171'}; font-weight:bold; text-align: right;">${formatoPesos(importe)}</td>
+                    </tr>`;
+            };
+ 
+            let html = `
+                <div class="modal-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); display:flex; justify-content:center; align-items:center; z-index:2000;">
                     <div style="background:#1e293b; padding:20px; border-radius:12px; width:90%; max-width:450px; border:1px solid #334155; max-height:80vh; overflow-y:auto;">
-                        <h3 style="color:#93c5fd; margin-top:0;">💳 Cta. Cte: ${nombreCliente}</h3>
-            `;
-
-            if (deudas.length === 0) {
-                detalleHtml += `<p style="color:#10b981; text-align:center; padding:20px;">¡Excelente! El cliente no registra deudas pendientes.</p>`;
+                        <h3 style="color:#93c5fd; margin-top:0;">💳 Cta. Cte: ${escapeHtml(nombreCliente)}</h3>`;
+ 
+            if (movimientos.length === 0) {
+                html += `<p style="color:#10b981; text-align:center; padding:20px;">El cliente no registra movimientos pendientes.</p>`;
             } else {
-                let totalDeuda = 0;
-                detalleHtml += `<table style="width:100%; font-size:0.85rem; margin-top:10px; border-collapse: collapse;">
+                html += `<table style="width:100%; font-size:0.85rem; margin-top:10px; border-collapse: collapse;">
                     <thead>
                         <tr style="border-bottom: 1px solid #475569; text-align: left;">
                             <th style="padding: 5px;">Comprobante</th>
-                            <th style="padding: 5px;">Vencimiento</th>
+                            <th style="padding: 5px;">Vence</th>
                             <th style="padding: 5px; text-align: right;">Saldo</th>
                         </tr>
                     </thead>
-                    <tbody>`;
-
-                deudas.forEach(d => {
-                    totalDeuda += parseFloat(d.saldo_pendiente);
-                    const fechaVto = d.fecha_vencimiento ? new Date(d.fecha_vencimiento).toLocaleDateString() : 'S/F';
-                    detalleHtml += `
-                        <tr style="border-bottom: 1px solid #334155;">
-                            <td style="padding: 6px 5px;">${d.tipo_comprobante_codigo || ''} ${d.punto_venta_codigo || ''}-${d.numero_comprobante || ''}</td>
-                            <td style="padding: 6px 5px;">${fechaVto}</td>
-                            <td style="padding: 6px 5px; color:#f87171; font-weight:bold; text-align: right;">$${parseFloat(d.saldo_pendiente).toLocaleString()}</td>
-                        </tr>`;
-                });
-
-                detalleHtml += `</tbody></table>`;
-                detalleHtml += `
-                    <div style="margin-top:15px; padding:10px; background:#0f172a; border-radius:6px; display:flex; justify-content:space-between; align-items:center; font-weight:bold; color:#f8fafc;">
-                        <span>Total a Cobrar:</span> 
-                        <span style="color:#ef4444; font-size:1.1rem;">$${totalDeuda.toLocaleString()}</span>
+                    <tbody>${debitos.map(fila).join('')}${creditos.map(fila).join('')}</tbody>
+                </table>`;
+ 
+                if (creditos.length > 0) {
+                    html += `
+                    <div style="margin-top:12px; font-size:0.85rem; color:#cbd5e1; display:flex; justify-content:space-between;"><span>Subtotal comprobantes:</span><span>${formatoPesos(totalDebitos)}</span></div>
+                    <div style="margin-top:4px; font-size:0.85rem; color:#34d399; display:flex; justify-content:space-between;"><span>Créditos a favor:</span><span>${formatoPesos(totalCreditos)}</span></div>`;
+                }
+ 
+                const etiqueta = total > 0 ? 'Total a Cobrar:' : (total < 0 ? 'Saldo a favor:' : 'Saldo:');
+                const colorTotal = total > 0 ? '#ef4444' : '#10b981';
+                html += `
+                    <div style="margin-top:12px; padding:10px; background:#0f172a; border-radius:6px; display:flex; justify-content:space-between; align-items:center; font-weight:bold; color:#f8fafc;">
+                        <span>${etiqueta}</span>
+                        <span style="color:${colorTotal}; font-size:1.1rem;">${formatoPesos(total)}</span>
                     </div>`;
             }
-
-            detalleHtml += `
-                        <button onclick="this.closest('div').parentElement.remove()" style="margin-top:15px; background:#475569;">Cerrar</button>
+ 
+            html += `
+                        <button onclick="this.closest('.modal-overlay').remove()" style="margin-top:15px; background:#475569;">Cerrar</button>
                     </div>
-                </div>
-            `;
-
-            document.body.insertAdjacentHTML('beforeend', detalleHtml);
-
+                </div>`;
+ 
+            document.body.insertAdjacentHTML('beforeend', html);
+ 
         } catch (error) {
             console.error("Error al obtener la cuenta corriente:", error);
             alert("No se pudo cargar la cuenta corriente en este momento.");
         }
     }
-
+ 
     let intervaloGPS = null;
     let wakeLock = null;
-
+ 
     async function solicitarWakeLock() {
         if ('wakeLock' in navigator) {
             try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
         }
     }
-
+ 
     document.getElementById('checklistForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const dominio = document.getElementById('dominio').value;
         const tipo_vehiculo = document.getElementById('tipo_vehiculo').value;
         const observaciones = document.getElementById('observaciones').value;
-
+ 
         const respuestas = {};
         itemsChecklist.forEach((item, index) => {
             respuestas[item] = document.querySelector(`[name="item_${index}"]`).value;
         });
-
+ 
         try {
             const respuesta = await fetch('/api/checklist', {
                 method: 'POST',
@@ -503,7 +550,7 @@
             alert("No se pudo conectar con el servidor.");
         }
     });
-
+ 
     document.getElementById('combustibleForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const datosCarga = {
@@ -513,7 +560,7 @@
             costoTotal: document.getElementById('costoTotal').value,
             odometroActual: document.getElementById('odometroActual').value
         };
-
+ 
         try {
             const respuesta = await fetch('/api/combustible', {
                 method: 'POST',
@@ -528,20 +575,20 @@
             alert("Error de conexión.");
         }
     });
-
+ 
     function iniciarEnvioGPS(chofer, vehiculo) {
         if (!navigator.geolocation) return;
         if (intervaloGPS) clearInterval(intervaloGPS);
         enviarCoordenadas(chofer, vehiculo);
         intervaloGPS = setInterval(() => enviarCoordenadas(chofer, vehiculo), 30000);
     }
-
+ 
     function enviarCoordenadas(chofer_id, vehiculo) {
         navigator.geolocation.getCurrentPosition(async (position) => {
             const latitud = position.coords.latitude;
             const longitud = position.coords.longitude;
             document.getElementById('coords').innerText = `Lat: ${latitud.toFixed(4)}, Lon: ${longitud.toFixed(4)}`;
-
+ 
             if (marcadorChoferVivo) {
                 marcadorChoferVivo.setLatLng([latitud, longitud]);
             } else {
@@ -552,7 +599,7 @@
                     })
                 }).addTo(mapChofer).bindPopup("<b>¡Estás acá! (Ubicación en vivo)</b>");
             }
-
+ 
             try {
                 await fetch('/api/ubicacion', {
                     method: 'POST',
@@ -562,7 +609,7 @@
             } catch (err) {}
         });
     }
-
+ 
     function finalizarTurno() {
         if (intervaloGPS) { clearInterval(intervaloGPS); intervaloGPS = null; }
         if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); }
@@ -570,6 +617,6 @@
         alert("🛑 Turno finalizado.");
     }
 </script>
-
+ 
 </body>
 </html>
