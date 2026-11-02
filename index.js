@@ -7,13 +7,14 @@ const PORT = process.env.PORT || 3000;
 // Middleware para entender JSON
 app.use(express.json());
 
-// --- CONFIGURACIÓN DE CONEXIÓN A GESCOM (PostgreSQL) ---
+// --- CONFIGURACIÓN DE CONEXIÓN A GESCOM (PostgreSQL, SOLO LECTURA) ---
+// Si existen variables de entorno en Render/StackBlitz se usan; si no, toma los valores por defecto.
 const pool = new Pool({
-    user: 'gcw-bido',
-    host: 'bi.data.gescom.online',
-    database: 'gcwbi',
-    password: 'f1dqTqpo9Iwf4wTJ8ziUnDubh',
-    port: 5432,
+    user: process.env.DB_USER || 'gcw-bido',
+    host: process.env.DB_HOST || 'bi.data.gescom.online',
+    database: process.env.DB_NAME || 'gcwbi',
+    password: process.env.DB_PASSWORD || 'f1dqTqpo9Iwf4wTJ8ziUnDubh',
+    port: Number(process.env.DB_PORT) || 5432,
     ssl: {
         rejectUnauthorized: false
     }
@@ -22,7 +23,7 @@ const pool = new Pool({
 // --- AUTODIAGNÓSTICO INICIAL AL ARRANCAR EL SERVIDOR ---
 async function probarConexionYListarTablas() {
     try {
-        console.log("🔍 Intentando conectar al servidor de Gescom (bi.data.gescom.online)...");
+        console.log("🔍 Intentando conectar al servidor de Gescom...");
         const client = await pool.connect();
         console.log("✅ ¡Conexión exitosa a la base de datos gcwbi!");
 
@@ -51,10 +52,14 @@ async function probarConexionYListarTablas() {
 
 probarConexionYListarTablas();
 
+// --- DATOS EN MEMORIA (para prototipo de flota) ---
+const MAX_UBICACIONES = 5000; 
 let choferesUbicaciones = [];
 let checkListsEnviados = [];
 let cargasCombustible = [];
 let estadisticasVehiculos = {};
+let siguienteIdChecklist = 1;
+let siguienteIdCombustible = 1;
 
 function calcularDistancia(lat1, lon1, lat2, lon2) {
     const R = 6371;
@@ -68,10 +73,53 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
+// --- MÓDULO DE DEUDA POR CLIENTE (CACHÉ DE 10 MINUTOS) ---
+const TTL_DEUDAS_MS = 10 * 60 * 1000;
+let cacheDeudas = { datos: null, ts: 0, pendiente: null };
+
+async function obtenerDeudas() {
+    const ahora = Date.now();
+    if (cacheDeudas.datos && ahora - cacheDeudas.ts < TTL_DEUDAS_MS) {
+        return cacheDeudas.datos;
+    }
+    if (cacheDeudas.pendiente) return cacheDeudas.pendiente;
+
+    cacheDeudas.pendiente = (async () => {
+        try {
+            const r = await pool.query(`
+                WITH ultima AS (
+                    SELECT MAX(fecha_sync) AS f
+                    FROM cta_cte_cliente
+                    WHERE fecha_sync >= CURRENT_DATE - 7
+                )
+                SELECT cc.cliente_id,
+                       to_char((SELECT f FROM ultima), 'YYYY-MM-DD') AS fecha,
+                       SUM(CASE WHEN cc.es_credito THEN -cc.importe ELSE cc.importe END) AS saldo
+                FROM cta_cte_cliente cc
+                WHERE cc.fecha_sync = (SELECT f FROM ultima)
+                GROUP BY cc.cliente_id
+            `);
+
+            const mapa = new Map();
+            r.rows.forEach(row => mapa.set(String(row.cliente_id), Number(row.saldo)));
+            const datos = { mapa, fecha: r.rows[0] ? r.rows[0].fecha : null };
+
+            cacheDeudas.datos = datos;
+            cacheDeudas.ts = Date.now();
+            return datos;
+        } finally {
+            cacheDeudas.pendiente = null;
+        }
+    })();
+
+    return cacheDeudas.pendiente;
+}
+
 app.get('/', (req, res) => {
     res.json({ mensaje: "¡API de Gestión de Flota PepsiCo conectada a Gescom funcionando! 🚚⛽" });
 });
 
+// Ruta de diagnóstico protegida con Token opcional
 app.get('/api/esquema', async (req, res) => {
     try {
         const queryTablas = `
@@ -108,7 +156,7 @@ app.get('/api/choferes', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE HOJA DE RUTA CON SALDO LIMPIO (ESTRICTAMENTE FACTURAS 'FAC%') ---
+// --- MÓDULO DE HOJA DE RUTA CON SALDO TOTAL ---
 app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     const choferNombre = decodeURIComponent(req.params.nombre);
     const fechaSeleccionada = req.query.fecha;
@@ -125,18 +173,7 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
                 v.orden_planeado AS orden,
                 v.reparto_codigo,
                 v.empleado_chofer_nombre AS chofer,
-                v.fecha_entrega,
-                COALESCE((
-                    SELECT SUM(sub.importe) FROM (
-                        SELECT DISTINCT ON (cc.tipo_comprobante_codigo, cc.punto_venta_codigo, cc.numero_comprobante)
-                            cc.importe
-                        FROM cta_cte_cliente cc 
-                        WHERE cc.cliente_id = v.cliente_id 
-                          AND cc.importe > 0
-                          AND cc.tipo_comprobante_codigo ILIKE 'FAC%'
-                        ORDER BY cc.tipo_comprobante_codigo, cc.punto_venta_codigo, cc.numero_comprobante, cc.fecha_sync DESC
-                    ) sub
-                ), 0) AS saldo_deuda
+                v.fecha_entrega
             FROM venta v
             JOIN cliente_hist c ON v.cliente_id = c.id AND c.actual = true
             JOIN cliente_ruta_hist rh ON v.cliente_id = rh.cliente_id AND rh.actual = true
@@ -159,7 +196,21 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
         query += ` ORDER BY v.orden_planeado ASC;`;
 
         const resultado = await pool.query(query, params);
-        res.json(resultado.rows);
+
+        let mapaDeudas = new Map();
+        try {
+            const deudas = await obtenerDeudas();
+            mapaDeudas = deudas.mapa;
+        } catch (errDeuda) {
+            console.error("⚠️ No se pudo obtener la deuda, se devuelve la ruta sin saldos:", errDeuda.message);
+        }
+
+        const filas = resultado.rows.map(f => ({
+            ...f,
+            saldo_deuda: mapaDeudas.get(String(f.id)) || 0
+        }));
+
+        res.json(filas);
 
     } catch (err) {
         console.error("❌ Error al consultar las ventas del chofer en Gescom:", err.message);
@@ -167,37 +218,45 @@ app.get('/api/ventas-chofer/:nombre', async (req, res) => {
     }
 });
 
-// --- MÓDULO DE CUENTA CORRIENTE DETALLADA (SOLO FACTURAS VIVAS SIN DUPLICADOS) ---
+// --- MÓDULO DE CUENTA CORRIENTE DETALLADA POR CLIENTE ---
 app.get('/api/cta-cte/:cliente_id', async (req, res) => {
     const clienteId = req.params.cliente_id;
 
+    if (!/^\d+$/.test(clienteId)) {
+        return res.status(400).json({ error: "cliente_id inválido" });
+    }
+
     try {
+        const { fecha } = await obtenerDeudas();
+        if (!fecha) return res.json([]);
+
         const query = `
-            SELECT DISTINCT ON (tipo_comprobante_codigo, punto_venta_codigo, numero_comprobante)
-                tipo_comprobante_codigo,
-                punto_venta_codigo,
-                numero_comprobante,
-                fecha_comprobante,
-                fecha_vencimiento,
-                importe_original,
-                importe AS saldo_pendiente,
-                detalle
+            SELECT tipo_comprobante_codigo,
+                   punto_venta_codigo,
+                   numero_comprobante,
+                   numero_cuota,
+                   fecha_comprobante,
+                   fecha_vencimiento,
+                   importe_original,
+                   CASE WHEN es_credito THEN -importe ELSE importe END AS saldo_pendiente,
+                   es_credito,
+                   detalle
             FROM cta_cte_cliente
             WHERE cliente_id = $1
-              AND importe > 0
-              AND tipo_comprobante_codigo ILIKE 'FAC%'
-            ORDER BY tipo_comprobante_codigo, punto_venta_codigo, numero_comprobante, fecha_sync DESC;
+              AND fecha_sync = $2::date
+            ORDER BY es_credito, fecha_comprobante, numero_comprobante, numero_cuota;
         `;
 
-        const resultado = await pool.query(query, [clienteId]);
+        const resultado = await pool.query(query, [clienteId, fecha]);
         res.json(resultado.rows);
 
     } catch (err) {
-        console.error("Error al consultar la cuenta corriente en Gescom:", err);
+        console.error("Error al consultar la cuenta corriente en Gescom:", err.message);
         res.status(500).json({ error: "Error interno al obtener la cuenta corriente" });
     }
 });
 
+// --- MÓDULO DE CLIENTES POR DÍA ---
 app.get('/api/clientes/:dia', async (req, res) => {
     const diaParam = req.params.dia.toUpperCase();
     const mapaDias = {
@@ -235,6 +294,7 @@ app.get('/api/clientes/:dia', async (req, res) => {
     }
 });
 
+// --- MÓDULO DE UBICACIONES Y GPS ---
 app.post('/api/ubicacion', (req, res) => {
     const { chofer_id, vehiculo, latitud, longitud } = req.body;
     if (!chofer_id || !latitud || !longitud) {
@@ -255,7 +315,11 @@ app.post('/api/ubicacion', (req, res) => {
     vehStats.ultimaLat = latitud;
     vehStats.ultimaLon = longitud;
     const distanciaTotalRedondeada = Number(vehStats.distanciaKm.toFixed(2));
+    
     choferesUbicaciones.push({ chofer_id, vehiculo: vehiculoKey, latitud, longitud, distanciaTotalKm: distanciaTotalRedondeada, fecha_hora: new Date() });
+    if (choferesUbicaciones.length > MAX_UBICACIONES) {
+        choferesUbicaciones.splice(0, choferesUbicaciones.length - MAX_UBICACIONES);
+    }
     res.status(201).json({ exito: true, distanciaTotalKm: distanciaTotalRedondeada });
 });
 
@@ -269,10 +333,11 @@ app.get('/api/estadisticas', (req, res) => {
     res.json(lista);
 });
 
+// --- MÓDULO DE CHECKLIST ---
 app.post('/api/checklist', (req, res) => {
     const { dominio, chofer } = req.body;
     if (!dominio || !chofer) return res.status(400).json({ error: "Faltan datos obligatorios" });
-    const nuevo = { id: checkListsEnviados.length + 1, marca_temporal: new Date(), ...req.body };
+    const nuevo = { id: siguienteIdChecklist++, marca_temporal: new Date(), ...req.body };
     checkListsEnviados.push(nuevo);
     res.status(201).json({ exito: true, id: nuevo.id });
 });
@@ -283,8 +348,9 @@ app.delete('/api/checklist/:id', (req, res) => {
     res.json({ exito: true });
 });
 
+// --- MÓDULO DE COMBUSTIBLE ---
 app.post('/api/combustible', (req, res) => {
-    const nueva = { id: cargasCombustible.length + 1, fecha: new Date(), ...req.body };
+    const nueva = { id: siguienteIdCombustible++, fecha: new Date(), ...req.body };
     cargasCombustible.push(nueva);
     res.status(201).json({ exito: true });
 });
