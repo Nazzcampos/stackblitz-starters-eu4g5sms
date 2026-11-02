@@ -31,11 +31,11 @@
             --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
             --glow: 0 0 28px rgba(124, 92, 255, 0.45);
         }
- 
+
         * { box-sizing: border-box; }
- 
+
         html { -webkit-text-size-adjust: 100%; }
- 
+
         body {
             margin: 0;
             font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif;
@@ -45,7 +45,7 @@
             padding-bottom: calc(110px + env(safe-area-inset-bottom));
             -webkit-font-smoothing: antialiased;
         }
- 
+
         /* ---------- Fondo espacial: nebulosas + campo de estrellas ---------- */
         body::before {
             content: "";
@@ -73,7 +73,7 @@
             animation: twinkle 6s ease-in-out infinite alternate;
         }
         @keyframes twinkle { from { opacity: .55; } to { opacity: 1; } }
- 
+
         /* ---------- Barra superior ---------- */
         .topbar {
             position: sticky; top: 0; z-index: 900;
@@ -105,7 +105,7 @@
         .brand-text { line-height: 1.15; min-width: 0; }
         .brand-title { font-size: 1rem; font-weight: 800; letter-spacing: .2px; white-space: nowrap; }
         .brand-sub { font-size: .7rem; color: var(--muted); letter-spacing: 1.4px; text-transform: uppercase; }
- 
+
         .topbar-right { display: flex; align-items: center; gap: 8px; flex: none; }
         .gps-pill {
             display: none; align-items: center; gap: 6px;
@@ -116,7 +116,7 @@
         .gps-pill.on { display: inline-flex; }
         .gps-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 rgba(52,211,153,.7); animation: ping 1.6s infinite; }
         @keyframes ping { 70% { box-shadow: 0 0 0 8px rgba(52,211,153,0); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
- 
+
         .user-chip {
             display: none; align-items: center; gap: 8px;
             padding: 4px 4px 4px 4px; border-radius: 999px;
@@ -135,10 +135,10 @@
             border-radius: 999px; cursor: pointer; box-shadow: none;
         }
         .btn-chip:hover { background: rgba(255,255,255,.16); transform: none; }
- 
+
         /* ---------- Contenedor principal ---------- */
         .container { max-width: 640px; margin: 8px auto 0; padding: 0 14px; }
- 
+
         .card {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -148,7 +148,7 @@
             backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
         }
         .card + .card { margin-top: 14px; }
- 
+
         .section-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
         .section-icon {
             flex: none; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
@@ -157,14 +157,14 @@
         }
         .section-title { margin: 0; font-size: 1.12rem; font-weight: 800; }
         .section-sub { margin: 2px 0 0; font-size: .8rem; color: var(--muted); }
- 
+
         .block-title {
             margin: 22px 0 8px; font-size: .78rem; font-weight: 800; letter-spacing: 1.4px;
             text-transform: uppercase; color: var(--cyan);
         }
- 
+
         label { display: block; margin: 14px 0 6px; font-size: .8rem; font-weight: 700; color: var(--muted); letter-spacing: .3px; }
- 
+
         input, select, textarea {
             width: 100%; padding: 13px 14px; font-size: 1rem; font-family: inherit;
             color: var(--text); background: rgba(4, 6, 20, .55);
@@ -184,7 +184,7 @@
         }
         select option { background: var(--surface-solid); color: var(--text); }
         textarea { resize: vertical; min-height: 90px; }
- 
+
         button {
             width: 100%; margin-top: 18px; padding: 14px 16px;
             font-family: inherit; font-size: 1rem; font-weight: 800; letter-spacing: .3px; color: #fff;
@@ -197,7 +197,7 @@
         button:active { transform: translateY(0) scale(.99); }
         .btn-danger { background: linear-gradient(135deg, #f43f5e, #e11d48); box-shadow: 0 10px 26px rgba(244, 63, 94, .35); }
         .btn-ghost { background: rgba(255,255,255,.08); border: 1px solid var(--border); box-shadow: none; }
- 
+
         /* ---------- Login ---------- */
         #vista-login .card { text-align: center; padding: 28px 22px; }
         .login-orb {
@@ -209,7 +209,7 @@
         .login-title { margin: 0; font-size: 1.35rem; font-weight: 800; }
         .login-sub { margin: 6px 0 4px; font-size: .88rem; color: var(--muted); }
         #vista-login label { text-align: left; }
- 
+
         /* ---------- Check-list ---------- */
         .checklist-item {
             display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
@@ -229,16 +229,31 @@
         .seg input:checked + label.l-falla { background: linear-gradient(135deg, #f43f5e, #fb7185); color: #fff; }
         .seg input:checked + label.l-na { background: rgba(255,255,255,.16); color: var(--text); }
         .seg input:focus-visible + label { outline: 2px solid var(--cyan); outline-offset: 1px; }
- 
+
         #gps-status {
             display: none; margin-top: 14px; padding: 16px; text-align: center; font-size: .9rem;
             color: #b8f5dc; background: rgba(16, 185, 129, .1); border: 1px solid rgba(52, 211, 153, .4);
             border-radius: var(--radius-lg);
         }
         #gps-status button { margin-top: 12px; }
- 
+
         /* ---------- Ruta ---------- */
-        #map-chofer { height: 320px; border-radius: var(--radius-lg); margin-top: 14px; border: 1px solid var(--border-strong); overflow: hidden; background: #0b1030; }
+        .map-wrap { position: relative; margin-top: 14px; }
+        #map-chofer { height: 340px; border-radius: var(--radius-lg); border: 1px solid var(--border-strong); overflow: hidden; background: #0b1030; }
+        .map-controls { position: absolute; right: 10px; top: 10px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+        .map-fab {
+            width: 46px; height: 46px; margin: 0; padding: 0; display: grid; place-items: center;
+            border-radius: 50%; color: var(--text); background: rgba(10, 14, 36, .9);
+            border: 1px solid var(--border-strong); box-shadow: 0 8px 22px rgba(0,0,0,.5);
+        }
+        .map-fab:hover { filter: none; transform: none; background: rgba(30, 38, 80, .95); }
+        .map-fab.on { color: #fff; background: linear-gradient(135deg, var(--cyan), var(--violet-2)); border-color: transparent; box-shadow: 0 0 20px rgba(34, 211, 238, .55); }
+        .map-status {
+            position: absolute; left: 10px; bottom: 10px; z-index: 1000; pointer-events: none;
+            max-width: calc(100% - 20px); padding: 6px 12px; border-radius: 999px;
+            font-size: .72rem; font-weight: 700; color: var(--text);
+            background: rgba(10, 14, 36, .88); border: 1px solid var(--border-strong);
+        }
         .lista-clientes { margin-top: 14px; }
         .cliente-card {
             display: flex; gap: 12px; align-items: flex-start;
@@ -267,7 +282,7 @@
             background: linear-gradient(135deg, #f43f5e, #fb7185); box-shadow: 0 6px 18px rgba(244, 63, 94, .3);
         }
         .empty-state { text-align: center; color: var(--muted); padding: 22px 10px; font-size: .9rem; }
- 
+
         .pin {
             width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
             font-size: 11px; font-weight: 800; color: #fff; border: 2px solid #fff; box-shadow: 0 3px 10px rgba(0,0,0,.5);
@@ -279,8 +294,10 @@
             box-shadow: 0 0 0 0 rgba(34, 211, 238, .8); animation: pingLive 1.8s infinite;
         }
         @keyframes pingLive { 70% { box-shadow: 0 0 0 16px rgba(34, 211, 238, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); } }
- 
+
         .leaflet-container { font-family: inherit; }
+        /* Invierte los colores del mapa claro para que combine con el tema espacial; los pines no se ven afectados */
+        .leaflet-tile-pane { filter: invert(100%) hue-rotate(188deg) brightness(.92) contrast(.92) saturate(.75); }
         .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface-solid); color: var(--text); border: 1px solid var(--border-strong); }
         .leaflet-popup-content-wrapper { border-radius: 16px; }
         .leaflet-popup-content { margin: 12px 14px; font-size: .85rem; line-height: 1.4; }
@@ -288,11 +305,11 @@
         .leaflet-bar a { background: var(--surface-solid); color: var(--text); border-color: var(--border); }
         .leaflet-control-attribution { background: rgba(5, 6, 15, .7) !important; color: var(--muted) !important; }
         .leaflet-control-attribution a { color: var(--cyan) !important; }
- 
+
         .vista-seccion { display: none; }
         .vista-seccion.active { display: block; animation: fadeUp .35s ease both; }
         @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
- 
+
         /* ---------- Dock de navegación inferior (al alcance del pulgar) ---------- */
         .nav-island {
             position: fixed; left: 50%; transform: translateX(-50%);
@@ -318,7 +335,7 @@
             background: linear-gradient(135deg, var(--violet), var(--violet-2));
             box-shadow: 0 8px 22px rgba(124, 92, 255, .5);
         }
- 
+
         /* ---------- Modal cuenta corriente ---------- */
         .modal-overlay {
             position: fixed; inset: 0; z-index: 2000; display: flex; justify-content: center; align-items: center; padding: 16px;
@@ -344,9 +361,9 @@
             font-weight: 800;
         }
         .cc-total .monto { font-size: 1.2rem; }
- 
+
         /* ---------- Avisos ---------- */
-        .toast-wrap { position: fixed; left: 50%; transform: translateX(-50%); top: calc(76px + env(safe-area-inset-top)); z-index: 3000; display: flex; flex-direction: column; gap: 8px; width: min(440px, calc(100% - 28px)); pointer-events: none; }
+        .toast-wrap { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(100px + env(safe-area-inset-bottom)); z-index: 3000; display: flex; flex-direction: column; gap: 8px; width: min(440px, calc(100% - 28px)); pointer-events: none; }
         .toast {
             padding: 12px 16px; border-radius: 16px; font-size: .88rem; font-weight: 700; text-align: center;
             background: var(--surface-solid); border: 1px solid var(--border-strong); box-shadow: var(--shadow);
@@ -355,7 +372,32 @@
         .toast.ok { border-color: rgba(52, 211, 153, .6); color: #b8f5dc; }
         .toast.error { border-color: rgba(251, 113, 133, .6); color: #ffd0d8; }
         @keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
- 
+
+        /* ---------- Aviso de llegada a un cliente ---------- */
+        .gps-pill { cursor: pointer; }
+        .aviso-wrap {
+            position: fixed; left: 50%; transform: translateX(-50%);
+            top: calc(78px + env(safe-area-inset-top)); z-index: 2500;
+            width: min(480px, calc(100% - 24px)); display: flex; flex-direction: column; gap: 10px;
+            pointer-events: none;
+        }
+        .aviso {
+            pointer-events: auto; padding: 16px; border-radius: 22px;
+            background: var(--surface-solid); border: 1px solid var(--border-strong); border-left: 6px solid var(--cyan);
+            box-shadow: var(--shadow), var(--glow); animation: toastIn .35s ease both;
+        }
+        .aviso.debe { border-left-color: var(--danger); }
+        .aviso.ok { border-left-color: var(--ok); }
+        .aviso-head { display: flex; gap: 12px; align-items: flex-start; }
+        .aviso-icon { flex: none; width: 40px; height: 40px; border-radius: 14px; display: grid; place-items: center; font-size: 1.3rem; background: rgba(34, 211, 238, .12); }
+        .aviso-title { font-weight: 800; font-size: 1rem; line-height: 1.3; }
+        .aviso-meta { margin-top: 3px; font-size: .78rem; color: var(--muted); }
+        .aviso-msg { margin-top: 12px; padding: 11px 13px; border-radius: 14px; font-weight: 800; font-size: .95rem; }
+        .aviso.debe .aviso-msg { color: #ffd0d8; background: rgba(251, 113, 133, .12); border: 1px solid rgba(251, 113, 133, .4); }
+        .aviso.ok .aviso-msg { color: #b8f5dc; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .35); }
+        .aviso-actions { display: flex; gap: 8px; margin-top: 12px; }
+        .aviso-actions button { margin: 0; padding: 11px 12px; font-size: .85rem; }
+
         @media (max-width: 420px) {
             .brand-sub { display: none; }
             .user-name { max-width: 70px; }
@@ -367,7 +409,7 @@
     </style>
 </head>
 <body>
- 
+
 <!-- BARRA SUPERIOR -->
 <header class="topbar">
     <div class="topbar-inner">
@@ -386,7 +428,7 @@
             </div>
         </div>
         <div class="topbar-right">
-            <span class="gps-pill" id="gps-pill"><span class="gps-dot"></span>GPS</span>
+            <span class="gps-pill" id="gps-pill" role="button" onclick="alternarSeguimiento()" title="Ubicación en vivo"><span class="gps-dot"></span>EN VIVO</span>
             <div class="user-chip" id="userChip">
                 <span class="avatar" id="avatarChofer">--</span>
                 <span class="user-name" id="lblChofer">-</span>
@@ -395,9 +437,9 @@
         </div>
     </div>
 </header>
- 
+
 <main class="container">
- 
+
     <!-- PANTALLA 0: LOGIN CON MENÚ DESPLEGABLE DE CHOFERES -->
     <div id="vista-login" class="vista-seccion active">
         <div class="card">
@@ -420,7 +462,7 @@
             </form>
         </div>
     </div>
- 
+
     <!-- SECCIÓN 1: CHECK-LIST -->
     <div id="seccion-checklist" class="vista-seccion">
         <div class="card">
@@ -433,26 +475,26 @@
                     <p class="section-sub">Completalo antes de salir a ruta</p>
                 </div>
             </div>
- 
+
             <form id="checklistForm">
                 <label for="dominio">Dominio / Patente del vehículo</label>
                 <input type="text" id="dominio" required placeholder="Ej: AF 189 LD" autocapitalize="characters" autocomplete="off">
- 
+
                 <label for="tipo_vehiculo">Tipo de vehículo</label>
                 <select id="tipo_vehiculo">
                     <option value="Vehiculo (Auto o Camioneta)">Vehículo (Auto o Camioneta)</option>
                     <option value="Camión">Camión</option>
                 </select>
- 
+
                 <div class="block-title">Revisión diaria</div>
                 <div id="checklist-container"></div>
- 
+
                 <label for="observaciones">Observaciones generales</label>
                 <textarea id="observaciones" rows="3" placeholder="Detalles o novedades..."></textarea>
- 
+
                 <button type="submit" id="btnEnviar">Enviar check-list y activar GPS</button>
             </form>
- 
+
             <div id="gps-status">
                 📡 <b>GPS activo:</b> transmitiendo en vivo<br>
                 <span id="coords" style="color: var(--muted); font-size: .8rem;">Esperando señal...</span>
@@ -460,7 +502,7 @@
             </div>
         </div>
     </div>
- 
+
     <!-- SECCIÓN 2: CARGA DE COMBUSTIBLE -->
     <div id="seccion-combustible" class="vista-seccion">
         <div class="card">
@@ -473,25 +515,25 @@
                     <p class="section-sub">Registrá cada carga para calcular el rendimiento en Km/L</p>
                 </div>
             </div>
- 
+
             <form id="combustibleForm">
                 <label for="dominio_combustible">Dominio / Patente</label>
                 <input type="text" id="dominio_combustible" required placeholder="Ej: AF 189 LD" autocapitalize="characters" autocomplete="off">
- 
+
                 <label for="litros">Litros cargados</label>
                 <input type="number" step="0.01" inputmode="decimal" id="litros" required placeholder="Ej: 45.5">
- 
+
                 <label for="costoTotal">Costo total ($)</label>
                 <input type="number" step="0.01" inputmode="decimal" id="costoTotal" required placeholder="Ej: 35000">
- 
+
                 <label for="odometroActual">Kilometraje actual del tablero</label>
                 <input type="number" inputmode="numeric" id="odometroActual" required placeholder="Ej: 12450">
- 
+
                 <button type="submit">Registrar carga</button>
             </form>
         </div>
     </div>
- 
+
     <!-- SECCIÓN 3: RUTA Y REPARTOS (GESCOM) -->
     <div id="seccion-ruta" class="vista-seccion">
         <div class="card">
@@ -504,13 +546,21 @@
                     <p class="section-sub">Tu reparto real desde Gescom</p>
                 </div>
             </div>
- 
+
             <label for="inputFechaRuta" style="margin-top: 0;">Fecha de reparto</label>
             <input type="date" id="inputFechaRuta" onchange="cambiarFechaRuta()">
- 
+
             <!-- Mapa interactivo del chofer -->
-            <div id="map-chofer"></div>
- 
+            <div class="map-wrap">
+                <div id="map-chofer"></div>
+                <div class="map-controls">
+                    <button type="button" class="map-fab" id="btnMiUbicacion" onclick="centrarEnMiUbicacion()" aria-label="Mi ubicación en vivo" title="Mi ubicación en vivo">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>
+                    </button>
+                </div>
+                <div class="map-status" id="mapStatus">Ubicación apagada · tocá ◎ para verla en vivo</div>
+            </div>
+
             <!-- Lista de Clientes del Reparto -->
             <div class="lista-clientes" id="contenedor-clientes">
                 <p class="empty-state">Cargando tu ruta...</p>
@@ -518,9 +568,10 @@
         </div>
     </div>
 </main>
- 
+
 <div class="toast-wrap" id="toastWrap"></div>
- 
+<div class="aviso-wrap" id="avisoWrap"></div>
+
 <!-- DOCK DE NAVEGACIÓN (3 SOLAPAS) -->
 <nav class="nav-island" id="navIsland">
     <button type="button" class="nav-btn active" onclick="cambiarVista('checklist', this)">
@@ -536,13 +587,13 @@
         Ruta de hoy
     </button>
 </nav>
- 
+
 <!-- Script de Leaflet -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
     let choferActual = "";
     let clientesPorId = {};
- 
+
     function escapeHtml(t) {
         return String(t == null ? '' : t).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     }
@@ -563,7 +614,7 @@
         const partes = String(nombre).trim().split(/\s+/).filter(Boolean);
         return ((partes[0] || '?')[0] + (partes[1] ? partes[1][0] : '')).toUpperCase();
     }
- 
+
     // Avisos breves (reemplazan a los alert)
     function mostrarToast(mensaje, tipo) {
         const wrap = document.getElementById('toastWrap');
@@ -574,7 +625,7 @@
         setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; }, 3200);
         setTimeout(() => t.remove(), 3600);
     }
- 
+
     // Cargar la lista de choferes en el select al abrir la app
     async function cargarChoferesParaLogin() {
         try {
@@ -582,7 +633,7 @@
             const choferes = await res.json();
             const select = document.getElementById('selectChoferLogin');
             select.innerHTML = '<option value="">Seleccioná tu nombre</option>';
- 
+
             choferes.forEach(c => {
                 const opt = document.createElement('option');
                 opt.value = c.nombre;
@@ -594,20 +645,20 @@
             document.getElementById('selectChoferLogin').innerHTML = '<option value="">Error al cargar choferes</option>';
         }
     }
- 
+
     // Ejecutar al iniciar y setear fecha de hoy en el input
     window.onload = () => {
         cargarChoferesParaLogin();
         const inputFecha = document.getElementById('inputFechaRuta');
         if (inputFecha) inputFecha.value = fechaLocalHoy();
     };
- 
+
     function cambiarFechaRuta() {
         if (choferActual) {
             cargarRutaChoferReal(choferActual);
         }
     }
- 
+
     // Manejo del Login con el Chofer Seleccionado
     document.getElementById('loginForm').addEventListener('submit', (e) => {
         e.preventDefault();
@@ -617,12 +668,12 @@
             mostrarToast("Por favor seleccioná un chofer.", 'error');
             return;
         }
- 
+
         choferActual = usuario;
         document.getElementById('lblChofer').innerText = choferActual;
         document.getElementById('avatarChofer').innerText = iniciales(choferActual);
         document.getElementById('userChip').classList.add('on');
- 
+
         // Ocultar login y mostrar solapas y check-list
         document.getElementById('vista-login').classList.remove('active');
         document.querySelectorAll('.nav-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
@@ -630,8 +681,15 @@
         document.getElementById('navIsland').style.display = 'flex';
         window.scrollTo({ top: 0 });
     });
- 
+
     function cerrarSesion() {
+        // Si se cambia de chofer, se corta el turno y el GPS para no enviar ubicaciones con el nombre equivocado
+        enviarAlServidor = false;
+        detenerSeguimientoGPS();
+        if (wakeLock !== null) { wakeLock.release().catch(() => {}); wakeLock = null; }
+        document.getElementById('gps-status').style.display = 'none';
+        document.getElementById('avisoWrap').innerHTML = '';
+        clientesPorId = {};
         choferActual = "";
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
         document.getElementById('vista-login').classList.add('active');
@@ -639,13 +697,13 @@
         document.getElementById('userChip').classList.remove('on');
         document.getElementById('selectChoferLogin').value = '';
     }
- 
+
     function cambiarVista(vista, btn) {
         document.querySelectorAll('.vista-seccion').forEach(s => {
             if (s.id !== 'vista-login') s.classList.remove('active');
         });
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
- 
+
         if (vista === 'checklist') {
             document.getElementById('seccion-checklist').classList.add('active');
         } else if (vista === 'combustible') {
@@ -658,7 +716,7 @@
         btn.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
- 
+
     const itemsChecklist = [
         "Documentación Completa (Licencia, Cédula, Seguro, ITV, etc.)",
         "Cinturón de seguridad",
@@ -670,7 +728,7 @@
         "Bocina",
         "Limpieza"
     ];
- 
+
     // Cada ítem se responde con un selector táctil OK / Falla / N/A
     const container = document.getElementById('checklist-container');
     itemsChecklist.forEach((item, index) => {
@@ -693,18 +751,18 @@
         });
         container.appendChild(div);
     });
- 
+
     // Inicializar mapa del chofer (mapa oscuro a tono con la app)
     const mapChofer = L.map('map-chofer').setView([-33.2814, -62.1785], 14);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // Mapa de OpenStreetMap (sin clave). El tono oscuro se logra con un filtro CSS sobre las baldosas.
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        subdomains: 'abcd',
-        attribution: '© OpenStreetMap · © CARTO'
+        attribution: '© OpenStreetMap'
     }).addTo(mapChofer);
- 
+
     let marcadoresClientes = [];
     let marcadorChoferVivo = null;
- 
+
     // Cargar la hoja de ruta real del chofer considerando la fecha elegida
     async function cargarRutaChoferReal(nombreChofer) {
         const fechaInput = document.getElementById('inputFechaRuta').value;
@@ -712,22 +770,22 @@
         if (fechaInput) {
             url += `?fecha=${fechaInput}`;
         }
- 
+
         try {
             const res = await fetch(url);
             const clientes = await res.json();
- 
+
             marcadoresClientes.forEach(m => mapChofer.removeLayer(m));
             marcadoresClientes = [];
- 
+
             const listaContainer = document.getElementById('contenedor-clientes');
             listaContainer.innerHTML = '';
- 
+
             if (!Array.isArray(clientes) || clientes.length === 0) {
                 listaContainer.innerHTML = `<p class="empty-state">⚠️ No hay repartos ni ventas cargadas para la fecha ${escapeHtml(formatoFecha(fechaInput) === 'S/F' ? 'de hoy' : formatoFecha(fechaInput))}.</p>`;
                 return;
             }
- 
+
             clientesPorId = {};
             clientes.forEach(c => {
                 const idSeguro = String(c.id).replace(/\D/g, '');
@@ -735,14 +793,15 @@
                 const saldo = parseFloat(c.saldo_deuda) || 0;
                 const tieneDeuda = saldo > 0;
                 const nombreSeguro = escapeHtml(c.nombre);
+                const codigoHtml = c.cliente_codigo ? `<span style="color: var(--cyan);">Cód. ${escapeHtml(c.cliente_codigo)}</span> · ` : '';
                 const textoBoton = `Ver Cta. Cte 💰 ${formatoPesos(saldo)}`;
- 
+
                 if (c.lat && c.lon) {
-                    let popupHtml = `<b>#${escapeHtml(c.orden || '-')} · ${nombreSeguro}</b><br>${escapeHtml(c.direccion) || 'Sin dirección'}`;
+                    let popupHtml = `<b>#${escapeHtml(c.orden || '-')} · ${codigoHtml}${nombreSeguro}</b><br>${escapeHtml(c.direccion) || 'Sin dirección'}`;
                     if (tieneDeuda) {
                         popupHtml += `<br><button class="btn-deuda" onclick="verCuentaCorriente('${idSeguro}')">${textoBoton}</button>`;
                     }
- 
+
                     const marker = L.marker([c.lat, c.lon], {
                         icon: L.divIcon({
                             className: 'custom-pin',
@@ -751,10 +810,10 @@
                             iconAnchor: [14, 14]
                         })
                     }).addTo(mapChofer).bindPopup(popupHtml);
- 
+
                     marcadoresClientes.push(marker);
                 }
- 
+
                 let estadoCuenta;
                 if (tieneDeuda) {
                     estadoCuenta = `<button class="btn-deuda" onclick="verCuentaCorriente('${idSeguro}')">${textoBoton}</button>`;
@@ -763,13 +822,13 @@
                 } else {
                     estadoCuenta = `<span class="chip chip-ok">✔ Al día</span>`;
                 }
- 
+
                 const card = document.createElement('div');
                 card.className = 'cliente-card';
                 card.innerHTML = `
                     <div class="orden-badge">${escapeHtml(c.orden || 'S/N')}</div>
                     <div class="cliente-body">
-                        <div class="cliente-nombre">${nombreSeguro}</div>
+                        <div class="cliente-nombre">${codigoHtml}${nombreSeguro}</div>
                         <div class="cliente-dir">${escapeHtml(c.direccion)} (${escapeHtml(c.localidad)})</div>
                         <div class="cliente-foot">
                             <span class="chip">Reparto ${escapeHtml(c.reparto_codigo || 'General')}</span>
@@ -779,8 +838,8 @@
                 `;
                 listaContainer.appendChild(card);
             });
- 
-            if (clientes.length > 0 && clientes[0].lat && clientes[0].lon) {
+
+            if (!ultimaPosicion && clientes.length > 0 && clientes[0].lat && clientes[0].lon) {
                 mapChofer.setView([clientes[0].lat, clientes[0].lon], 13);
             }
         } catch (err) {
@@ -788,7 +847,7 @@
             document.getElementById('contenedor-clientes').innerHTML = '<p class="empty-state" style="color: var(--danger);">Error al conectar con Gescom.</p>';
         }
     }
- 
+
     // --- FUNCIÓN: CONSULTAR Y MOSTRAR LA CUENTA CORRIENTE DEL CLIENTE ---
     // Muestra comprobantes a cobrar y créditos (notas de crédito, recibos a cuenta) y el total neto
     async function verCuentaCorriente(clienteId) {
@@ -798,14 +857,14 @@
             const response = await fetch(`/api/cta-cte/${clienteId}`);
             if (!response.ok) throw new Error('HTTP ' + response.status);
             const movimientos = await response.json();
- 
+
             const debitos = movimientos.filter(m => !m.es_credito);
             const creditos = movimientos.filter(m => m.es_credito);
             const totalDebitos = debitos.reduce((a, m) => a + parseFloat(m.saldo_pendiente), 0);
             const totalCreditos = creditos.reduce((a, m) => a + parseFloat(m.saldo_pendiente), 0); // ya viene negativo
             const total = totalDebitos + totalCreditos;
             const hoy = fechaLocalHoy();
- 
+
             const fila = m => {
                 const importe = parseFloat(m.saldo_pendiente);
                 const vencido = !m.es_credito && m.fecha_vencimiento && String(m.fecha_vencimiento).slice(0, 10) < hoy;
@@ -817,13 +876,13 @@
                         <td class="num" style="color:${m.es_credito ? 'var(--ok)' : 'var(--danger)'};">${formatoPesos(importe)}</td>
                     </tr>`;
             };
- 
+
             let html = `
                 <div class="modal-overlay" onclick="if (event.target === this) this.remove()">
                     <div class="modal-card">
                         <h3 class="modal-title">💳 ${escapeHtml(nombreCliente)}</h3>
                         <p class="modal-sub">Cuenta corriente</p>`;
- 
+
             if (movimientos.length === 0) {
                 html += `<p class="empty-state" style="color: var(--ok);">El cliente no registra movimientos pendientes.</p>`;
             } else {
@@ -837,13 +896,13 @@
                     </thead>
                     <tbody>${debitos.map(fila).join('')}${creditos.map(fila).join('')}</tbody>
                 </table>`;
- 
+
                 if (creditos.length > 0) {
                     html += `
                     <div class="cc-line"><span>Subtotal comprobantes</span><span>${formatoPesos(totalDebitos)}</span></div>
                     <div class="cc-line" style="color: var(--ok);"><span>Créditos a favor</span><span>${formatoPesos(totalCreditos)}</span></div>`;
                 }
- 
+
                 const etiqueta = total > 0 ? 'Total a cobrar' : (total < 0 ? 'Saldo a favor' : 'Saldo');
                 const colorTotal = total > 0 ? 'var(--danger)' : 'var(--ok)';
                 html += `
@@ -852,40 +911,268 @@
                         <span class="monto" style="color:${colorTotal};">${formatoPesos(total)}</span>
                     </div>`;
             }
- 
+
             html += `
                         <button type="button" class="btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cerrar</button>
                     </div>
                 </div>`;
- 
+
             document.body.insertAdjacentHTML('beforeend', html);
- 
+
         } catch (error) {
             console.error("Error al obtener la cuenta corriente:", error);
             mostrarToast("No se pudo cargar la cuenta corriente en este momento.", 'error');
         }
     }
- 
-    let intervaloGPS = null;
+
+    // =====================================================================
+    //  GPS EN VIVO + AVISO DE LLEGADA A CLIENTES
+    // =====================================================================
+    const RADIO_AVISO_METROS = 250;      // a esta distancia de un cliente se muestra el aviso
+    const INTERVALO_ENVIO_MS = 30000;    // cada cuánto se informa la posición al servidor
+    const PRECISION_MAX_ENVIO_M = 150;   // no se envían posiciones con más de este error
+    const MODO_PRUEBA = new URLSearchParams(location.search).has('sim'); // ?sim=1 → tocar el mapa simula la ubicación
+
+    let watchId = null;
+    let enviarAlServidor = false;        // true mientras hay un turno activo (check-list enviado)
+    let vehiculoActual = "";
+    let ultimoEnvio = 0;
+    let ultimaPosicion = null;
+    let circuloPrecision = null;
+    let seguirMiUbicacion = true;
     let wakeLock = null;
- 
+    const clientesAvisados = new Set();  // "fecha:idCliente" para avisar una sola vez por cliente y día
+
+    function distanciaMetros(lat1, lon1, lat2, lon2) {
+        const R = 6371000, rad = Math.PI / 180;
+        const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
     async function solicitarWakeLock() {
         if ('wakeLock' in navigator) {
             try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
         }
     }
- 
+    // Android/iOS liberan el bloqueo de pantalla al minimizar; se vuelve a pedir al regresar
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && enviarAlServidor) solicitarWakeLock();
+    });
+
+    function actualizarEstadoMapa(texto) {
+        document.getElementById('mapStatus').innerText = texto;
+        document.getElementById('btnMiUbicacion').classList.toggle('on', watchId !== null || MODO_PRUEBA);
+    }
+
+    // Si el usuario arrastra el mapa, deja de seguirlo hasta que toque ◎
+    mapChofer.on('dragstart', () => { seguirMiUbicacion = false; });
+    if (MODO_PRUEBA) {
+        mapChofer.on('click', (e) => {
+            onPosicion({ coords: { latitude: e.latlng.lat, longitude: e.latlng.lng, accuracy: 10 } });
+        });
+        setTimeout(() => mostrarToast("Modo prueba: tocá el mapa para simular tu ubicación.", 'ok'), 600);
+        actualizarEstadoMapa("Modo prueba · tocá el mapa para simular tu ubicación");
+    }
+
+    function iniciarSeguimientoGPS() {
+        if (MODO_PRUEBA) return true;
+        if (!navigator.geolocation) {
+            mostrarToast("Este dispositivo no permite usar el GPS.", 'error');
+            return false;
+        }
+        if (watchId !== null) return true;
+        watchId = navigator.geolocation.watchPosition(onPosicion, onErrorGPS, {
+            enableHighAccuracy: true, maximumAge: 2000, timeout: 20000
+        });
+        document.getElementById('gps-pill').classList.add('on');
+        actualizarEstadoMapa("Buscando señal GPS...");
+        return true;
+    }
+
+    function detenerSeguimientoGPS() {
+        if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+        document.getElementById('gps-pill').classList.remove('on');
+        if (marcadorChoferVivo) { mapChofer.removeLayer(marcadorChoferVivo); marcadorChoferVivo = null; }
+        if (circuloPrecision) { mapChofer.removeLayer(circuloPrecision); circuloPrecision = null; }
+        ultimaPosicion = null;
+        actualizarEstadoMapa("Ubicación apagada · tocá ◎ para verla en vivo");
+    }
+
+    // Tocar la pastilla "EN VIVO" apaga la ubicación, salvo que haya un turno activo
+    function alternarSeguimiento() {
+        if (enviarAlServidor) {
+            mostrarToast("Hay un turno activo. Para detener el GPS, finalizá el turno en Check-list.", 'error');
+            return;
+        }
+        detenerSeguimientoGPS();
+    }
+
+    function centrarEnMiUbicacion() {
+        seguirMiUbicacion = true;
+        if (!iniciarSeguimientoGPS()) return;
+        if (ultimaPosicion) {
+            mapChofer.setView([ultimaPosicion.lat, ultimaPosicion.lon], Math.max(mapChofer.getZoom(), 16), { animate: true });
+        }
+        actualizarEstadoMapa(ultimaPosicion ? "Siguiendo tu ubicación en vivo" : "Buscando señal GPS...");
+    }
+
+    function onErrorGPS(err) {
+        if (err.code === 1) {
+            mostrarToast("Permití el acceso a la ubicación en el navegador para usar el GPS.", 'error');
+            detenerSeguimientoGPS();
+        } else if (err.code === 2) {
+            actualizarEstadoMapa("Sin señal GPS. Buscando...");
+        }
+        // code 3 (timeout): el seguimiento continúa y se reintenta solo
+    }
+
+    // Se ejecuta cada vez que el dispositivo informa una nueva posición (movimiento real, sin esperar)
+    function onPosicion(pos) {
+        const lat = pos.coords.latitude, lon = pos.coords.longitude;
+        const precision = Math.round(pos.coords.accuracy || 0);
+        const primera = !ultimaPosicion;
+        ultimaPosicion = { lat, lon, precision };
+
+        // Punto celeste pulsante + círculo con la precisión del GPS
+        if (marcadorChoferVivo) {
+            marcadorChoferVivo.setLatLng([lat, lon]);
+        } else {
+            marcadorChoferVivo = L.marker([lat, lon], {
+                zIndexOffset: 1000,
+                icon: L.divIcon({ className: 'custom-pin', html: '<div class="pin-live"></div>', iconSize: [20, 20], iconAnchor: [10, 10] })
+            }).addTo(mapChofer).bindPopup("<b>¡Estás acá!</b><br>Ubicación en vivo");
+        }
+        if (circuloPrecision) {
+            circuloPrecision.setLatLng([lat, lon]).setRadius(precision || 1);
+        } else {
+            circuloPrecision = L.circle([lat, lon], {
+                radius: precision || 1, color: '#22d3ee', weight: 1, fillColor: '#22d3ee', fillOpacity: 0.12, interactive: false
+            }).addTo(mapChofer);
+        }
+
+        if (primera) {
+            mapChofer.setView([lat, lon], Math.max(mapChofer.getZoom(), 16), { animate: true });
+        } else if (seguirMiUbicacion) {
+            mapChofer.panTo([lat, lon], { animate: true, duration: 0.5 });
+        }
+
+        const texto = `Lat ${lat.toFixed(5)}, Lon ${lon.toFixed(5)} · precisión ±${precision} m`;
+        document.getElementById('coords').innerText = texto;
+        actualizarEstadoMapa(MODO_PRUEBA ? "Modo prueba · ubicación simulada" : (seguirMiUbicacion ? "Siguiendo tu ubicación en vivo · ±" + precision + " m" : "Ubicación en vivo · ±" + precision + " m"));
+
+        // Informar al servidor (máx. una vez cada 30 s y solo con buena precisión)
+        if (enviarAlServidor && !MODO_PRUEBA && precision <= PRECISION_MAX_ENVIO_M && Date.now() - ultimoEnvio >= INTERVALO_ENVIO_MS) {
+            ultimoEnvio = Date.now();
+            fetch('/api/ubicacion', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chofer_id: choferActual, vehiculo: vehiculoActual, latitud: lat, longitud: lon })
+            }).catch(() => {});
+        }
+
+        revisarCercaniaClientes(lat, lon);
+    }
+
+    // Avisa una sola vez por cliente y por día cuando el chofer se acerca
+    function revisarCercaniaClientes(lat, lon) {
+        const fecha = document.getElementById('inputFechaRuta').value;
+        if (fecha !== fechaLocalHoy()) return; // solo se avisa en la ruta de hoy
+
+        const cercanos = [];
+        Object.keys(clientesPorId).forEach(idSeguro => {
+            const c = clientesPorId[idSeguro];
+            if (!c.lat || !c.lon) return;
+            const clave = `${fecha}:${idSeguro}`;
+            if (clientesAvisados.has(clave)) return;
+            const d = distanciaMetros(lat, lon, Number(c.lat), Number(c.lon));
+            if (d <= RADIO_AVISO_METROS) cercanos.push({ c, idSeguro, clave, d });
+        });
+        cercanos.sort((a, b) => a.d - b.d).forEach(x => {
+            clientesAvisados.add(x.clave);
+            mostrarAvisoCliente(x.c, x.idSeguro, x.d);
+        });
+    }
+
+    function textoDeudaCliente(saldo) {
+        if (saldo > 0) return { clase: 'debe', texto: `Este cliente debe ${formatoPesos(saldo)}.` };
+        if (saldo < 0) return { clase: 'ok', texto: `Este cliente no debe (tiene ${formatoPesos(Math.abs(saldo))} a favor).` };
+        return { clase: 'ok', texto: 'Este cliente no debe.' };
+    }
+
+    function mostrarAvisoCliente(c, idSeguro, distancia) {
+        const saldo = parseFloat(c.saldo_deuda) || 0;
+        const { clase, texto } = textoDeudaCliente(saldo);
+        const codigo = c.cliente_codigo ? `${c.cliente_codigo}, ` : '';
+        const titulo = `Estás llegando al cliente ${codigo}${c.nombre}`;
+        const metros = Math.max(10, Math.round(distancia / 10) * 10);
+
+        const aviso = document.createElement('div');
+        aviso.className = 'aviso ' + clase;
+        aviso.innerHTML = `
+            <div class="aviso-head">
+                <div class="aviso-icon">📍</div>
+                <div>
+                    <div class="aviso-title">Estás llegando al cliente ${escapeHtml(codigo)}${escapeHtml(c.nombre)}</div>
+                    <div class="aviso-meta">A unos ${metros} m · ${escapeHtml(c.direccion || 'Sin dirección')}${c.localidad ? ' (' + escapeHtml(c.localidad) + ')' : ''}</div>
+                </div>
+            </div>
+            <div class="aviso-msg">${escapeHtml(texto)}</div>
+            <div class="aviso-actions">
+                ${saldo > 0 ? `<button type="button" class="btn-deuda" data-accion="cc" style="flex:1;">Ver Cta. Cte</button>` : ''}
+                <button type="button" class="btn-ghost" data-accion="cerrar" style="flex:1;">Entendido</button>
+            </div>`;
+        aviso.querySelector('[data-accion="cerrar"]').onclick = () => aviso.remove();
+        const btnCc = aviso.querySelector('[data-accion="cc"]');
+        if (btnCc) btnCc.onclick = () => { aviso.remove(); verCuentaCorriente(idSeguro); };
+        document.getElementById('avisoWrap').appendChild(aviso);
+        setTimeout(() => aviso.remove(), 90000);
+
+        // Llamar la atención aunque el chofer esté mirando el camino: vibración, sonido y, si se permitió, notificación del sistema
+        try { if (navigator.vibrate) navigator.vibrate([250, 120, 250]); } catch (e) {}
+        sonarAviso();
+        notificarSistema(titulo, `${texto}`, idSeguro);
+    }
+
+    function sonarAviso() {
+        try {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            const ctx = new Ctx(), osc = ctx.createOscillator(), gain = ctx.createGain();
+            osc.type = 'sine'; osc.frequency.value = 880;
+            gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.45);
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.start(); osc.stop(ctx.currentTime + 0.5);
+            osc.onended = () => ctx.close();
+        } catch (e) {}
+    }
+
+    function pedirPermisoNotificaciones() {
+        try {
+            if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+        } catch (e) {}
+    }
+    function notificarSistema(titulo, cuerpo, tag) {
+        try {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(titulo, { body: cuerpo, tag: 'cliente-' + tag });
+            }
+        } catch (e) { /* algunos celulares no permiten el constructor sin service worker: queda el aviso en pantalla */ }
+    }
+
     document.getElementById('checklistForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const dominio = document.getElementById('dominio').value;
         const tipo_vehiculo = document.getElementById('tipo_vehiculo').value;
         const observaciones = document.getElementById('observaciones').value;
- 
+
         const respuestas = {};
         itemsChecklist.forEach((item, index) => {
             respuestas[item] = document.querySelector(`input[name="item_${index}"]:checked`).value;
         });
- 
+
         try {
             const respuesta = await fetch('/api/checklist', {
                 method: 'POST',
@@ -893,11 +1180,17 @@
                 body: JSON.stringify({ chofer: choferActual, dominio, tipo_vehiculo, respuestas, observaciones })
             });
             if (respuesta.ok) {
-                mostrarToast("¡Check-list enviado! GPS y hoja de ruta activados.", 'ok');
+                mostrarToast("¡Check-list enviado! GPS y avisos de llegada activados.", 'ok');
                 document.getElementById('gps-status').style.display = 'block';
-                document.getElementById('gps-pill').classList.add('on');
+                vehiculoActual = dominio;
+                enviarAlServidor = true;
+                ultimoEnvio = 0;
+                seguirMiUbicacion = true;
                 solicitarWakeLock();
-                iniciarEnvioGPS(choferActual, dominio);
+                pedirPermisoNotificaciones();
+                iniciarSeguimientoGPS();
+                // Se carga la ruta ahora para poder avisar al acercarse, aunque el chofer no abra la pestaña de ruta
+                cargarRutaChoferReal(choferActual);
             } else {
                 mostrarToast("El servidor no aceptó el check-list. Revisá los datos.", 'error');
             }
@@ -905,7 +1198,7 @@
             mostrarToast("No se pudo conectar con el servidor.", 'error');
         }
     });
- 
+
     document.getElementById('combustibleForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const datosCarga = {
@@ -915,7 +1208,7 @@
             costoTotal: document.getElementById('costoTotal').value,
             odometroActual: document.getElementById('odometroActual').value
         };
- 
+
         try {
             const respuesta = await fetch('/api/combustible', {
                 method: 'POST',
@@ -932,52 +1225,15 @@
             mostrarToast("Error de conexión.", 'error');
         }
     });
- 
-    function iniciarEnvioGPS(chofer, vehiculo) {
-        if (!navigator.geolocation) return;
-        if (intervaloGPS) clearInterval(intervaloGPS);
-        enviarCoordenadas(chofer, vehiculo);
-        intervaloGPS = setInterval(() => enviarCoordenadas(chofer, vehiculo), 30000);
-    }
- 
-    function enviarCoordenadas(chofer_id, vehiculo) {
-        navigator.geolocation.getCurrentPosition(async (position) => {
-            const latitud = position.coords.latitude;
-            const longitud = position.coords.longitude;
-            document.getElementById('coords').innerText = `Lat: ${latitud.toFixed(4)}, Lon: ${longitud.toFixed(4)}`;
- 
-            if (marcadorChoferVivo) {
-                marcadorChoferVivo.setLatLng([latitud, longitud]);
-            } else {
-                marcadorChoferVivo = L.marker([latitud, longitud], {
-                    icon: L.divIcon({
-                        className: 'custom-pin',
-                        html: '<div class="pin-live"></div>',
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10]
-                    })
-                }).addTo(mapChofer).bindPopup("<b>¡Estás acá!</b><br>Ubicación en vivo");
-            }
- 
-            try {
-                await fetch('/api/ubicacion', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chofer_id, vehiculo, latitud, longitud })
-                });
-            } catch (err) {}
-        });
-    }
- 
+
     function finalizarTurno() {
-        if (intervaloGPS) { clearInterval(intervaloGPS); intervaloGPS = null; }
-        if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); }
+        enviarAlServidor = false;
+        detenerSeguimientoGPS();
+        if (wakeLock !== null) { wakeLock.release().catch(() => {}); wakeLock = null; }
         document.getElementById('gps-status').style.display = 'none';
-        document.getElementById('gps-pill').classList.remove('on');
         mostrarToast("🛑 Turno finalizado.", 'ok');
     }
 </script>
- 
+
 </body>
 </html>
- 
