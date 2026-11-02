@@ -276,6 +276,12 @@
             border: 1px solid var(--border); box-shadow: none;
         }
         .btn-suave:hover { background: rgba(255,255,255,.16); filter: none; }
+        .export-fila { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+        .export-fila label { display: block; margin-bottom: 4px; font-size: .7rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+        .export-fila .campo { width: auto; min-width: 150px; text-align: left; padding: 10px 12px; font-size: .9rem; }
+        .export-estado { min-height: 20px; margin-top: 10px; font-size: .82rem; font-weight: 700; color: var(--muted); }
+        .export-estado.error { color: var(--danger); }
+        .export-estado.ok { color: var(--ok); }
         .badge-warn { color: var(--warn); background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .4); }
         .acciones { display: flex; gap: 6px; flex-wrap: wrap; }
         .pin-nota { display: block; margin-top: 4px; font-size: .68rem; color: var(--muted); }
@@ -408,8 +414,9 @@
                     </div>
                     <div>
                         <h2 class="section-title">Odómetro de la flota</h2>
-                        <p class="section-sub">Kilómetros recorridos por vehículo</p>
+                        <p class="section-sub">Kilómetros recorridos por vehículo (hoy)</p>
                     </div>
+                    <button type="button" class="btn-suave" style="margin-left:auto;" onclick="irAExportar()">📥 Excel</button>
                 </div>
                 <div class="table-wrap">
                     <table id="tabla-kilometraje">
@@ -432,6 +439,28 @@
 
     <!-- PESTAÑA 2: CHECK-LISTS -->
     <div id="seccion-checklists" class="vista-seccion">
+        <div class="card" id="tarjetaExportar">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </div>
+                <div>
+                    <h2 class="section-title">Descargar a Excel</h2>
+                    <p class="section-sub">Elegí el período y bajá los check-lists o el odómetro (km por día y por vehículo)</p>
+                </div>
+            </div>
+            <div class="export-fila">
+                <div><label for="expDesde">Desde</label><input type="date" class="campo" id="expDesde"></div>
+                <div><label for="expHasta">Hasta</label><input type="date" class="campo" id="expHasta"></div>
+                <button type="button" class="btn-suave" onclick="periodoExport('mes')">Este mes</button>
+                <button type="button" class="btn-suave" onclick="periodoExport('mesAnterior')">Mes anterior</button>
+            </div>
+            <div class="export-fila" style="margin-top:12px;">
+                <button type="button" id="btnExpChecklists" onclick="exportarExcel('checklists', this)">📥 Check-lists (Excel)</button>
+                <button type="button" id="btnExpOdometro" onclick="exportarExcel('odometro', this)">📥 Odómetro (Excel)</button>
+            </div>
+            <div class="export-estado" id="expEstado"></div>
+        </div>
         <div class="card">
             <div class="section-head">
                 <div class="section-icon">
@@ -765,6 +794,67 @@
     document.getElementById('btnCopiarNuevoPin').onclick = (ev) => copiarPin(document.getElementById('modalPinValor').innerText, ev.currentTarget);
     document.getElementById('modalPinInput').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, ''); });
     document.getElementById('modalPinInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('btnGuardarPin').click(); });
+
+    // ---------- Descargar a Excel ----------
+    function fechaISO(d) {
+        const p = n => String(n).padStart(2, '0');
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    }
+    function periodoExport(tipo) {
+        const hoy = new Date();
+        let desde, hasta;
+        if (tipo === 'mesAnterior') {
+            desde = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1);
+            hasta = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
+        } else {
+            desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+            hasta = hoy;
+        }
+        document.getElementById('expDesde').value = fechaISO(desde);
+        document.getElementById('expHasta').value = fechaISO(hasta);
+    }
+    periodoExport('mes');
+
+    function irAExportar() {
+        cambiarVistaAdmin('checklists', document.querySelectorAll('.nav-btn')[1]);
+        setTimeout(() => document.getElementById('tarjetaExportar').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+
+    async function exportarExcel(tipo, boton) {
+        const estado = document.getElementById('expEstado');
+        const desde = document.getElementById('expDesde').value;
+        const hasta = document.getElementById('expHasta').value;
+        estado.className = 'export-estado';
+        if (!desde || !hasta) { estado.className = 'export-estado error'; estado.innerText = 'Elegí las fechas Desde y Hasta.'; return; }
+        if (hasta < desde) { estado.className = 'export-estado error'; estado.innerText = 'La fecha Hasta no puede ser anterior a Desde.'; return; }
+        const botones = document.querySelectorAll('#tarjetaExportar button');
+        botones.forEach(b => b.disabled = true);
+        estado.innerText = 'Generando el Excel…';
+        try {
+            const res = await adminFetch('/api/admin/exportar/' + tipo + '?desde=' + encodeURIComponent(desde) + '&hasta=' + encodeURIComponent(hasta));
+            if (!res.ok) {
+                const datos = await res.json().catch(() => ({}));
+                estado.className = 'export-estado error';
+                estado.innerText = datos.error || 'No se pudo generar el Excel.';
+                return;
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = (tipo === 'checklists' ? 'checklists_' : 'odometro_') + desde + '_a_' + hasta + '.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            estado.className = 'export-estado ok';
+            estado.innerText = '✔ Descargado: ' + a.download;
+        } catch (err) {
+            if (err.message !== 'SESION') { estado.className = 'export-estado error'; estado.innerText = 'No se pudo conectar con el servidor.'; }
+        } finally {
+            botones.forEach(b => b.disabled = false);
+        }
+    }
 
     // ---------- Estado de la base de datos ----------
     async function revisarBaseDatos() {
