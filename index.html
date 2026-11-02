@@ -2,223 +2,540 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#05060f">
     <title>App Chofer - Gestión de Flota PepsiCo</title>
     <!-- Librería de Mapas Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            background: #0f172a; 
-            margin: 0; 
-            padding: 20px; 
-            padding-bottom: 90px; 
-            color: #f8fafc;
-        }
-        .container { 
-            max-width: 500px; 
-            background: #1e293b; 
-            padding: 20px; 
-            border-radius: 12px; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3); 
-            margin: auto; 
-            border: 1px solid #334155;
-        }
-        
-        /* Encabezado con Logo Animado */
-        .app-header {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            border-bottom: 2px solid #334155;
-            padding-bottom: 12px;
-            margin-bottom: 20px;
-        }
-        .logo-container {
-            width: 45px;
-            height: 45px;
-            background: #2563eb;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 0 15px rgba(37, 99, 235, 0.6);
-            animation: pulseLogo 2s infinite ease-in-out;
-        }
-        @keyframes pulseLogo {
-            0% { transform: scale(1); box-shadow: 0 0 10px rgba(37, 99, 235, 0.4); }
-            50% { transform: scale(1.08); box-shadow: 0 0 20px rgba(59, 130, 246, 0.8); }
-            100% { transform: scale(1); box-shadow: 0 0 10px rgba(37, 99, 235, 0.4); }
+        :root {
+            --bg-0: #05060f;
+            --bg-1: #0a0e24;
+            --surface: rgba(18, 24, 52, 0.72);
+            --surface-solid: #11173a;
+            --surface-2: rgba(255, 255, 255, 0.045);
+            --border: rgba(148, 163, 255, 0.16);
+            --border-strong: rgba(148, 163, 255, 0.32);
+            --text: #eef1ff;
+            --muted: #94a0c8;
+            --violet: #7c5cff;
+            --violet-2: #5b8cff;
+            --cyan: #22d3ee;
+            --ok: #34d399;
+            --danger: #fb7185;
+            --warn: #fbbf24;
+            --radius-xl: 26px;
+            --radius-lg: 20px;
+            --radius-md: 14px;
+            --radius-sm: 10px;
+            --shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+            --glow: 0 0 28px rgba(124, 92, 255, 0.45);
         }
  
-        h2 { color: #f8fafc; margin: 0; font-size: 1.4rem; text-align: center; }
-        h3 { color: #93c5fd; font-size: 1.1rem; margin-top: 25px; border-bottom: 1px solid #334155; padding-bottom: 6px; }
-        label { font-weight: bold; display: block; margin-top: 15px; color: #cbd5e1; font-size: 0.95rem; }
-        input, select, textarea { 
-            width: 100%; padding: 10px; margin-top: 5px; background: #0f172a;
-            border: 1px solid #475569; border-radius: 6px; box-sizing: border-box; color: #f8fafc; font-size: 0.95rem;
-        }
-        input:focus, select:focus, textarea:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3); }
-        
-        .checklist-item { 
-            display: flex; justify-content: space-between; align-items: center; margin-top: 10px; 
-            padding: 10px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; font-size: 0.9rem;
-        }
-        button { 
-            background: #2563eb; color: white; border: none; padding: 12px; width: 100%; 
-            font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-top: 20px; transition: background 0.2s;
-        }
-        button:hover { background: #1d4ed8; }
-        .btn-danger { background: #dc2626; }
-        .btn-danger:hover { background: #b91c1c; }
+        * { box-sizing: border-box; }
  
-        #gps-status { 
-            margin-top: 15px; padding: 12px; background: #064e3b; border: 1px solid #059669;
-            border-radius: 6px; font-size: 14px; text-align: center; color: #a7f3d0;
+        html { -webkit-text-size-adjust: 100%; }
+ 
+        body {
+            margin: 0;
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif;
+            color: var(--text);
+            background: var(--bg-0);
+            min-height: 100vh;
+            padding-bottom: calc(110px + env(safe-area-inset-bottom));
+            -webkit-font-smoothing: antialiased;
         }
  
-        /* Pantalla de Login */
-        #vista-login { text-align: center; padding: 20px 0; }
-        .login-box { background: #0f172a; padding: 20px; border-radius: 8px; border: 1px solid #334155; margin-top: 15px; }
+        /* ---------- Fondo espacial: nebulosas + campo de estrellas ---------- */
+        body::before {
+            content: "";
+            position: fixed; inset: 0; z-index: -2;
+            background:
+                radial-gradient(ellipse 80% 55% at 85% -10%, rgba(124, 92, 255, 0.30), transparent 60%),
+                radial-gradient(ellipse 70% 50% at -10% 105%, rgba(34, 211, 238, 0.18), transparent 60%),
+                radial-gradient(ellipse 60% 40% at 50% 50%, rgba(91, 140, 255, 0.07), transparent 70%),
+                linear-gradient(180deg, var(--bg-1), var(--bg-0));
+        }
+        body::after {
+            content: "";
+            position: fixed; inset: 0; z-index: -1; pointer-events: none;
+            background-image:
+                radial-gradient(1.2px 1.2px at 12% 18%, rgba(255,255,255,.85), transparent),
+                radial-gradient(1px 1px at 28% 72%, rgba(255,255,255,.6), transparent),
+                radial-gradient(1.4px 1.4px at 44% 34%, rgba(255,255,255,.8), transparent),
+                radial-gradient(1px 1px at 63% 81%, rgba(255,255,255,.55), transparent),
+                radial-gradient(1.3px 1.3px at 78% 22%, rgba(255,255,255,.75), transparent),
+                radial-gradient(1px 1px at 90% 60%, rgba(255,255,255,.6), transparent),
+                radial-gradient(1.1px 1.1px at 6% 52%, rgba(255,255,255,.5), transparent),
+                radial-gradient(1px 1px at 54% 8%, rgba(255,255,255,.6), transparent),
+                radial-gradient(1.2px 1.2px at 35% 92%, rgba(255,255,255,.5), transparent),
+                radial-gradient(1px 1px at 95% 91%, rgba(255,255,255,.5), transparent);
+            animation: twinkle 6s ease-in-out infinite alternate;
+        }
+        @keyframes twinkle { from { opacity: .55; } to { opacity: 1; } }
  
-        #map-chofer { height: 300px; border-radius: 8px; margin-top: 15px; border: 1px solid #475569; }
-        .lista-clientes { margin-top: 15px; max-height: 220px; overflow-y: auto; }
+        /* ---------- Barra superior ---------- */
+        .topbar {
+            position: sticky; top: 0; z-index: 900;
+            padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
+            background: linear-gradient(180deg, rgba(5, 6, 15, 0.92), rgba(5, 6, 15, 0.55));
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+        }
+        .topbar-inner {
+            max-width: 640px; margin: 0 auto;
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            padding: 8px 10px 8px 8px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            box-shadow: var(--shadow);
+        }
+        .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .logo-orb {
+            flex: none; width: 42px; height: 42px; border-radius: 50%;
+            display: grid; place-items: center;
+            background: radial-gradient(circle at 30% 25%, #9b86ff, var(--violet) 55%, #3b2bb8);
+            box-shadow: var(--glow), inset 0 0 0 1px rgba(255,255,255,.25);
+            animation: orbPulse 3.2s ease-in-out infinite;
+        }
+        @keyframes orbPulse {
+            0%, 100% { box-shadow: 0 0 18px rgba(124,92,255,.4), inset 0 0 0 1px rgba(255,255,255,.25); }
+            50% { box-shadow: 0 0 32px rgba(124,92,255,.75), inset 0 0 0 1px rgba(255,255,255,.35); }
+        }
+        .brand-text { line-height: 1.15; min-width: 0; }
+        .brand-title { font-size: 1rem; font-weight: 800; letter-spacing: .2px; white-space: nowrap; }
+        .brand-sub { font-size: .7rem; color: var(--muted); letter-spacing: 1.4px; text-transform: uppercase; }
+ 
+        .topbar-right { display: flex; align-items: center; gap: 8px; flex: none; }
+        .gps-pill {
+            display: none; align-items: center; gap: 6px;
+            padding: 6px 10px; border-radius: 999px;
+            font-size: .7rem; font-weight: 700; letter-spacing: .6px;
+            color: var(--ok); background: rgba(52, 211, 153, .12); border: 1px solid rgba(52, 211, 153, .35);
+        }
+        .gps-pill.on { display: inline-flex; }
+        .gps-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 rgba(52,211,153,.7); animation: ping 1.6s infinite; }
+        @keyframes ping { 70% { box-shadow: 0 0 0 8px rgba(52,211,153,0); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
+ 
+        .user-chip {
+            display: none; align-items: center; gap: 8px;
+            padding: 4px 4px 4px 4px; border-radius: 999px;
+            background: var(--surface-2); border: 1px solid var(--border);
+        }
+        .user-chip.on { display: inline-flex; }
+        .avatar {
+            width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+            font-size: .72rem; font-weight: 800; color: #fff;
+            background: linear-gradient(135deg, var(--violet), var(--cyan));
+        }
+        .user-name { font-size: .78rem; font-weight: 700; max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .btn-chip {
+            width: auto; margin: 0; padding: 6px 12px; font-size: .72rem; font-weight: 700;
+            color: var(--text); background: rgba(255,255,255,.08); border: 1px solid var(--border);
+            border-radius: 999px; cursor: pointer; box-shadow: none;
+        }
+        .btn-chip:hover { background: rgba(255,255,255,.16); transform: none; }
+ 
+        /* ---------- Contenedor principal ---------- */
+        .container { max-width: 640px; margin: 8px auto 0; padding: 0 14px; }
+ 
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-xl);
+            padding: 20px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+        }
+        .card + .card { margin-top: 14px; }
+ 
+        .section-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+        .section-icon {
+            flex: none; width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
+            color: #fff; background: linear-gradient(135deg, var(--violet), var(--violet-2));
+            box-shadow: 0 8px 22px rgba(124, 92, 255, .35);
+        }
+        .section-title { margin: 0; font-size: 1.12rem; font-weight: 800; }
+        .section-sub { margin: 2px 0 0; font-size: .8rem; color: var(--muted); }
+ 
+        .block-title {
+            margin: 22px 0 8px; font-size: .78rem; font-weight: 800; letter-spacing: 1.4px;
+            text-transform: uppercase; color: var(--cyan);
+        }
+ 
+        label { display: block; margin: 14px 0 6px; font-size: .8rem; font-weight: 700; color: var(--muted); letter-spacing: .3px; }
+ 
+        input, select, textarea {
+            width: 100%; padding: 13px 14px; font-size: 1rem; font-family: inherit;
+            color: var(--text); background: rgba(4, 6, 20, .55);
+            border: 1px solid var(--border); border-radius: var(--radius-md);
+            transition: border-color .2s, box-shadow .2s, background .2s;
+            color-scheme: dark;
+        }
+        input::placeholder, textarea::placeholder { color: #5f6b96; }
+        input:focus, select:focus, textarea:focus {
+            outline: none; border-color: var(--violet);
+            box-shadow: 0 0 0 4px rgba(124, 92, 255, .22);
+            background: rgba(4, 6, 20, .8);
+        }
+        select { appearance: none; -webkit-appearance: none; cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a0c8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 14px center; padding-right: 40px;
+        }
+        select option { background: var(--surface-solid); color: var(--text); }
+        textarea { resize: vertical; min-height: 90px; }
+ 
+        button {
+            width: 100%; margin-top: 18px; padding: 14px 16px;
+            font-family: inherit; font-size: 1rem; font-weight: 800; letter-spacing: .3px; color: #fff;
+            background: linear-gradient(135deg, var(--violet), var(--violet-2));
+            border: none; border-radius: var(--radius-md); cursor: pointer;
+            box-shadow: 0 10px 26px rgba(124, 92, 255, .38);
+            transition: transform .15s, box-shadow .2s, filter .2s;
+        }
+        button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+        button:active { transform: translateY(0) scale(.99); }
+        .btn-danger { background: linear-gradient(135deg, #f43f5e, #e11d48); box-shadow: 0 10px 26px rgba(244, 63, 94, .35); }
+        .btn-ghost { background: rgba(255,255,255,.08); border: 1px solid var(--border); box-shadow: none; }
+ 
+        /* ---------- Login ---------- */
+        #vista-login .card { text-align: center; padding: 28px 22px; }
+        .login-orb {
+            width: 84px; height: 84px; margin: 4px auto 16px; border-radius: 50%; display: grid; place-items: center;
+            background: radial-gradient(circle at 30% 25%, #9b86ff, var(--violet) 55%, #3b2bb8);
+            box-shadow: var(--glow), inset 0 0 0 1px rgba(255,255,255,.25);
+            animation: orbPulse 3.2s ease-in-out infinite;
+        }
+        .login-title { margin: 0; font-size: 1.35rem; font-weight: 800; }
+        .login-sub { margin: 6px 0 4px; font-size: .88rem; color: var(--muted); }
+        #vista-login label { text-align: left; }
+ 
+        /* ---------- Check-list ---------- */
+        .checklist-item {
+            display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+            margin-top: 8px; padding: 10px 12px;
+            background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md);
+            font-size: .9rem; transition: border-color .2s, background .2s;
+        }
+        .checklist-item.falla { border-color: rgba(251, 113, 133, .55); background: rgba(251, 113, 133, .09); }
+        .checklist-item > span { flex: 1 1 180px; line-height: 1.3; }
+        .seg { display: flex; gap: 4px; padding: 4px; background: rgba(4, 6, 20, .6); border: 1px solid var(--border); border-radius: 12px; }
+        .seg input { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+        .seg label {
+            margin: 0; padding: 7px 12px; border-radius: 9px; font-size: .78rem; font-weight: 800;
+            letter-spacing: .3px; cursor: pointer; color: var(--muted); transition: all .15s; user-select: none;
+        }
+        .seg input:checked + label.l-ok { background: linear-gradient(135deg, #10b981, #34d399); color: #052e22; }
+        .seg input:checked + label.l-falla { background: linear-gradient(135deg, #f43f5e, #fb7185); color: #fff; }
+        .seg input:checked + label.l-na { background: rgba(255,255,255,.16); color: var(--text); }
+        .seg input:focus-visible + label { outline: 2px solid var(--cyan); outline-offset: 1px; }
+ 
+        #gps-status {
+            display: none; margin-top: 14px; padding: 16px; text-align: center; font-size: .9rem;
+            color: #b8f5dc; background: rgba(16, 185, 129, .1); border: 1px solid rgba(52, 211, 153, .4);
+            border-radius: var(--radius-lg);
+        }
+        #gps-status button { margin-top: 12px; }
+ 
+        /* ---------- Ruta ---------- */
+        #map-chofer { height: 320px; border-radius: var(--radius-lg); margin-top: 14px; border: 1px solid var(--border-strong); overflow: hidden; background: #0b1030; }
+        .lista-clientes { margin-top: 14px; }
         .cliente-card {
-            background: #0f172a; padding: 10px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #334155; font-size: 0.85rem;
+            display: flex; gap: 12px; align-items: flex-start;
+            padding: 12px; margin-bottom: 10px;
+            background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-lg);
+            transition: border-color .2s, transform .15s;
         }
-        
-        .vista-seccion { display: none; }
-        .vista-seccion.active { display: block; }
+        .cliente-card:hover { border-color: var(--border-strong); }
+        .orden-badge {
+            flex: none; min-width: 38px; height: 38px; padding: 0 8px; border-radius: 12px; display: grid; place-items: center;
+            font-weight: 800; font-size: .9rem; color: #fff;
+            background: linear-gradient(135deg, var(--violet), var(--violet-2));
+        }
+        .cliente-body { flex: 1; min-width: 0; }
+        .cliente-nombre { font-weight: 800; font-size: .95rem; line-height: 1.25; }
+        .cliente-dir { margin-top: 2px; font-size: .8rem; color: var(--muted); }
+        .cliente-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+        .chip {
+            display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px;
+            font-size: .7rem; font-weight: 700; letter-spacing: .4px;
+            color: var(--cyan); background: rgba(34, 211, 238, .1); border: 1px solid rgba(34, 211, 238, .3);
+        }
+        .chip-ok { color: var(--ok); background: rgba(52, 211, 153, .1); border-color: rgba(52, 211, 153, .35); }
+        .btn-deuda {
+            width: auto; margin: 0; padding: 8px 14px; font-size: .78rem; border-radius: 999px;
+            background: linear-gradient(135deg, #f43f5e, #fb7185); box-shadow: 0 6px 18px rgba(244, 63, 94, .3);
+        }
+        .empty-state { text-align: center; color: var(--muted); padding: 22px 10px; font-size: .9rem; }
  
-        /* Isla Flotante Inferior (Oculta hasta hacer login) */
+        .pin {
+            width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+            font-size: 11px; font-weight: 800; color: #fff; border: 2px solid #fff; box-shadow: 0 3px 10px rgba(0,0,0,.5);
+        }
+        .pin-ok { background: #10b981; }
+        .pin-debt { background: #f43f5e; }
+        .pin-live {
+            width: 20px; height: 20px; border-radius: 50%; background: var(--cyan); border: 3px solid #fff;
+            box-shadow: 0 0 0 0 rgba(34, 211, 238, .8); animation: pingLive 1.8s infinite;
+        }
+        @keyframes pingLive { 70% { box-shadow: 0 0 0 16px rgba(34, 211, 238, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); } }
+ 
+        .leaflet-container { font-family: inherit; }
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface-solid); color: var(--text); border: 1px solid var(--border-strong); }
+        .leaflet-popup-content-wrapper { border-radius: 16px; }
+        .leaflet-popup-content { margin: 12px 14px; font-size: .85rem; line-height: 1.4; }
+        .leaflet-popup-content button { margin-top: 8px; }
+        .leaflet-bar a { background: var(--surface-solid); color: var(--text); border-color: var(--border); }
+        .leaflet-control-attribution { background: rgba(5, 6, 15, .7) !important; color: var(--muted) !important; }
+        .leaflet-control-attribution a { color: var(--cyan) !important; }
+ 
+        .vista-seccion { display: none; }
+        .vista-seccion.active { display: block; animation: fadeUp .35s ease both; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+ 
+        /* ---------- Dock de navegación inferior (al alcance del pulgar) ---------- */
         .nav-island {
-            position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%);
-            background: #0f172a; padding: 8px 12px; border-radius: 30px; box-shadow: 0 6px 20px rgba(0,0,0,0.6);
-            display: none; gap: 8px; z-index: 1000; border: 1px solid #334155;
+            position: fixed; left: 50%; transform: translateX(-50%);
+            bottom: calc(14px + env(safe-area-inset-bottom));
+            width: min(560px, calc(100% - 28px));
+            display: none; gap: 6px; padding: 8px; z-index: 1000;
+            background: rgba(10, 14, 36, 0.86);
+            backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+            border: 1px solid var(--border-strong); border-radius: 28px;
+            box-shadow: 0 16px 44px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255,255,255,.03) inset;
         }
         .nav-btn {
-            background: transparent; color: #94a3b8; border: none; padding: 8px 12px; border-radius: 20px;
-            font-size: 13px; font-weight: bold; cursor: pointer; width: auto; transition: all 0.2s ease;
+            flex: 1; width: auto; margin: 0; padding: 10px 6px;
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            font-size: .72rem; font-weight: 700; letter-spacing: .3px; color: var(--muted);
+            background: transparent; border: none; border-radius: 20px; box-shadow: none;
+            transition: all .2s ease;
         }
-        .nav-btn.active { background: #2563eb; color: white; box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4); }
-        
-        .user-welcome {
-            background: #0f172a; padding: 10px; border-radius: 6px; margin-bottom: 15px;
-            border: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;
+        .nav-btn svg { width: 22px; height: 22px; }
+        .nav-btn:hover { filter: none; transform: none; color: var(--text); background: rgba(255,255,255,.05); }
+        .nav-btn.active {
+            color: #fff;
+            background: linear-gradient(135deg, var(--violet), var(--violet-2));
+            box-shadow: 0 8px 22px rgba(124, 92, 255, .5);
+        }
+ 
+        /* ---------- Modal cuenta corriente ---------- */
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 2000; display: flex; justify-content: center; align-items: center; padding: 16px;
+            background: rgba(2, 3, 12, .75); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+            animation: fadeIn .2s ease both;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .modal-card {
+            width: 100%; max-width: 460px; max-height: 84vh; overflow-y: auto; padding: 22px;
+            background: var(--surface-solid); border: 1px solid var(--border-strong);
+            border-radius: var(--radius-xl); box-shadow: var(--shadow), var(--glow);
+        }
+        .modal-title { margin: 0 0 4px; font-size: 1.1rem; font-weight: 800; }
+        .modal-sub { margin: 0 0 12px; font-size: .78rem; color: var(--muted); letter-spacing: .4px; text-transform: uppercase; }
+        .tabla-cc { width: 100%; border-collapse: collapse; font-size: .85rem; }
+        .tabla-cc th { padding: 8px 6px; text-align: left; font-size: .7rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border-strong); }
+        .tabla-cc td { padding: 9px 6px; border-bottom: 1px solid var(--border); }
+        .tabla-cc .num { text-align: right; font-weight: 800; white-space: nowrap; }
+        .cc-line { display: flex; justify-content: space-between; margin-top: 8px; font-size: .85rem; color: var(--muted); }
+        .cc-total {
+            display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding: 14px 16px;
+            background: rgba(4, 6, 20, .7); border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+            font-weight: 800;
+        }
+        .cc-total .monto { font-size: 1.2rem; }
+ 
+        /* ---------- Avisos ---------- */
+        .toast-wrap { position: fixed; left: 50%; transform: translateX(-50%); top: calc(76px + env(safe-area-inset-top)); z-index: 3000; display: flex; flex-direction: column; gap: 8px; width: min(440px, calc(100% - 28px)); pointer-events: none; }
+        .toast {
+            padding: 12px 16px; border-radius: 16px; font-size: .88rem; font-weight: 700; text-align: center;
+            background: var(--surface-solid); border: 1px solid var(--border-strong); box-shadow: var(--shadow);
+            animation: toastIn .3s ease both;
+        }
+        .toast.ok { border-color: rgba(52, 211, 153, .6); color: #b8f5dc; }
+        .toast.error { border-color: rgba(251, 113, 133, .6); color: #ffd0d8; }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+ 
+        @media (max-width: 420px) {
+            .brand-sub { display: none; }
+            .user-name { max-width: 70px; }
+            .card { padding: 16px; border-radius: 22px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation: none !important; transition: none !important; }
         }
     </style>
 </head>
 <body>
  
-<div class="container">
-    <div class="app-header">
-        <div class="logo-container">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M1 3h15v13H1z"></path>
-                <path d="M16 8h4l3 3v5h-7V8z"></path>
-                <circle cx="5.5" cy="18.5" r="2.5"></circle>
-                <circle cx="18.5" cy="18.5" r="2.5"></circle>
-            </svg>
+<!-- BARRA SUPERIOR -->
+<header class="topbar">
+    <div class="topbar-inner">
+        <div class="brand">
+            <div class="logo-orb">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 3h15v13H1z"></path>
+                    <path d="M16 8h4l3 3v5h-7V8z"></path>
+                    <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                    <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                </svg>
+            </div>
+            <div class="brand-text">
+                <div class="brand-title">Panel del Chofer</div>
+                <div class="brand-sub">Gestión de Flota · PepsiCo</div>
+            </div>
         </div>
-        <h2>Panel del Chofer</h2>
+        <div class="topbar-right">
+            <span class="gps-pill" id="gps-pill"><span class="gps-dot"></span>GPS</span>
+            <div class="user-chip" id="userChip">
+                <span class="avatar" id="avatarChofer">--</span>
+                <span class="user-name" id="lblChofer">-</span>
+                <button type="button" class="btn-chip" onclick="cerrarSesion()">Cambiar</button>
+            </div>
+        </div>
     </div>
+</header>
+ 
+<main class="container">
  
     <!-- PANTALLA 0: LOGIN CON MENÚ DESPLEGABLE DE CHOFERES -->
     <div id="vista-login" class="vista-seccion active">
-        <h3>🔐 Selección de Chofer</h3>
-        <p style="font-size: 0.85rem; color: #94a3b8;">Seleccioná tu nombre para iniciar tu turno y ver tus entregas:</p>
-        <div class="login-box">
+        <div class="card">
+            <div class="login-orb">
+                <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 3h15v13H1z"></path>
+                    <path d="M16 8h4l3 3v5h-7V8z"></path>
+                    <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                    <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                </svg>
+            </div>
+            <h2 class="login-title">Bienvenido a bordo</h2>
+            <p class="login-sub">Seleccioná tu nombre para iniciar tu turno y ver tus entregas.</p>
             <form id="loginForm">
-                <label for="selectChoferLogin">Chofer:</label>
-                <select id="selectChoferLogin" required style="background: #1e293b; color: white;">
-                    <option value="">-- Cargando choferes de Gescom... --</option>
+                <label for="selectChoferLogin">Chofer</label>
+                <select id="selectChoferLogin" required>
+                    <option value="">Cargando choferes de Gescom...</option>
                 </select>
-                <button type="submit" style="margin-top: 15px;">Iniciar Turno</button>
+                <button type="submit">Iniciar Turno</button>
             </form>
         </div>
     </div>
  
     <!-- SECCIÓN 1: CHECK-LIST -->
     <div id="seccion-checklist" class="vista-seccion">
-        <div class="user-welcome">
-            <span>👤 Chofer: <b id="lblChofer" style="color: #60a5fa;">-</b></span>
-            <button type="button" onclick="cerrarSesion()" style="width: auto; margin: 0; padding: 5px 10px; font-size: 12px; background: #475569;">Cambiar</button>
-        </div>
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                </div>
+                <div>
+                    <h3 class="section-title">Check-list de seguridad</h3>
+                    <p class="section-sub">Completalo antes de salir a ruta</p>
+                </div>
+            </div>
  
-        <form id="checklistForm">
-            <label for="dominio">Dominio / Patente del Vehículo:</label>
-            <input type="text" id="dominio" required placeholder="Ej: AF 189 LD">
+            <form id="checklistForm">
+                <label for="dominio">Dominio / Patente del vehículo</label>
+                <input type="text" id="dominio" required placeholder="Ej: AF 189 LD" autocapitalize="characters" autocomplete="off">
  
-            <label for="tipo_vehiculo">Tipo de Vehículo:</label>
-            <select id="tipo_vehiculo">
-                <option value="Vehiculo (Auto o Camioneta)">Vehículo (Auto o Camioneta)</option>
-                <option value="Camión">Camión</option>
-            </select>
+                <label for="tipo_vehiculo">Tipo de vehículo</label>
+                <select id="tipo_vehiculo">
+                    <option value="Vehiculo (Auto o Camioneta)">Vehículo (Auto o Camioneta)</option>
+                    <option value="Camión">Camión</option>
+                </select>
  
-            <h3>📋 Check-list Diario de Seguridad</h3>
-            <div id="checklist-container"></div>
+                <div class="block-title">Revisión diaria</div>
+                <div id="checklist-container"></div>
  
-            <label for="observaciones">Observaciones generales:</label>
-            <textarea id="observaciones" rows="3" placeholder="Detalles o novedades..."></textarea>
+                <label for="observaciones">Observaciones generales</label>
+                <textarea id="observaciones" rows="3" placeholder="Detalles o novedades..."></textarea>
  
-            <button type="submit" id="btnEnviar">Enviar Check-list y Activar GPS</button>
-        </form>
+                <button type="submit" id="btnEnviar">Enviar check-list y activar GPS</button>
+            </form>
  
-        <div id="gps-status" style="display:none;">
-            📍 <b>GPS Activo:</b> Transmitiendo en vivo... <span id="coords">Esperando señal...</span>
-            <button type="button" class="btn-danger" onclick="finalizarTurno()" style="margin-top: 10px;">🛑 Finalizar Turno / Detener GPS</button>
+            <div id="gps-status">
+                📡 <b>GPS activo:</b> transmitiendo en vivo<br>
+                <span id="coords" style="color: var(--muted); font-size: .8rem;">Esperando señal...</span>
+                <button type="button" class="btn-danger" onclick="finalizarTurno()">Finalizar turno / detener GPS</button>
+            </div>
         </div>
     </div>
  
     <!-- SECCIÓN 2: CARGA DE COMBUSTIBLE -->
     <div id="seccion-combustible" class="vista-seccion">
-        <h3>⛽ Carga y Gasto de Combustible</h3>
-        <p style="font-size: 0.85rem; color: #94a3b8; text-align: center;">Registrá tu carga para calcular automáticamente el rendimiento en Km/L.</p>
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18"/><path d="M3 22h12"/><path d="M15 12h2a2 2 0 0 1 2 2v3a2 2 0 0 0 4 0V9l-3-3"/><path d="M6 8h6"/></svg>
+                </div>
+                <div>
+                    <h3 class="section-title">Carga de combustible</h3>
+                    <p class="section-sub">Registrá cada carga para calcular el rendimiento en Km/L</p>
+                </div>
+            </div>
  
-        <form id="combustibleForm">
-            <label for="dominio_combustible">Dominio / Patente:</label>
-            <input type="text" id="dominio_combustible" required placeholder="Ej: AF 189 LD">
+            <form id="combustibleForm">
+                <label for="dominio_combustible">Dominio / Patente</label>
+                <input type="text" id="dominio_combustible" required placeholder="Ej: AF 189 LD" autocapitalize="characters" autocomplete="off">
  
-            <label for="litros">Litros Cargados:</label>
-            <input type="number" step="0.01" id="litros" required placeholder="Ej: 45.5">
+                <label for="litros">Litros cargados</label>
+                <input type="number" step="0.01" inputmode="decimal" id="litros" required placeholder="Ej: 45.5">
  
-            <label for="costoTotal">Costo Total ($):</label>
-            <input type="number" step="0.01" id="costoTotal" required placeholder="Ej: 35000">
+                <label for="costoTotal">Costo total ($)</label>
+                <input type="number" step="0.01" inputmode="decimal" id="costoTotal" required placeholder="Ej: 35000">
  
-            <label for="odometroActual">Kilometraje Actual del Tablero:</label>
-            <input type="number" id="odometroActual" required placeholder="Ej: 12450">
+                <label for="odometroActual">Kilometraje actual del tablero</label>
+                <input type="number" inputmode="numeric" id="odometroActual" required placeholder="Ej: 12450">
  
-            <button type="submit">Registrar Carga de Combustible</button>
-        </form>
+                <button type="submit">Registrar carga</button>
+            </form>
+        </div>
     </div>
  
     <!-- SECCIÓN 3: RUTA Y REPARTOS (GESCOM) -->
     <div id="seccion-ruta" class="vista-seccion">
-        <h3>📍 Hoja de Ruta (Reparto Real)</h3>
-        
-        <!-- Selector de Fecha -->
-        <div style="margin-top: 10px;">
-            <label for="inputFechaRuta" style="font-size: 0.85rem; color: #94a3b8; margin-top: 5px;">📅 Seleccionar Fecha de Reparto:</label>
-            <input type="date" id="inputFechaRuta" style="background: #1e293b; color: white;" onchange="cambiarFechaRuta()">
-        </div>
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                </div>
+                <div>
+                    <h3 class="section-title">Hoja de ruta</h3>
+                    <p class="section-sub">Tu reparto real desde Gescom</p>
+                </div>
+            </div>
  
-        <!-- Mapa interactivo del chofer -->
-        <div id="map-chofer"></div>
+            <label for="inputFechaRuta" style="margin-top: 0;">Fecha de reparto</label>
+            <input type="date" id="inputFechaRuta" onchange="cambiarFechaRuta()">
  
-        <!-- Lista de Clientes del Reparto -->
-        <div class="lista-clientes" id="contenedor-clientes">
-            <p style="text-align: center; color: #94a3b8;">Cargando tu ruta...</p>
+            <!-- Mapa interactivo del chofer -->
+            <div id="map-chofer"></div>
+ 
+            <!-- Lista de Clientes del Reparto -->
+            <div class="lista-clientes" id="contenedor-clientes">
+                <p class="empty-state">Cargando tu ruta...</p>
+            </div>
         </div>
     </div>
-</div>
+</main>
  
-<!-- ISLA INTERACTIVA INFERIOR (3 SOLAPAS) -->
-<div class="nav-island" id="navIsland">
-    <button type="button" class="nav-btn active" onclick="cambiarVista('checklist', this)">📋 Check-list</button>
-    <button type="button" class="nav-btn" onclick="cambiarVista('combustible', this)">⛽ Combustible</button>
-    <button type="button" class="nav-btn" onclick="cambiarVista('ruta', this)">📍 Ruta de Hoy</button>
-</div>
+<div class="toast-wrap" id="toastWrap"></div>
+ 
+<!-- DOCK DE NAVEGACIÓN (3 SOLAPAS) -->
+<nav class="nav-island" id="navIsland">
+    <button type="button" class="nav-btn active" onclick="cambiarVista('checklist', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Check-list
+    </button>
+    <button type="button" class="nav-btn" onclick="cambiarVista('combustible', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18"/><path d="M3 22h12"/><path d="M15 12h2a2 2 0 0 1 2 2v3a2 2 0 0 0 4 0V9l-3-3"/><path d="M6 8h6"/></svg>
+        Combustible
+    </button>
+    <button type="button" class="nav-btn" onclick="cambiarVista('ruta', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        Ruta de hoy
+    </button>
+</nav>
  
 <!-- Script de Leaflet -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -242,6 +559,21 @@
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }
+    function iniciales(nombre) {
+        const partes = String(nombre).trim().split(/\s+/).filter(Boolean);
+        return ((partes[0] || '?')[0] + (partes[1] ? partes[1][0] : '')).toUpperCase();
+    }
+ 
+    // Avisos breves (reemplazan a los alert)
+    function mostrarToast(mensaje, tipo) {
+        const wrap = document.getElementById('toastWrap');
+        const t = document.createElement('div');
+        t.className = 'toast ' + (tipo || '');
+        t.textContent = mensaje;
+        wrap.appendChild(t);
+        setTimeout(() => { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; }, 3200);
+        setTimeout(() => t.remove(), 3600);
+    }
  
     // Cargar la lista de choferes en el select al abrir la app
     async function cargarChoferesParaLogin() {
@@ -249,7 +581,7 @@
             const res = await fetch('/api/choferes');
             const choferes = await res.json();
             const select = document.getElementById('selectChoferLogin');
-            select.innerHTML = '<option value="">-- Seleccioná tu nombre --</option>';
+            select.innerHTML = '<option value="">Seleccioná tu nombre</option>';
  
             choferes.forEach(c => {
                 const opt = document.createElement('option');
@@ -266,9 +598,8 @@
     // Ejecutar al iniciar y setear fecha de hoy en el input
     window.onload = () => {
         cargarChoferesParaLogin();
-        const hoy = fechaLocalHoy();
         const inputFecha = document.getElementById('inputFechaRuta');
-        if (inputFecha) inputFecha.value = hoy;
+        if (inputFecha) inputFecha.value = fechaLocalHoy();
     };
  
     function cambiarFechaRuta() {
@@ -283,17 +614,21 @@
         const select = document.getElementById('selectChoferLogin');
         const usuario = select.value;
         if (!usuario) {
-            alert("Por favor seleccioná un chofer.");
+            mostrarToast("Por favor seleccioná un chofer.", 'error');
             return;
         }
  
         choferActual = usuario;
         document.getElementById('lblChofer').innerText = choferActual;
+        document.getElementById('avatarChofer').innerText = iniciales(choferActual);
+        document.getElementById('userChip').classList.add('on');
  
         // Ocultar login y mostrar solapas y check-list
         document.getElementById('vista-login').classList.remove('active');
+        document.querySelectorAll('.nav-btn').forEach((b, i) => b.classList.toggle('active', i === 0));
         document.getElementById('seccion-checklist').classList.add('active');
         document.getElementById('navIsland').style.display = 'flex';
+        window.scrollTo({ top: 0 });
     });
  
     function cerrarSesion() {
@@ -301,6 +636,7 @@
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
         document.getElementById('vista-login').classList.add('active');
         document.getElementById('navIsland').style.display = 'none';
+        document.getElementById('userChip').classList.remove('on');
         document.getElementById('selectChoferLogin').value = '';
     }
  
@@ -320,6 +656,7 @@
             cargarRutaChoferReal(choferActual);
         }
         btn.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
  
     const itemsChecklist = [
@@ -334,26 +671,35 @@
         "Limpieza"
     ];
  
+    // Cada ítem se responde con un selector táctil OK / Falla / N/A
     const container = document.getElementById('checklist-container');
     itemsChecklist.forEach((item, index) => {
         const div = document.createElement('div');
         div.className = 'checklist-item';
         div.innerHTML = `
-            <span>${item}</span>
-            <select name="item_${index}" style="width: 100px; margin: 0; background: #0f172a; color: white;">
-                <option value="OK">OK</option>
-                <option value="Falla">Falla</option>
-                <option value="N/A">N/A</option>
-            </select>
+            <span>${escapeHtml(item)}</span>
+            <div class="seg" role="radiogroup" aria-label="${escapeHtml(item)}">
+                <input type="radio" name="item_${index}" id="item_${index}_ok" value="OK" checked>
+                <label for="item_${index}_ok" class="l-ok">OK</label>
+                <input type="radio" name="item_${index}" id="item_${index}_falla" value="Falla">
+                <label for="item_${index}_falla" class="l-falla">Falla</label>
+                <input type="radio" name="item_${index}" id="item_${index}_na" value="N/A">
+                <label for="item_${index}_na" class="l-na">N/A</label>
+            </div>
         `;
+        div.addEventListener('change', () => {
+            const valor = div.querySelector('input:checked').value;
+            div.classList.toggle('falla', valor === 'Falla');
+        });
         container.appendChild(div);
     });
  
-    // Inicializar mapa del chofer
+    // Inicializar mapa del chofer (mapa oscuro a tono con la app)
     const mapChofer = L.map('map-chofer').setView([-33.2814, -62.1785], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
         maxZoom: 19,
-        attribution: '© OpenStreetMap'
+        subdomains: 'abcd',
+        attribution: '© OpenStreetMap · © CARTO'
     }).addTo(mapChofer);
  
     let marcadoresClientes = [];
@@ -378,7 +724,7 @@
             listaContainer.innerHTML = '';
  
             if (!Array.isArray(clientes) || clientes.length === 0) {
-                listaContainer.innerHTML = `<p style="text-align: center; color: #94a3b8;">⚠️ No hay repartos ni ventas cargadas para la fecha ${fechaInput || 'de hoy'}.</p>`;
+                listaContainer.innerHTML = `<p class="empty-state">⚠️ No hay repartos ni ventas cargadas para la fecha ${escapeHtml(formatoFecha(fechaInput) === 'S/F' ? 'de hoy' : formatoFecha(fechaInput))}.</p>`;
                 return;
             }
  
@@ -389,18 +735,20 @@
                 const saldo = parseFloat(c.saldo_deuda) || 0;
                 const tieneDeuda = saldo > 0;
                 const nombreSeguro = escapeHtml(c.nombre);
-                const textoBoton = `Ver Cta. Cte 💰 (${formatoPesos(saldo)})`;
+                const textoBoton = `Ver Cta. Cte 💰 ${formatoPesos(saldo)}`;
  
                 if (c.lat && c.lon) {
-                    let popupHtml = `<b>📦 #${c.orden || '-'} ${nombreSeguro}</b><br>${escapeHtml(c.direccion) || 'Sin dirección'}`;
+                    let popupHtml = `<b>#${escapeHtml(c.orden || '-')} · ${nombreSeguro}</b><br>${escapeHtml(c.direccion) || 'Sin dirección'}`;
                     if (tieneDeuda) {
-                        popupHtml += `<br><button onclick="verCuentaCorriente('${idSeguro}')" style="margin-top:5px; background:#059669; padding:4px 8px; font-size:0.75rem;">${textoBoton}</button>`;
+                        popupHtml += `<br><button class="btn-deuda" onclick="verCuentaCorriente('${idSeguro}')">${textoBoton}</button>`;
                     }
  
                     const marker = L.marker([c.lat, c.lon], {
                         icon: L.divIcon({
                             className: 'custom-pin',
-                            html: `<div style="background:${tieneDeuda ? '#ef4444' : '#10b981'}; width:14px; height:14px; border-radius:50%; border:2px solid white;"></div>`
+                            html: `<div class="pin ${tieneDeuda ? 'pin-debt' : 'pin-ok'}">${escapeHtml(c.orden || '')}</div>`,
+                            iconSize: [28, 28],
+                            iconAnchor: [14, 14]
                         })
                     }).addTo(mapChofer).bindPopup(popupHtml);
  
@@ -409,21 +757,24 @@
  
                 let estadoCuenta;
                 if (tieneDeuda) {
-                    estadoCuenta = `<button onclick="verCuentaCorriente('${idSeguro}')" style="background:#059669; padding:5px 10px; font-size:0.75rem; width:auto; margin:0;">${textoBoton}</button>`;
+                    estadoCuenta = `<button class="btn-deuda" onclick="verCuentaCorriente('${idSeguro}')">${textoBoton}</button>`;
                 } else if (saldo < 0) {
-                    estadoCuenta = `<span style="color: #10b981; font-size: 0.75rem;">✔ Saldo a favor (${formatoPesos(saldo)})</span>`;
+                    estadoCuenta = `<span class="chip chip-ok">✔ Saldo a favor ${formatoPesos(saldo)}</span>`;
                 } else {
-                    estadoCuenta = `<span style="color: #10b981; font-size: 0.75rem;">✔ Al día</span>`;
+                    estadoCuenta = `<span class="chip chip-ok">✔ Al día</span>`;
                 }
  
                 const card = document.createElement('div');
                 card.className = 'cliente-card';
                 card.innerHTML = `
-                    <b>📦 Orden #${c.orden || 'S/N'} - ${nombreSeguro}</b><br>
-                    <span style="color: #94a3b8;">${escapeHtml(c.direccion)} (${escapeHtml(c.localidad)})</span><br>
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-                        <small style="color: #38bdf8;">Reparto: ${escapeHtml(c.reparto_codigo || 'General')}</small>
-                        ${estadoCuenta}
+                    <div class="orden-badge">${escapeHtml(c.orden || 'S/N')}</div>
+                    <div class="cliente-body">
+                        <div class="cliente-nombre">${nombreSeguro}</div>
+                        <div class="cliente-dir">${escapeHtml(c.direccion)} (${escapeHtml(c.localidad)})</div>
+                        <div class="cliente-foot">
+                            <span class="chip">Reparto ${escapeHtml(c.reparto_codigo || 'General')}</span>
+                            ${estadoCuenta}
+                        </div>
                     </div>
                 `;
                 listaContainer.appendChild(card);
@@ -434,7 +785,7 @@
             }
         } catch (err) {
             console.error("Error al cargar la ruta real del chofer:", err);
-            document.getElementById('contenedor-clientes').innerHTML = '<p style="text-align: center; color: #ef4444;">Error al conectar con Gescom.</p>';
+            document.getElementById('contenedor-clientes').innerHTML = '<p class="empty-state" style="color: var(--danger);">Error al conectar con Gescom.</p>';
         }
     }
  
@@ -458,29 +809,30 @@
             const fila = m => {
                 const importe = parseFloat(m.saldo_pendiente);
                 const vencido = !m.es_credito && m.fecha_vencimiento && String(m.fecha_vencimiento).slice(0, 10) < hoy;
-                const cuota = m.numero_cuota > 1 ? ` (cuota ${m.numero_cuota})` : '';
+                const cuota = m.numero_cuota > 1 ? ` (cuota ${escapeHtml(m.numero_cuota)})` : '';
                 return `
-                    <tr style="border-bottom: 1px solid #334155;">
-                        <td style="padding: 6px 5px;">${escapeHtml(m.tipo_comprobante_codigo)} ${escapeHtml(m.punto_venta_codigo)}-${escapeHtml(m.numero_comprobante)}${cuota}</td>
-                        <td style="padding: 6px 5px; color:${vencido ? '#f87171' : '#cbd5e1'};">${m.es_credito ? '-' : formatoFecha(m.fecha_vencimiento)}</td>
-                        <td style="padding: 6px 5px; color:${m.es_credito ? '#34d399' : '#f87171'}; font-weight:bold; text-align: right;">${formatoPesos(importe)}</td>
+                    <tr>
+                        <td>${escapeHtml(m.tipo_comprobante_codigo)} ${escapeHtml(m.punto_venta_codigo)}-${escapeHtml(m.numero_comprobante)}${cuota}</td>
+                        <td style="color:${vencido ? 'var(--danger)' : 'var(--muted)'};">${m.es_credito ? '-' : formatoFecha(m.fecha_vencimiento)}</td>
+                        <td class="num" style="color:${m.es_credito ? 'var(--ok)' : 'var(--danger)'};">${formatoPesos(importe)}</td>
                     </tr>`;
             };
  
             let html = `
-                <div class="modal-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); display:flex; justify-content:center; align-items:center; z-index:2000;">
-                    <div style="background:#1e293b; padding:20px; border-radius:12px; width:90%; max-width:450px; border:1px solid #334155; max-height:80vh; overflow-y:auto;">
-                        <h3 style="color:#93c5fd; margin-top:0;">💳 Cta. Cte: ${escapeHtml(nombreCliente)}</h3>`;
+                <div class="modal-overlay" onclick="if (event.target === this) this.remove()">
+                    <div class="modal-card">
+                        <h3 class="modal-title">💳 ${escapeHtml(nombreCliente)}</h3>
+                        <p class="modal-sub">Cuenta corriente</p>`;
  
             if (movimientos.length === 0) {
-                html += `<p style="color:#10b981; text-align:center; padding:20px;">El cliente no registra movimientos pendientes.</p>`;
+                html += `<p class="empty-state" style="color: var(--ok);">El cliente no registra movimientos pendientes.</p>`;
             } else {
-                html += `<table style="width:100%; font-size:0.85rem; margin-top:10px; border-collapse: collapse;">
+                html += `<table class="tabla-cc">
                     <thead>
-                        <tr style="border-bottom: 1px solid #475569; text-align: left;">
-                            <th style="padding: 5px;">Comprobante</th>
-                            <th style="padding: 5px;">Vence</th>
-                            <th style="padding: 5px; text-align: right;">Saldo</th>
+                        <tr>
+                            <th>Comprobante</th>
+                            <th>Vence</th>
+                            <th style="text-align: right;">Saldo</th>
                         </tr>
                     </thead>
                     <tbody>${debitos.map(fila).join('')}${creditos.map(fila).join('')}</tbody>
@@ -488,21 +840,21 @@
  
                 if (creditos.length > 0) {
                     html += `
-                    <div style="margin-top:12px; font-size:0.85rem; color:#cbd5e1; display:flex; justify-content:space-between;"><span>Subtotal comprobantes:</span><span>${formatoPesos(totalDebitos)}</span></div>
-                    <div style="margin-top:4px; font-size:0.85rem; color:#34d399; display:flex; justify-content:space-between;"><span>Créditos a favor:</span><span>${formatoPesos(totalCreditos)}</span></div>`;
+                    <div class="cc-line"><span>Subtotal comprobantes</span><span>${formatoPesos(totalDebitos)}</span></div>
+                    <div class="cc-line" style="color: var(--ok);"><span>Créditos a favor</span><span>${formatoPesos(totalCreditos)}</span></div>`;
                 }
  
-                const etiqueta = total > 0 ? 'Total a Cobrar:' : (total < 0 ? 'Saldo a favor:' : 'Saldo:');
-                const colorTotal = total > 0 ? '#ef4444' : '#10b981';
+                const etiqueta = total > 0 ? 'Total a cobrar' : (total < 0 ? 'Saldo a favor' : 'Saldo');
+                const colorTotal = total > 0 ? 'var(--danger)' : 'var(--ok)';
                 html += `
-                    <div style="margin-top:12px; padding:10px; background:#0f172a; border-radius:6px; display:flex; justify-content:space-between; align-items:center; font-weight:bold; color:#f8fafc;">
+                    <div class="cc-total">
                         <span>${etiqueta}</span>
-                        <span style="color:${colorTotal}; font-size:1.1rem;">${formatoPesos(total)}</span>
+                        <span class="monto" style="color:${colorTotal};">${formatoPesos(total)}</span>
                     </div>`;
             }
  
             html += `
-                        <button onclick="this.closest('.modal-overlay').remove()" style="margin-top:15px; background:#475569;">Cerrar</button>
+                        <button type="button" class="btn-ghost" onclick="this.closest('.modal-overlay').remove()">Cerrar</button>
                     </div>
                 </div>`;
  
@@ -510,7 +862,7 @@
  
         } catch (error) {
             console.error("Error al obtener la cuenta corriente:", error);
-            alert("No se pudo cargar la cuenta corriente en este momento.");
+            mostrarToast("No se pudo cargar la cuenta corriente en este momento.", 'error');
         }
     }
  
@@ -531,7 +883,7 @@
  
         const respuestas = {};
         itemsChecklist.forEach((item, index) => {
-            respuestas[item] = document.querySelector(`[name="item_${index}"]`).value;
+            respuestas[item] = document.querySelector(`input[name="item_${index}"]:checked`).value;
         });
  
         try {
@@ -541,13 +893,16 @@
                 body: JSON.stringify({ chofer: choferActual, dominio, tipo_vehiculo, respuestas, observaciones })
             });
             if (respuesta.ok) {
-                alert("¡Check-list enviado con éxito! GPS y hoja de ruta activados.");
+                mostrarToast("¡Check-list enviado! GPS y hoja de ruta activados.", 'ok');
                 document.getElementById('gps-status').style.display = 'block';
+                document.getElementById('gps-pill').classList.add('on');
                 solicitarWakeLock();
                 iniciarEnvioGPS(choferActual, dominio);
+            } else {
+                mostrarToast("El servidor no aceptó el check-list. Revisá los datos.", 'error');
             }
         } catch (error) {
-            alert("No se pudo conectar con el servidor.");
+            mostrarToast("No se pudo conectar con el servidor.", 'error');
         }
     });
  
@@ -568,11 +923,13 @@
                 body: JSON.stringify(datosCarga)
             });
             if (respuesta.ok) {
-                alert("⛽ ¡Carga registrada con éxito!");
+                mostrarToast("⛽ ¡Carga registrada con éxito!", 'ok');
                 document.getElementById('combustibleForm').reset();
+            } else {
+                mostrarToast("No se pudo registrar la carga.", 'error');
             }
         } catch (error) {
-            alert("Error de conexión.");
+            mostrarToast("Error de conexión.", 'error');
         }
     });
  
@@ -595,9 +952,11 @@
                 marcadorChoferVivo = L.marker([latitud, longitud], {
                     icon: L.divIcon({
                         className: 'custom-pin',
-                        html: '<div style="background:#2563eb; width:16px; height:16px; border-radius:50%; border:3px solid white; box-shadow:0 0 10px blue;"></div>'
+                        html: '<div class="pin-live"></div>',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
                     })
-                }).addTo(mapChofer).bindPopup("<b>¡Estás acá! (Ubicación en vivo)</b>");
+                }).addTo(mapChofer).bindPopup("<b>¡Estás acá!</b><br>Ubicación en vivo");
             }
  
             try {
@@ -614,9 +973,11 @@
         if (intervaloGPS) { clearInterval(intervaloGPS); intervaloGPS = null; }
         if (wakeLock !== null) { wakeLock.release().then(() => { wakeLock = null; }); }
         document.getElementById('gps-status').style.display = 'none';
-        alert("🛑 Turno finalizado.");
+        document.getElementById('gps-pill').classList.remove('on');
+        mostrarToast("🛑 Turno finalizado.", 'ok');
     }
 </script>
  
 </body>
 </html>
+ 
