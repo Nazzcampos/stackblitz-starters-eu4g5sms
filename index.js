@@ -338,6 +338,11 @@ function calcularDistancia(lat1, lon1, lat2, lon2) {
 }
 
 // --- DEUDA POR CLIENTE ---
+// Un pedido recién facturado figura en la cuenta corriente pero todavía no corresponde cobrarlo:
+// los débitos con menos de DIAS_DEUDA_RECIENTE días (por defecto 7) se informan aparte como "pedido reciente".
+// Se puede cambiar con la variable de entorno DIAS_DEUDA_RECIENTE en Render.
+const DIAS_DEUDA_RECIENTE = Math.max(0, Number(process.env.DIAS_DEUDA_RECIENTE) || 7);
+const HOY_AR_SQL = `(now() AT TIME ZONE 'America/Argentina/Buenos_Aires')::date`;
 // cta_cte_cliente guarda una "foto" completa por día (fecha_sync).
 // Solo sirve la foto más reciente. Saldo = débitos - créditos (es_credito = true).
 // Se guarda en caché 10 minutos para no recorrer la tabla (2,5 GB) en cada pantalla.
@@ -363,19 +368,23 @@ async function obtenerDeudas() {
                 SELECT cc.cliente_id,
                        MAX(cc.cliente_codigo) AS cliente_codigo,
                        to_char((SELECT f FROM ultima), 'YYYY-MM-DD') AS fecha,
-                       SUM(CASE WHEN cc.es_credito THEN -cc.importe ELSE cc.importe END) AS saldo
+                       SUM(CASE WHEN cc.es_credito THEN -cc.importe ELSE cc.importe END) AS saldo,
+                       SUM(CASE WHEN NOT cc.es_credito AND cc.fecha_comprobante::date > (${HOY_AR_SQL} - $1::int)
+                                THEN cc.importe ELSE 0 END) AS reciente
                 FROM cta_cte_cliente cc
                 WHERE cc.fecha_sync = (SELECT f FROM ultima)
                 GROUP BY cc.cliente_id
-            `);
+            `, [DIAS_DEUDA_RECIENTE]);
 
             const mapa = new Map();
             const codigos = new Map();
+            const recientes = new Map();
             r.rows.forEach(row => {
                 mapa.set(String(row.cliente_id), Number(row.saldo));
+                recientes.set(String(row.cliente_id), Number(row.reciente) || 0);
                 if (row.cliente_codigo) codigos.set(String(row.cliente_id), row.cliente_codigo);
             });
-            const datos = { mapa, codigos, fecha: r.rows[0] ? r.rows[0].fecha : null };
+            const datos = { mapa, codigos, recientes, fecha: r.rows[0] ? r.rows[0].fecha : null };
 
             cacheDeudas.datos = datos;
             cacheDeudas.ts = Date.now();
@@ -714,22 +723,34 @@ app.get('/api/ventas-chofer/:nombre', requireChofer, async (req, res) => {
         // La deuda se trae una sola vez para todos los clientes (con caché)
         let mapaDeudas = new Map();
         let mapaCodigos = new Map();
+        let mapaRecientes = new Map();
         try {
             const deudas = await obtenerDeudas();
             mapaDeudas = deudas.mapa;
             mapaCodigos = deudas.codigos;
+            mapaRecientes = deudas.recientes;
         } catch (errDeuda) {
             console.error("⚠️ No se pudo obtener la deuda, se devuelve la ruta sin saldos:", errDeuda.message);
         }
 
         // orden_planeado de Gescom llega siempre en 1, así que se numera según
         // la secuencia de la ruta del cliente (cliente_ruta_hist.orden)
-        const filas = resultado.rows.map((f, i) => ({
-            ...f,
-            orden: i + 1,
-            cliente_codigo: f.cliente_codigo || mapaCodigos.get(String(f.id)) || null,
-            saldo_deuda: mapaDeudas.get(String(f.id)) || 0
-        }));
+        // saldo_deuda = total de la cuenta corriente; deuda_cobrar = lo que ya corresponde cobrar;
+        // deuda_reciente = pedidos de los últimos días que todavía no se cobran (se descuentan los créditos de lo más viejo primero)
+        const filas = resultado.rows.map((f, i) => {
+            const total = mapaDeudas.get(String(f.id)) || 0;
+            const reciente = mapaRecientes.get(String(f.id)) || 0;
+            const redondear = n => Number(n.toFixed(2));
+            return {
+                ...f,
+                orden: i + 1,
+                cliente_codigo: f.cliente_codigo || mapaCodigos.get(String(f.id)) || null,
+                saldo_deuda: redondear(total),
+                deuda_cobrar: total > 0 ? redondear(Math.max(0, total - reciente)) : 0,
+                deuda_reciente: total > 0 ? redondear(Math.min(reciente, total)) : 0,
+                dias_reciente: DIAS_DEUDA_RECIENTE
+            };
+        });
 
         res.json(filas);
 
@@ -765,6 +786,7 @@ app.get('/api/cta-cte/:cliente_id', requireChofer, async (req, res) => {
                    importe_original,
                    CASE WHEN es_credito THEN -importe ELSE importe END AS saldo_pendiente,
                    es_credito,
+                   (NOT es_credito AND fecha_comprobante::date > (${HOY_AR_SQL} - $3::int)) AS reciente,
                    detalle
             FROM cta_cte_cliente
             WHERE cliente_id = $1
@@ -772,7 +794,7 @@ app.get('/api/cta-cte/:cliente_id', requireChofer, async (req, res) => {
             ORDER BY es_credito, fecha_comprobante, numero_comprobante, numero_cuota;
         `;
 
-        const resultado = await pool.query(query, [clienteId, fecha]);
+        const resultado = await pool.query(query, [clienteId, fecha, DIAS_DEUDA_RECIENTE]);
         res.json(resultado.rows);
 
     } catch (err) {

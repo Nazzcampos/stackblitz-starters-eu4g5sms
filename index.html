@@ -395,9 +395,21 @@
         .aviso-msg { margin-top: 12px; padding: 11px 13px; border-radius: 14px; font-weight: 800; font-size: .95rem; }
         .aviso.debe .aviso-msg { color: #ffd0d8; background: rgba(251, 113, 133, .12); border: 1px solid rgba(251, 113, 133, .4); }
         .aviso.ok .aviso-msg { color: #b8f5dc; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .35); }
+        .aviso.reciente { border-left-color: var(--warn); }
+        .aviso.reciente .aviso-msg { color: #fde9a8; background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .4); }
+        .chip-warn { color: var(--warn); background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .4); }
         .aviso-actions { display: flex; gap: 8px; margin-top: 12px; }
         .aviso-actions button { margin: 0; padding: 11px 12px; font-size: .85rem; }
 
+        @media (max-width: 560px) {
+            .brand-text { display: none; }
+            .topbar-right { gap: 6px; }
+        }
+        @media (max-width: 440px) {
+            .user-name { display: none; }
+            .gps-pill { font-size: 0; padding: 9px; }
+            .btn-chip { padding: 6px 10px; }
+        }
         @media (max-width: 420px) {
             .brand-sub { display: none; }
             .user-name { max-width: 70px; }
@@ -566,6 +578,7 @@
                     </button>
                 </div>
                 <div class="map-status" id="mapStatus">Ubicación apagada · tocá ◎ para verla en vivo</div>
+                <div class="map-status" id="alertasStatus" style="margin-top:6px;"></div>
             </div>
 
             <!-- Lista de Clientes del Reparto -->
@@ -716,6 +729,12 @@
         document.getElementById('seccion-checklist').classList.add('active');
         document.getElementById('navIsland').style.display = 'flex';
         window.scrollTo({ top: 0 });
+
+        // Para que los avisos de llegada funcionen sin pasos extra (también al reabrir la app): se carga la ruta y se enciende el GPS
+        cargarAvisados();
+        cargarRutaChoferReal(nombre);
+        if (!MODO_PRUEBA) iniciarSeguimientoGPS();
+        actualizarEstadoAlertas();
     }
 
     // Login: nombre + PIN. El servidor devuelve una sesión que solo da acceso al reparto de ese chofer
@@ -824,7 +843,9 @@
         document.getElementById('gps-status').style.display = 'none';
         document.getElementById('avisoWrap').innerHTML = '';
         clientesPorId = {};
+        clientesAvisados.clear();
         choferActual = "";
+        actualizarEstadoAlertas();
         document.querySelectorAll('.vista-seccion').forEach(sec => sec.classList.remove('active'));
         document.getElementById('vista-login').classList.add('active');
         document.getElementById('navIsland').style.display = 'none';
@@ -898,6 +919,14 @@
     let marcadoresClientes = [];
     let marcadorChoferVivo = null;
 
+    // Deuda del cliente: total de la cuenta, lo que ya corresponde cobrar y el pedido reciente (todavía no se cobra)
+    function deudaDe(c) {
+        const total = parseFloat(c.saldo_deuda) || 0;
+        const cobrar = c.deuda_cobrar !== undefined ? (parseFloat(c.deuda_cobrar) || 0) : Math.max(total, 0);
+        const reciente = parseFloat(c.deuda_reciente) || 0;
+        return { total, cobrar, reciente, dias: c.dias_reciente || 7 };
+    }
+
     // Cargar la hoja de ruta real del chofer considerando la fecha elegida
     async function cargarRutaChoferReal(nombreChofer) {
         const fechaInput = document.getElementById('inputFechaRuta').value;
@@ -925,17 +954,19 @@
             clientes.forEach(c => {
                 const idSeguro = String(c.id).replace(/\D/g, '');
                 clientesPorId[idSeguro] = c;
-                const saldo = parseFloat(c.saldo_deuda) || 0;
-                const tieneDeuda = saldo > 0;
+                const d = deudaDe(c);
+                const saldo = d.total;
+                const tieneDeuda = d.cobrar > 0;
                 const nombreSeguro = escapeHtml(c.nombre);
                 const codigoHtml = c.cliente_codigo ? `<span style="color: var(--cyan);">Cód. ${escapeHtml(c.cliente_codigo)}</span> · ` : '';
-                const textoBoton = `Ver Cta. Cte 💰 ${formatoPesos(saldo)}`;
+                const textoBoton = tieneDeuda ? `Ver Cta. Cte 💰 ${formatoPesos(d.cobrar)} a cobrar` : 'Ver Cta. Cte';
 
                 if (c.lat && c.lon) {
                     let popupHtml = `<b>#${escapeHtml(c.orden || '-')} · ${codigoHtml}${nombreSeguro}</b><br>${escapeHtml(c.direccion) || 'Sin dirección'}`;
-                    if (tieneDeuda) {
+                    if (d.total > 0) {
                         popupHtml += `<br><button class="btn-deuda" onclick="verCuentaCorriente('${idSeguro}')">${textoBoton}</button>`;
                     }
+                    if (d.reciente > 0) popupHtml += `<br>🕓 Pedido reciente: ${formatoPesos(d.reciente)}`;
 
                     const marker = L.marker([c.lat, c.lon], {
                         icon: L.divIcon({
@@ -951,7 +982,11 @@
 
                 let estadoCuenta;
                 if (tieneDeuda) {
-                    estadoCuenta = `<button class="btn-deuda" onclick="verCuentaCorriente('${idSeguro}')">${textoBoton}</button>`;
+                    estadoCuenta = `<button class="btn-deuda" onclick="verCuentaCorriente('${idSeguro}')">${textoBoton}</button>`
+                        + (d.reciente > 0 ? `<span class="chip chip-warn">🕓 Pedido reciente ${formatoPesos(d.reciente)}</span>` : '');
+                } else if (d.reciente > 0) {
+                    estadoCuenta = `<span class="chip chip-ok">✔ Sin deuda a cobrar</span><span class="chip chip-warn">🕓 Pedido reciente ${formatoPesos(d.reciente)}</span>`
+                        + `<button type="button" class="btn-ghost" style="padding:6px 12px; font-size:.78rem;" onclick="verCuentaCorriente('${idSeguro}')">Ver Cta. Cte</button>`;
                 } else if (saldo < 0) {
                     estadoCuenta = `<span class="chip chip-ok">✔ Saldo a favor ${formatoPesos(saldo)}</span>`;
                 } else {
@@ -977,6 +1012,9 @@
             if (!ultimaPosicion && clientes.length > 0 && clientes[0].lat && clientes[0].lon) {
                 mapChofer.setView([clientes[0].lat, clientes[0].lon], 13);
             }
+            // La ruta puede llegar después de que el GPS ya tenga posición: se revisa de inmediato
+            if (ultimaPosicion) revisarCercaniaClientes(ultimaPosicion.lat, ultimaPosicion.lon);
+            actualizarEstadoAlertas();
         } catch (err) {
             console.error("Error al cargar la ruta real del chofer:", err);
             document.getElementById('contenedor-clientes').innerHTML = '<p class="empty-state" style="color: var(--danger);">Error al conectar con Gescom.</p>';
@@ -1008,9 +1046,10 @@
                 const importe = parseFloat(m.saldo_pendiente);
                 const vencido = !m.es_credito && m.fecha_vencimiento && String(m.fecha_vencimiento).slice(0, 10) < hoy;
                 const cuota = m.numero_cuota > 1 ? ` (cuota ${escapeHtml(m.numero_cuota)})` : '';
+                const etiquetaReciente = m.reciente ? ' <span class="chip chip-warn" style="padding:1px 7px; font-size:.62rem;">Reciente</span>' : '';
                 return `
                     <tr>
-                        <td>${escapeHtml(m.tipo_comprobante_codigo)} ${escapeHtml(m.punto_venta_codigo)}-${escapeHtml(m.numero_comprobante)}${cuota}</td>
+                        <td>${escapeHtml(m.tipo_comprobante_codigo)} ${escapeHtml(m.punto_venta_codigo)}-${escapeHtml(m.numero_comprobante)}${cuota}${etiquetaReciente}</td>
                         <td style="color:${vencido ? 'var(--danger)' : 'var(--muted)'};">${m.es_credito ? '-' : formatoFecha(m.fecha_vencimiento)}</td>
                         <td class="num" style="color:${m.es_credito ? 'var(--ok)' : 'var(--danger)'};">${formatoPesos(importe)}</td>
                     </tr>`;
@@ -1042,13 +1081,26 @@
                     <div class="cc-line" style="color: var(--ok);"><span>Créditos a favor</span><span>${formatoPesos(totalCreditos)}</span></div>`;
                 }
 
-                const etiqueta = total > 0 ? 'Total a cobrar' : (total < 0 ? 'Saldo a favor' : 'Saldo');
-                const colorTotal = total > 0 ? 'var(--danger)' : 'var(--ok)';
-                html += `
+                const recientes = debitos.filter(m => m.reciente).reduce((a, m) => a + parseFloat(m.saldo_pendiente), 0);
+                const recienteEf = total > 0 ? Math.min(recientes, total) : 0;
+                if (recienteEf > 0) {
+                    const aCobrar = Math.max(0, total - recientes);
+                    html += `
+                    <div class="cc-line" style="color: var(--warn);"><span>🕓 Pedido reciente (todavía no se cobra)</span><span>${formatoPesos(recienteEf)}</span></div>
+                    <div class="cc-total">
+                        <span>A cobrar ahora</span>
+                        <span class="monto" style="color:${aCobrar > 0 ? 'var(--danger)' : 'var(--ok)'};">${formatoPesos(aCobrar)}</span>
+                    </div>
+                    <div class="cc-line"><span>Total de la cuenta corriente</span><span>${formatoPesos(total)}</span></div>`;
+                } else {
+                    const etiqueta = total > 0 ? 'Total a cobrar' : (total < 0 ? 'Saldo a favor' : 'Saldo');
+                    const colorTotal = total > 0 ? 'var(--danger)' : 'var(--ok)';
+                    html += `
                     <div class="cc-total">
                         <span>${etiqueta}</span>
                         <span class="monto" style="color:${colorTotal};">${formatoPesos(total)}</span>
                     </div>`;
+                }
             }
 
             html += `
@@ -1213,8 +1265,42 @@
         revisarCercaniaClientes(lat, lon);
     }
 
-    // Avisa una sola vez por cliente y por día cuando el chofer se acerca
+    // Recuerda qué clientes ya se avisaron hoy (sobrevive a recargar la página)
+    function cargarAvisados() {
+        try {
+            const o = JSON.parse(localStorage.getItem('flota_avisados') || '{}');
+            if (o.fecha === fechaLocalHoy() && Array.isArray(o.claves)) o.claves.forEach(k => clientesAvisados.add(k));
+        } catch (e) {}
+    }
+    function guardarAvisados() {
+        if (MODO_PRUEBA) return;
+        try { localStorage.setItem('flota_avisados', JSON.stringify({ fecha: fechaLocalHoy(), claves: [...clientesAvisados] })); } catch (e) {}
+    }
+    function formatoDistancia(m) {
+        return m >= 1000 ? (m / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(m / 10) * 10 + ' m';
+    }
+
+    // Línea bajo el mapa que muestra si los avisos de llegada están funcionando y por qué no
+    function actualizarEstadoAlertas() {
+        const el = document.getElementById('alertasStatus');
+        if (!el) return;
+        const fecha = document.getElementById('inputFechaRuta').value;
+        const clientes = Object.values(clientesPorId).filter(c => c.lat && c.lon);
+        if (!choferActual) { el.innerText = ''; return; }
+        if (fecha !== fechaLocalHoy()) { el.innerText = '🔕 Avisos de llegada apagados: la fecha elegida no es la de hoy'; return; }
+        if (clientes.length === 0) { el.innerText = '🔕 Avisos de llegada: todavía no hay clientes de hoy cargados'; return; }
+        if (!ultimaPosicion) { el.innerText = `🔕 Avisos de llegada: esperando tu ubicación (${clientes.length} clientes cargados). Tocá ◎ y permití el GPS.`; return; }
+        let mejor = null;
+        clientes.forEach(c => {
+            const d = distanciaMetros(ultimaPosicion.lat, ultimaPosicion.lon, Number(c.lat), Number(c.lon));
+            if (!mejor || d < mejor.d) mejor = { c, d };
+        });
+        el.innerText = `🔔 Avisos activos · ${clientes.length} clientes · más cercano: ${mejor.c.nombre} a ${formatoDistancia(mejor.d)}`;
+    }
+
+    // Avisa cuando el chofer se acerca a un cliente (una vez; se vuelve a habilitar si se aleja más del doble del radio)
     function revisarCercaniaClientes(lat, lon) {
+        actualizarEstadoAlertas();
         const fecha = document.getElementById('inputFechaRuta').value;
         if (fecha !== fechaLocalHoy()) return; // solo se avisa en la ruta de hoy
 
@@ -1222,26 +1308,37 @@
         Object.keys(clientesPorId).forEach(idSeguro => {
             const c = clientesPorId[idSeguro];
             if (!c.lat || !c.lon) return;
-            const clave = `${fecha}:${idSeguro}`;
-            if (clientesAvisados.has(clave)) return;
+            const clave = `${choferActual}:${fecha}:${idSeguro}`;
             const d = distanciaMetros(lat, lon, Number(c.lat), Number(c.lon));
+            if (clientesAvisados.has(clave)) {
+                if (d > RADIO_AVISO_METROS * 2) { clientesAvisados.delete(clave); guardarAvisados(); }
+                return;
+            }
             if (d <= RADIO_AVISO_METROS) cercanos.push({ c, idSeguro, clave, d });
         });
         cercanos.sort((a, b) => a.d - b.d).forEach(x => {
             clientesAvisados.add(x.clave);
+            guardarAvisados();
             mostrarAvisoCliente(x.c, x.idSeguro, x.d);
         });
     }
 
-    function textoDeudaCliente(saldo) {
-        if (saldo > 0) return { clase: 'debe', texto: `Este cliente debe ${formatoPesos(saldo)}.` };
-        if (saldo < 0) return { clase: 'ok', texto: `Este cliente no debe (tiene ${formatoPesos(Math.abs(saldo))} a favor).` };
+    function textoDeudaCliente(d) {
+        if (d.cobrar > 0) {
+            let texto = `Este cliente debe ${formatoPesos(d.cobrar)} a cobrar.`;
+            if (d.reciente > 0) texto += ` Además tiene ${formatoPesos(d.reciente)} de pedido reciente (todavía no se cobra).`;
+            return { clase: 'debe', texto };
+        }
+        if (d.reciente > 0) {
+            return { clase: 'reciente', texto: `No tiene deuda a cobrar. Figuran ${formatoPesos(d.reciente)} de pedido reciente (menos de ${d.dias} días): todavía no corresponde cobrarlo.` };
+        }
+        if (d.total < 0) return { clase: 'ok', texto: `Este cliente no debe (tiene ${formatoPesos(Math.abs(d.total))} a favor).` };
         return { clase: 'ok', texto: 'Este cliente no debe.' };
     }
 
     function mostrarAvisoCliente(c, idSeguro, distancia) {
-        const saldo = parseFloat(c.saldo_deuda) || 0;
-        const { clase, texto } = textoDeudaCliente(saldo);
+        const d = deudaDe(c);
+        const { clase, texto } = textoDeudaCliente(d);
         const codigo = c.cliente_codigo ? `${c.cliente_codigo}, ` : '';
         const titulo = `Estás llegando al cliente ${codigo}${c.nombre}`;
         const metros = Math.max(10, Math.round(distancia / 10) * 10);
@@ -1258,7 +1355,7 @@
             </div>
             <div class="aviso-msg">${escapeHtml(texto)}</div>
             <div class="aviso-actions">
-                ${saldo > 0 ? `<button type="button" class="btn-deuda" data-accion="cc" style="flex:1;">Ver Cta. Cte</button>` : ''}
+                ${d.total > 0 ? `<button type="button" class="btn-deuda" data-accion="cc" style="flex:1;">Ver Cta. Cte</button>` : ''}
                 <button type="button" class="btn-ghost" data-accion="cerrar" style="flex:1;">Entendido</button>
             </div>`;
         aviso.querySelector('[data-accion="cerrar"]').onclick = () => aviso.remove();
