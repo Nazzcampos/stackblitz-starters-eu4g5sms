@@ -397,6 +397,11 @@
         .aviso.ok .aviso-msg { color: #b8f5dc; background: rgba(52, 211, 153, .1); border: 1px solid rgba(52, 211, 153, .35); }
         .aviso.reciente { border-left-color: var(--warn); }
         .aviso.reciente .aviso-msg { color: #fde9a8; background: rgba(251, 191, 36, .1); border: 1px solid rgba(251, 191, 36, .4); }
+        .paso-nat { display: flex; gap: 12px; align-items: flex-start; padding: 12px; margin-top: 10px; background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 14px; }
+        .paso-nat .num-nat { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; font-weight: 800; font-size: .85rem; color: #fff; background: linear-gradient(135deg, var(--violet), var(--cyan)); }
+        .paso-nat h4 { margin: 0 0 4px; font-size: .95rem; }
+        .paso-nat p { margin: 0 0 8px; font-size: .8rem; color: var(--muted); line-height: 1.35; }
+        .paso-nat button { padding: 8px 12px; font-size: .8rem; border-radius: 10px; }
         .aviso-exh { margin-top: 8px; padding: 8px 12px; font-size: .84rem; font-weight: 700; color: var(--cyan); background: rgba(34, 211, 238, .08); border: 1px solid rgba(34, 211, 238, .3); border-radius: 12px; }
         .cliente-exh { margin-top: 6px; font-size: .78rem; font-weight: 700; color: var(--cyan); }
         .chip-warn { color: var(--warn); background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .4); }
@@ -581,6 +586,7 @@
                 </div>
                 <div class="map-status" id="mapStatus">Ubicación apagada · tocá ◎ para verla en vivo</div>
             </div>
+            <button type="button" class="btn-ghost" id="btnPermisosNativos" style="display:none; width:100%; margin-top:8px; padding:9px; font-size:.8rem;" onclick="abrirBienvenidaNativa(true)">⚙ Permisos y batería del celular</button>
             <div id="alertasStatus" style="margin-top:8px; padding:8px 12px; font-size:.78rem; font-weight:700; color: var(--muted); background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 12px;"></div>
 
             <!-- Lista de Clientes del Reparto -->
@@ -737,6 +743,7 @@
         cargarRutaChoferReal(nombre);
         if (!MODO_PRUEBA) iniciarSeguimientoGPS();
         actualizarEstadoAlertas();
+        if (NATIVO) setTimeout(() => abrirBienvenidaNativa(false), 600);
     }
 
     // Login: nombre + PIN. El servidor devuelve una sesión que solo da acceso al reparto de ese chofer
@@ -1144,6 +1151,152 @@
     let circuloPrecision = null;
     let seguirMiUbicacion = true;
     let wakeLock = null;
+
+    // =====================================================================
+    //  APP ANDROID (APK): GPS en segundo plano, avisos del sistema y envío nativo
+    //  Dentro del APK, Capacitor deja disponibles los plugins; en el navegador común nada de esto se activa.
+    // =====================================================================
+    const CAP = window.Capacitor || null;
+    const NATIVO = !!(CAP && typeof CAP.isNativePlatform === 'function' && CAP.isNativePlatform());
+    let watcherNativo = null;
+    let gpsNativoIniciando = false;
+    const pluginsNativos = {};
+    function pluginNativo(nombre) {
+        if (!NATIVO) return null;
+        if (!pluginsNativos[nombre]) {
+            try { pluginsNativos[nombre] = (CAP.Plugins && CAP.Plugins[nombre]) || CAP.registerPlugin(nombre); } catch (e) { return null; }
+        }
+        return pluginsNativos[nombre];
+    }
+
+    async function prepararNotificacionesNativas() {
+        const LN = pluginNativo('LocalNotifications');
+        if (!LN) return;
+        try {
+            await LN.createChannel({ id: 'avisos', name: 'Avisos de llegada a clientes', description: 'Te avisa cuando te acercás a un cliente de tu ruta',
+                importance: 5, visibility: 1, vibration: true, lights: true });
+        } catch (e) {}
+        try {
+            const p = await LN.checkPermissions();
+            if (p && p.display !== 'granted') await LN.requestPermissions();
+        } catch (e) {}
+    }
+
+    // GPS que sigue funcionando con la pantalla apagada (servicio con notificación fija "ruta en curso")
+    async function iniciarGpsNativo() {
+        if (watcherNativo !== null || gpsNativoIniciando) return true;
+        const BG = pluginNativo('BackgroundGeolocation');
+        if (!BG) { mostrarToast("No se pudo iniciar el GPS de la app.", 'error'); return false; }
+        gpsNativoIniciando = true;
+        try {
+            prepararNotificacionesNativas();
+            watcherNativo = await BG.addWatcher({
+                backgroundTitle: 'Flota · ruta en curso',
+                backgroundMessage: 'Compartiendo tu ubicación y avisando cuando llegues a un cliente',
+                requestPermissions: true,
+                stale: false,
+                distanceFilter: 10
+            }, (loc, err) => {
+                if (err) {
+                    if (err.code === 'NOT_AUTHORIZED') {
+                        mostrarToast("Falta el permiso de ubicación. Tocá «Permisos y batería».", 'error');
+                        abrirBienvenidaNativa(true);
+                    }
+                    return;
+                }
+                if (!loc) return;
+                onPosicion({ coords: { latitude: loc.latitude, longitude: loc.longitude, accuracy: loc.accuracy } });
+            });
+            document.getElementById('gps-pill').classList.add('on');
+            actualizarEstadoMapa("Buscando señal GPS...");
+            return true;
+        } catch (e) {
+            mostrarToast("No se pudo iniciar el GPS. Revisá los permisos del celular.", 'error');
+            return false;
+        } finally {
+            gpsNativoIniciando = false;
+        }
+    }
+    function detenerGpsNativo() {
+        if (watcherNativo === null) return;
+        const BG = pluginNativo('BackgroundGeolocation');
+        try { if (BG) BG.removeWatcher({ id: watcherNativo }); } catch (e) {}
+        watcherNativo = null;
+    }
+
+    // Aviso del sistema (suena y vibra aunque la pantalla esté apagada)
+    async function notificarNativo(titulo, cuerpo) {
+        const LN = pluginNativo('LocalNotifications');
+        if (!LN) return;
+        try {
+            await LN.schedule({ notifications: [{ id: Date.now() % 2000000000, title: titulo, body: cuerpo, largeBody: cuerpo, channelId: 'avisos' }] });
+        } catch (e) {}
+    }
+
+    // Al estar en segundo plano, Android frena los pedidos de la página; el envío nativo no se frena
+    function enviarUbicacionServidor(lat, lon) {
+        const cuerpo = { chofer_id: choferActual, vehiculo: vehiculoActual, latitud: lat, longitud: lon };
+        const viaWeb = () => apiFetch('/api/ubicacion', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo)
+        }).catch(() => {});
+        const http = pluginNativo('CapacitorHttp');
+        if (http && typeof http.request === 'function') {
+            http.request({
+                url: location.origin + '/api/ubicacion', method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (leerTokenGuardado() || '') },
+                data: cuerpo
+            }).then(r => { if (r && r.status === 401) sesionVencida(); }).catch(viaWeb);
+        } else {
+            viaWeb();
+        }
+    }
+
+    // Pantalla de bienvenida: permisos y batería (en Motorola/Samsung/Xiaomi sin esto el sistema puede apagar la app)
+    function abrirBienvenidaNativa(forzar) {
+        if (!NATIVO || document.getElementById('modalBienvenidaNativa')) return;
+        let hecho = false;
+        try { hecho = localStorage.getItem('flota_bienvenida_ok') === '1'; } catch (e) {}
+        if (hecho && !forzar) return;
+        const cont = document.createElement('div');
+        cont.id = 'modalBienvenidaNativa';
+        cont.className = 'modal-overlay';
+        cont.innerHTML = `
+            <div class="modal-card">
+                <h3 class="modal-title">📱 Dejá el celular listo</h3>
+                <p class="modal-sub">Hacelo una sola vez</p>
+                <div class="paso-nat"><div class="num-nat">1</div><div>
+                    <h4>📍 Ubicación todo el tiempo</h4>
+                    <p>Entrá a Permisos → Ubicación y elegí «Permitir todo el tiempo». Activá también «Usar ubicación precisa».</p>
+                    <button type="button" class="btn-ghost" data-acc="ajustes">Abrir ajustes de la app</button>
+                </div></div>
+                <div class="paso-nat"><div class="num-nat">2</div><div>
+                    <h4>🔔 Notificaciones</h4>
+                    <p>Para que suene el aviso cuando llegás a un cliente, aunque la pantalla esté apagada.</p>
+                    <button type="button" class="btn-ghost" data-acc="notif">Permitir notificaciones</button>
+                </div></div>
+                <div class="paso-nat"><div class="num-nat">3</div><div>
+                    <h4>🔋 Batería sin restricciones</h4>
+                    <p>En los ajustes de la app entrá a Batería (o «Uso de batería de la app») y elegí «Sin restricciones».</p>
+                    <button type="button" class="btn-ghost" data-acc="ajustes">Abrir ajustes de la app</button>
+                </div></div>
+                <div style="display:grid; gap:8px; margin-top:14px;">
+                    <button type="button" data-acc="listo">Ya lo configuré</button>
+                    <button type="button" class="btn-ghost" data-acc="luego">Más tarde</button>
+                </div>
+            </div>`;
+        document.body.appendChild(cont);
+        cont.querySelectorAll('[data-acc="ajustes"]').forEach(b => b.onclick = () => {
+            const BG = pluginNativo('BackgroundGeolocation');
+            try { if (BG) BG.openSettings(); } catch (e) {}
+        });
+        cont.querySelector('[data-acc="notif"]').onclick = () => prepararNotificacionesNativas();
+        cont.querySelector('[data-acc="listo"]').onclick = () => {
+            try { localStorage.setItem('flota_bienvenida_ok', '1'); } catch (e) {}
+            cont.remove();
+        };
+        cont.querySelector('[data-acc="luego"]').onclick = () => cont.remove();
+    }
+    if (NATIVO) document.getElementById('btnPermisosNativos').style.display = 'block';
     const clientesAvisados = new Set();  // "fecha:idCliente" para avisar una sola vez por cliente y día
 
     function distanciaMetros(lat1, lon1, lat2, lon2) {
@@ -1154,6 +1307,7 @@
     }
 
     async function solicitarWakeLock() {
+        if (NATIVO) return; // en la app el servicio de GPS ya mantiene el seguimiento con la pantalla apagada
         if ('wakeLock' in navigator) {
             try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
         }
@@ -1165,7 +1319,7 @@
 
     function actualizarEstadoMapa(texto) {
         document.getElementById('mapStatus').innerText = texto;
-        document.getElementById('btnMiUbicacion').classList.toggle('on', watchId !== null || MODO_PRUEBA);
+        document.getElementById('btnMiUbicacion').classList.toggle('on', watchId !== null || watcherNativo !== null || MODO_PRUEBA);
     }
 
     // Si el usuario arrastra el mapa, deja de seguirlo hasta que toque ◎
@@ -1180,6 +1334,7 @@
 
     function iniciarSeguimientoGPS() {
         if (MODO_PRUEBA) return true;
+        if (NATIVO) { iniciarGpsNativo(); return true; }
         if (!navigator.geolocation) {
             mostrarToast("Este dispositivo no permite usar el GPS.", 'error');
             return false;
@@ -1194,6 +1349,7 @@
     }
 
     function detenerSeguimientoGPS() {
+        detenerGpsNativo();
         if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
         document.getElementById('gps-pill').classList.remove('on');
         if (marcadorChoferVivo) { mapChofer.removeLayer(marcadorChoferVivo); marcadorChoferVivo = null; }
@@ -1267,11 +1423,7 @@
         // Informar al servidor (máx. una vez cada 30 s y solo con buena precisión)
         if (enviarAlServidor && !MODO_PRUEBA && precision <= PRECISION_MAX_ENVIO_M && Date.now() - ultimoEnvio >= INTERVALO_ENVIO_MS) {
             ultimoEnvio = Date.now();
-            apiFetch('/api/ubicacion', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chofer_id: choferActual, vehiculo: vehiculoActual, latitud: lat, longitud: lon })
-            }).catch(() => {});
+            enviarUbicacionServidor(lat, lon);
         }
 
         revisarCercaniaClientes(lat, lon);
@@ -1400,11 +1552,13 @@
     }
 
     function pedirPermisoNotificaciones() {
+        if (NATIVO) { prepararNotificacionesNativas(); return; }
         try {
             if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
         } catch (e) {}
     }
     function notificarSistema(titulo, cuerpo, tag) {
+        if (NATIVO) { notificarNativo(titulo, cuerpo); return; }
         try {
             if ('Notification' in window && Notification.permission === 'granted') {
                 new Notification(titulo, { body: cuerpo, tag: 'cliente-' + tag });
