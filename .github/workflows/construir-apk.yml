@@ -1,0 +1,74 @@
+name: Construir APK de Flota
+
+# Se ejecuta a mano (Actions > Construir APK de Flota > Run workflow)
+# y también cuando cambia algo dentro de la carpeta app-movil.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'app-movil/**'
+      - '.github/workflows/construir-apk.yml'
+
+jobs:
+  construir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: app-movil
+    env:
+      APP_URL: ${{ vars.APP_URL }}
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Verificar la dirección de la web
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "::error::Falta la variable APP_URL. Cargala en Settings > Secrets and variables > Actions > Variables (ej: https://mi-flota.onrender.com)"
+            exit 1
+          fi
+          echo "La app va a abrir: $APP_URL"
+
+      - name: Instalar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Instalar dependencias
+        run: npm install --no-audit --no-fund
+
+      - name: Crear el proyecto Android
+        run: npx cap add android
+
+      - name: Agregar permisos
+        run: node preparar-android.js
+
+      - name: Generar íconos (si falla, se usa el ícono por defecto)
+        continue-on-error: true
+        run: npx --yes @capacitor/assets generate --android --assetPath assets
+
+      - name: Sincronizar
+        run: npx cap sync android
+
+      - name: Aceptar licencias del SDK de Android
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Compilar el APK
+        working-directory: app-movil/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Guardar el APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: flota-apk
+          path: app-movil/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
