@@ -1,0 +1,15 @@
+{
+  "name": "flota-app-movil",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Envoltorio Android (APK) de la app de gestión de flota: GPS en segundo plano y avisos del sistema",
+  "dependencies": {
+    "@capacitor-community/background-geolocation": "^1.2.27",
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/local-notifications": "^8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.0"
+  }
+}
