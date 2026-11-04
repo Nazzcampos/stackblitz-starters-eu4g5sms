@@ -523,7 +523,8 @@
 
             <div id="gps-status">
                 📡 <b>GPS activo:</b> transmitiendo en vivo<br>
-                <span id="coords" style="color: var(--muted); font-size: .8rem;">Esperando señal...</span>
+                <span id="coords" style="color: var(--muted); font-size: .8rem;">Esperando señal...</span><br>
+                <span id="envioEstado" style="color: var(--muted); font-size: .8rem;">Envío al servidor: esperando primera posición…</span>
                 <button type="button" class="btn-danger" onclick="finalizarTurno()">Finalizar turno / detener GPS</button>
             </div>
         </div>
@@ -1233,23 +1234,47 @@
         } catch (e) {}
     }
 
+    // Muestra en pantalla si el último envío llegó al servidor (sirve para diagnosticar problemas de GPS)
+    function marcarEnvio(ok, detalle) {
+        const el = document.getElementById('envioEstado');
+        if (!el) return;
+        const hora = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        el.style.color = ok ? 'var(--ok)' : '#fb7185';
+        el.textContent = ok ? ('Envío al servidor: ✔ ' + hora) : ('Envío al servidor: ✖ ' + hora + (detalle ? ' · ' + detalle : ''));
+    }
+
     // Al estar en segundo plano, Android frena los pedidos de la página; el envío nativo no se frena
     function enviarUbicacionServidor(lat, lon) {
         const cuerpo = { chofer_id: choferActual, vehiculo: vehiculoActual, latitud: lat, longitud: lon };
         const viaWeb = () => apiFetch('/api/ubicacion', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo)
-        }).catch(() => {});
+        }).then(r => marcarEnvio(r.ok, r.ok ? '' : 'error ' + r.status)).catch(() => marcarEnvio(false, 'sin conexión'));
         const http = pluginNativo('CapacitorHttp');
         if (http && typeof http.request === 'function') {
             http.request({
                 url: location.origin + '/api/ubicacion', method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (leerTokenGuardado() || '') },
                 data: cuerpo
-            }).then(r => { if (r && r.status === 401) sesionVencida(); }).catch(viaWeb);
+            }).then(r => {
+                if (r && r.status === 401) { sesionVencida(); return; }
+                if (r && r.status >= 200 && r.status < 300) marcarEnvio(true);
+                else viaWeb();
+            }).catch(viaWeb);
         } else {
             viaWeb();
         }
     }
+
+    // Si el vehículo está quieto el GPS no informa posiciones nuevas: se reenvía la última cada 30 s
+    // para que el panel de administración lo vea igual (y se envía al instante al enviar el check-list).
+    function reenviarUltimaPosicion(forzar) {
+        if (!enviarAlServidor || MODO_PRUEBA || !ultimaPosicion) return;
+        if (ultimaPosicion.precision > PRECISION_MAX_ENVIO_M) return;
+        if (!forzar && Date.now() - ultimoEnvio < INTERVALO_ENVIO_MS) return;
+        ultimoEnvio = Date.now();
+        enviarUbicacionServidor(ultimaPosicion.lat, ultimaPosicion.lon);
+    }
+    setInterval(() => reenviarUltimaPosicion(false), 15000);
 
     // Pantalla de bienvenida: permisos y batería (en Motorola/Samsung/Xiaomi sin esto el sistema puede apagar la app)
     function abrirBienvenidaNativa(forzar) {
@@ -1593,6 +1618,7 @@
                 solicitarWakeLock();
                 pedirPermisoNotificaciones();
                 iniciarSeguimientoGPS();
+                reenviarUltimaPosicion(true);
                 // Se carga la ruta ahora para poder avisar al acercarse, aunque el chofer no abra la pestaña de ruta
                 cargarRutaChoferReal(choferActual);
             } else {
