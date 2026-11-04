@@ -336,6 +336,43 @@
             box-shadow: 0 8px 22px rgba(124, 92, 255, .5);
         }
 
+
+        /* ---------- Orden de reparto ---------- */
+        .ord-modo { display: flex; gap: 6px; padding: 4px; background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 14px; margin-top: 4px; }
+        .ord-modo button { margin: 0; padding: 9px 8px; font-size: .85rem; background: transparent; box-shadow: none; color: var(--muted); border-radius: 10px; }
+        .ord-modo button.on { color: #fff; background: linear-gradient(135deg, var(--violet), var(--violet-2)); box-shadow: 0 6px 16px rgba(124,92,255,.4); }
+        .ord-banner { margin-top: 12px; padding: 10px 12px; border-radius: 12px; font-size: .82rem; font-weight: 700; line-height: 1.4; border: 1px solid var(--border); background: rgba(255,255,255,.04); color: var(--muted); }
+        .ord-banner.ok { color: var(--ok); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
+        .ord-banner.warn { color: var(--warn); border-color: rgba(251,191,36,.4); background: rgba(251,191,36,.08); }
+        .ord-banner.err { color: var(--danger); border-color: rgba(251,113,133,.4); background: rgba(251,113,133,.08); }
+        .ord-ayuda { margin: 12px 2px 0; font-size: .78rem; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+        .ord-lista { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .ord-item { display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 16px; transition: background .2s, border-color .2s; }
+        .ord-item.cambio { border-color: rgba(34,211,238,.5); background: rgba(34,211,238,.07); }
+        .ord-item.nuevo { border-color: rgba(251,191,36,.6); background: rgba(251,191,36,.08); }
+        .ord-item.baja { opacity: .55; border-style: dashed; }
+        .ord-item.baja .ord-nom { text-decoration: line-through; }
+        .ord-item.arrastrando { position: relative; z-index: 5; background: var(--surface-solid); border-color: var(--violet); box-shadow: 0 14px 34px rgba(0,0,0,.55), var(--glow); transform: scale(1.02); }
+        .ord-item.destello { animation: ordDestello 1.2s ease; }
+        @keyframes ordDestello { 0%, 60% { box-shadow: 0 0 0 3px var(--cyan); } 100% { box-shadow: 0 0 0 0 transparent; } }
+        .ord-pos { flex: 0 0 auto; width: 46px; height: 46px; margin: 0; padding: 0; display: grid; place-items: center; font-size: 1.05rem; font-weight: 800; color: #fff; background: rgba(124,92,255,.25); border: 1px solid rgba(124,92,255,.55); border-radius: 14px; box-shadow: none; }
+        .ord-item.baja .ord-pos { background: rgba(255,255,255,.06); border-color: var(--border); color: var(--muted); }
+        .ord-main { flex: 1; min-width: 0; }
+        .ord-nom { font-weight: 800; font-size: .92rem; overflow-wrap: anywhere; }
+        .ord-dir { margin-top: 1px; font-size: .76rem; color: var(--muted); overflow-wrap: anywhere; }
+        .ord-tags { margin-top: 5px; display: flex; gap: 5px; flex-wrap: wrap; }
+        .ord-tags .chip { padding: 2px 8px; font-size: .66rem; }
+        .ord-baja { flex: 0 0 auto; width: 38px; height: 38px; margin: 0; padding: 0; font-size: 1rem; background: rgba(255,255,255,.06); border: 1px solid var(--border); box-shadow: none; border-radius: 12px; }
+        .ord-baja.on { background: rgba(251,113,133,.2); border-color: rgba(251,113,133,.6); }
+        .ord-handle { flex: 0 0 auto; width: 42px; height: 46px; display: grid; place-items: center; font-size: 1.5rem; color: var(--muted); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; border-radius: 12px; }
+        .ord-handle:active { cursor: grabbing; color: var(--text); background: rgba(255,255,255,.08); }
+        .ord-barra { position: sticky; bottom: 92px; z-index: 50; margin-top: 14px; padding: 10px; display: flex; gap: 8px; background: rgba(10,14,36,.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border-strong); border-radius: 18px; }
+        .ord-barra button { margin: 0; padding: 12px 10px; font-size: .9rem; }
+        .ord-guardado { margin-top: 8px; font-size: .74rem; color: var(--muted); text-align: right; min-height: 1em; }
+        .ord-num { width: 100%; font-size: 1.4rem; font-weight: 800; text-align: center; }
+        .ord-fila { display: flex; gap: 8px; margin-top: 12px; }
+        .ord-fila button { margin: 0; padding: 12px 10px; font-size: .9rem; }
+
         /* ---------- Modal cuenta corriente ---------- */
         .modal-overlay {
             position: fixed; inset: 0; z-index: 2000; display: flex; justify-content: center; align-items: center; padding: 16px;
@@ -596,12 +633,40 @@
             </div>
         </div>
     </div>
+    <!-- SECCIÓN 4: ORDEN DE REPARTO -->
+    <div id="seccion-orden" class="vista-seccion">
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><polyline points="3 6 4 6 4 6"/><line x1="3" y1="12" x2="4" y2="12"/><line x1="3" y1="18" x2="4" y2="18"/></svg>
+                </div>
+                <div>
+                    <h3 class="section-title">Orden de reparto</h3>
+                    <p class="section-sub">Ordená tus clientes y enviale el cambio al administrador</p>
+                </div>
+            </div>
+            <div class="ord-modo" id="ordModo">
+                <button type="button" data-modo="dia" onclick="ordenCambiarModo('dia')">📅 Por día</button>
+                <button type="button" data-modo="zona" onclick="ordenCambiarModo('zona')">🗺 Por zona</button>
+            </div>
+            <label for="ordSelector">¿Qué recorrido querés ordenar?</label>
+            <select id="ordSelector" onchange="ordenElegir()"><option value="">Cargando…</option></select>
+            <div class="ord-banner" id="ordBanner" style="display:none;"></div>
+            <div class="ord-ayuda" id="ordAyuda" style="display:none;">
+                <span>☰ arrastrá · tocá el número para elegir la posición · 🚫 = baja</span>
+                <span id="ordContador"></span>
+            </div>
+            <div class="ord-lista" id="ordLista"><p class="empty-state">Elegí un recorrido para empezar.</p></div>
+            <div class="ord-guardado" id="ordGuardado"></div>
+            <div class="ord-barra" id="ordBarra" style="display:none;"></div>
+        </div>
+    </div>
 </main>
 
 <div class="toast-wrap" id="toastWrap"></div>
 <div class="aviso-wrap" id="avisoWrap"></div>
 
-<!-- DOCK DE NAVEGACIÓN (3 SOLAPAS) -->
+<!-- DOCK DE NAVEGACIÓN (4 SOLAPAS) -->
 <nav class="nav-island" id="navIsland">
     <button type="button" class="nav-btn active" onclick="cambiarVista('checklist', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -614,6 +679,10 @@
     <button type="button" class="nav-btn" onclick="cambiarVista('ruta', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
         Ruta de hoy
+    </button>
+    <button type="button" class="nav-btn" onclick="cambiarVista('orden', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Orden
     </button>
 </nav>
 
@@ -854,6 +923,7 @@
         document.getElementById('avisoWrap').innerHTML = '';
         clientesPorId = {};
         clientesAvisados.clear();
+        ordenReset();
         choferActual = "";
         actualizarEstadoAlertas();
         document.querySelectorAll('.vista-seccion').forEach(sec => sec.classList.remove('active'));
@@ -878,7 +948,11 @@
             document.getElementById('seccion-ruta').classList.add('active');
             setTimeout(() => { mapChofer.invalidateSize(); }, 200);
             cargarRutaChoferReal(choferActual);
+        } else if (vista === 'orden') {
+            document.getElementById('seccion-orden').classList.add('active');
+            ordenAbrir();
         }
+        if (vista !== 'orden') ordenGuardarYa();
         btn.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -1655,6 +1729,360 @@
             mostrarToast("Error de conexión.", 'error');
         }
     });
+
+
+    // =====================================================================
+    //  ORDEN DE REPARTO: el chofer ordena su recorrido y lo envía al administrador (que lo baja a Excel para Gescom)
+    // =====================================================================
+    const ORD_DIAS = { lunes: 'Lunes', martes: 'Martes', miercoles: 'Miércoles', jueves: 'Jueves', viernes: 'Viernes', sabado: 'Sábado', domingo: 'Domingo' };
+    const ORD_DIAS_CORTO = { lunes: 'Lun', martes: 'Mar', miercoles: 'Mié', jueves: 'Jue', viernes: 'Vie', sabado: 'Sáb', domingo: 'Dom' };
+    let ord = { modo: 'dia', rutas: [], propuestas: [], actual: null, lista: [], editable: false, propuesta: null, guardando: null, cambiosServidor: 0, cargado: false };
+
+    function ordenReset() {
+        clearTimeout(ord.guardando);
+        ord = { modo: ord.modo, rutas: [], propuestas: [], actual: null, lista: [], editable: false, propuesta: null, guardando: null, cambiosServidor: 0, cargado: false };
+        const l = document.getElementById('ordLista');
+        if (l) l.innerHTML = '<p class="empty-state">Elegí un recorrido para empezar.</p>';
+        ['ordBanner', 'ordAyuda', 'ordBarra'].forEach(id => { const e = document.getElementById(id); if (e) e.style.display = 'none'; });
+    }
+
+    async function ordenAbrir() {
+        const sel = document.getElementById('ordSelector');
+        try {
+            const r = await apiFetch('/api/orden/rutas');
+            if (!r.ok) throw new Error();
+            const d = await r.json();
+            ord.rutas = d.rutas || [];
+            ord.propuestas = d.propuestas || [];
+        } catch (e) {
+            sel.innerHTML = '<option value="">No se pudieron cargar tus zonas</option>';
+            mostrarToast("No se pudieron cargar tus zonas. Probá de nuevo en un momento.", 'error');
+            return;
+        }
+        if (!ord.cargado) {
+            let guardado = null;
+            try { guardado = localStorage.getItem('flota_orden_modo'); } catch (e) {}
+            // Si cada zona tiene un solo día, es más natural mostrarlo por día; si no, por zona
+            const unDiaCadaUna = ord.rutas.length > 0 && ord.rutas.every(z => Object.keys(z.dias).length === 1);
+            ord.modo = guardado === 'dia' || guardado === 'zona' ? guardado : (unDiaCadaUna ? 'dia' : 'zona');
+            ord.cargado = true;
+        }
+        ordenPintarSelector();
+    }
+
+    function ordenMarca(ruta, dia) {
+        const p = ord.propuestas.find(x => x.ruta === ruta && (x.dia || '') === dia);
+        if (!p) return '';
+        return { borrador: ' ✎', enviada: ' 📤', aprobada: ' ✅', rechazada: ' ❌' }[p.estado] || '';
+    }
+
+    function ordenPintarSelector(mantener) {
+        const sel = document.getElementById('ordSelector');
+        document.querySelectorAll('#ordModo button').forEach(b => b.classList.toggle('on', b.dataset.modo === ord.modo));
+        const opciones = [];
+        if (ord.modo === 'zona') {
+            ord.rutas.forEach(z => {
+                const dias = Object.keys(z.dias).map(d => ORD_DIAS_CORTO[d] + ' ' + z.dias[d]).join(', ');
+                opciones.push({ v: z.ruta + '|', t: 'Zona ' + z.ruta + ' · ' + z.clientes + ' clientes' + (dias ? ' (' + dias + ')' : '') + ordenMarca(z.ruta, '') });
+            });
+        } else {
+            Object.keys(ORD_DIAS).forEach(d => {
+                ord.rutas.forEach(z => {
+                    if (z.dias[d]) opciones.push({ v: z.ruta + '|' + d, t: ORD_DIAS[d] + ' · Zona ' + z.ruta + ' · ' + z.dias[d] + ' clientes' + ordenMarca(z.ruta, d) });
+                });
+            });
+        }
+        const previo = mantener ? sel.value : '';
+        if (!opciones.length) {
+            sel.innerHTML = '<option value="">No encontramos zonas para tu reparto</option>';
+            document.getElementById('ordLista').innerHTML = '<p class="empty-state">Todavía no tenés zonas asignadas según tus entregas de las últimas semanas. Si creés que es un error, avisale al administrador.</p>';
+            return;
+        }
+        sel.innerHTML = '<option value="">Elegí un recorrido…</option>' + opciones.map(o => '<option value="' + escapeHtml(o.v) + '">' + escapeHtml(o.t) + '</option>').join('');
+        if (previo && opciones.some(o => o.v === previo)) sel.value = previo;
+        else if (opciones.length === 1) { sel.value = opciones[0].v; ordenElegir(); }
+    }
+
+    function ordenCambiarModo(modo) {
+        if (ord.modo === modo) return;
+        ordenGuardarYa();
+        ord.modo = modo;
+        try { localStorage.setItem('flota_orden_modo', modo); } catch (e) {}
+        ord.actual = null;
+        ordenPintarSelector();
+        document.getElementById('ordLista').innerHTML = '<p class="empty-state">Elegí un recorrido para empezar.</p>';
+        ['ordBanner', 'ordAyuda', 'ordBarra'].forEach(id => document.getElementById(id).style.display = 'none');
+    }
+
+    async function ordenElegir() {
+        await ordenGuardarYa();
+        const val = document.getElementById('ordSelector').value;
+        if (!val) return;
+        const [ruta, dia] = val.split('|');
+        ord.actual = { ruta, dia: dia || '' };
+        document.getElementById('ordLista').innerHTML = '<p class="empty-state">Cargando clientes…</p>';
+        try {
+            const r = await apiFetch('/api/orden/ruta/' + encodeURIComponent(ruta) + (dia ? '?dia=' + encodeURIComponent(dia) : ''));
+            if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'error');
+            const d = await r.json();
+            if (!ord.actual || ord.actual.ruta !== ruta) return;
+            ord.lista = d.clientes.map(c => ({ ...c, baja: !!c.baja }));
+            ord.editable = !!d.editable;
+            ord.propuesta = d.propuesta;
+            ord.cambiosServidor = d.propuesta && d.propuesta.estado === 'borrador' ? d.propuesta.cambios : 0;
+            // Posición original según Gescom (para mostrar "antes estaba en…")
+            const base = ord.lista.slice().sort((a, b) => ((a.orden == null ? -1 : a.orden) - (b.orden == null ? -1 : b.orden)) || a.nombre.localeCompare(b.nombre));
+            const pos = new Map(base.map((c, i) => [c.id, i + 1]));
+            ord.lista.forEach(c => { c.posOrig = pos.get(c.id); });
+            ordenPintar();
+        } catch (e) {
+            document.getElementById('ordLista').innerHTML = '<p class="empty-state">No se pudo cargar este recorrido: ' + escapeHtml(e.message || '') + '</p>';
+        }
+    }
+
+    // Posición visible de cada cliente (las bajas no ocupan lugar)
+    function ordenPosiciones() {
+        let n = 0;
+        return ord.lista.map(c => c.baja ? null : ++n);
+    }
+
+    function ordenPintar() {
+        const cont = document.getElementById('ordLista');
+        const pos = ordenPosiciones();
+        const hayCambios = ordenHayCambios();
+        cont.innerHTML = '';
+        ord.lista.forEach((c, i) => {
+            const cambio = c.baja || (pos[i] !== null && pos[i] !== c.posOrig);
+            const el = document.createElement('div');
+            el.className = 'ord-item' + (cambio && ord.editable ? ' cambio' : '') + (c.sin_ubicar && !c.baja && !cambio ? ' nuevo' : '') + (c.baja ? ' baja' : '');
+            el.dataset.id = c.id;
+            const tags = [];
+            if (c.sin_ubicar && !c.baja) tags.push(cambio ? '<span class="chip chip-ok">🆕 Alta ya ubicada</span>' : '<span class="chip chip-warn">🆕 Alta sin ubicar</span>');
+            if (c.aparecio) tags.push('<span class="chip chip-warn">🆕 Apareció después</span>');
+            if (c.baja) tags.push('<span class="chip" style="color:var(--danger);border-color:rgba(251,113,133,.4);background:rgba(251,113,133,.1);">🚫 Baja propuesta</span>');
+            else if (cambio && !c.sin_ubicar) tags.push('<span class="chip">Antes: N° ' + c.posOrig + '</span>');
+            if (c.codigo) tags.push('<span class="chip" style="color:var(--muted);border-color:var(--border);background:transparent;">Cód. ' + escapeHtml(c.codigo) + '</span>');
+            const dir = [c.direccion, c.localidad].filter(Boolean).join(' · ');
+            el.innerHTML =
+                (ord.editable ? '<button type="button" class="ord-pos" onclick="ordenPedirPosicion(\'' + c.id + '\')" aria-label="Elegir posición">' + (pos[i] === null ? '—' : pos[i]) + '</button>'
+                              : '<div class="ord-pos" style="cursor:default;">' + (pos[i] === null ? '—' : pos[i]) + '</div>') +
+                '<div class="ord-main"><div class="ord-nom">' + escapeHtml(c.nombre) + '</div>' +
+                (dir ? '<div class="ord-dir">' + escapeHtml(dir) + '</div>' : '') +
+                (tags.length ? '<div class="ord-tags">' + tags.join('') + '</div>' : '') + '</div>' +
+                (ord.editable ? '<button type="button" class="ord-baja' + (c.baja ? ' on' : '') + '" onclick="ordenAlternarBaja(\'' + c.id + '\')" aria-label="Marcar baja" title="Marcar como baja">🚫</button>' +
+                                '<div class="ord-handle" data-arrastrar="1" aria-label="Arrastrar">⠿</div>' : '');
+            cont.appendChild(el);
+        });
+        if (ord.editable) cont.querySelectorAll('.ord-handle').forEach(h => h.addEventListener('pointerdown', ordenIniciarArrastre));
+        ordenPintarEstado(hayCambios);
+    }
+
+    function ordenHayCambios() {
+        const pos = ordenPosiciones();
+        return ord.lista.some((c, i) => c.baja || (pos[i] !== null && pos[i] !== c.posOrig));
+    }
+
+    function ordenPintarEstado(hayCambios) {
+        const banner = document.getElementById('ordBanner');
+        const barra = document.getElementById('ordBarra');
+        const ayuda = document.getElementById('ordAyuda');
+        const p = ord.propuesta;
+        let txt = '', cls = '';
+        if (p && p.estado === 'enviada') { txt = '📤 Ya enviaste esta propuesta (' + p.cambios + ' cambios). Esperando que el administrador la revise.'; cls = 'warn'; }
+        else if (p && p.estado === 'aprobada') { txt = '✅ El administrador aprobó tu propuesta. Falta que la cargue en Gescom; cuando esté cargada vas a ver el orden nuevo.'; cls = 'ok'; }
+        else if (p && p.estado === 'rechazada') { txt = '❌ El administrador no aprobó la última propuesta' + (p.nota ? ': «' + p.nota + '»' : '.') + ' Podés armar una nueva.'; cls = 'err'; }
+        else if (ord.lista.some(c => c.sin_ubicar && !c.baja)) { txt = '🆕 Hay clientes nuevos sin lugar en el recorrido (marcados en amarillo). Ubicalos donde corresponda.'; cls = 'warn'; }
+        banner.style.display = txt ? 'block' : 'none';
+        banner.className = 'ord-banner ' + cls;
+        banner.textContent = txt;
+        ayuda.style.display = ord.editable && ord.lista.length ? 'flex' : 'none';
+        document.getElementById('ordContador').textContent = ord.lista.length + ' clientes' + (hayCambios ? ' · con cambios' : '');
+        // Barra de acciones
+        let html = '';
+        if (ord.editable && hayCambios) {
+            html = '<button type="button" class="btn-ghost" onclick="ordenDescartar()">↺ Descartar</button><button type="button" onclick="ordenEnviar()">📤 Enviar al administrador</button>';
+        } else if (p && p.estado === 'enviada') {
+            html = '<button type="button" class="btn-ghost" onclick="ordenRetirar()">Retirar propuesta</button>';
+        }
+        barra.style.display = html ? 'flex' : 'none';
+        barra.innerHTML = html;
+    }
+
+    // ---- Guardado automático del borrador ----
+    function ordenProgramarGuardado() {
+        clearTimeout(ord.guardando);
+        document.getElementById('ordGuardado').textContent = 'Guardando…';
+        ord.guardando = setTimeout(() => ordenGuardarYa(), 900);
+    }
+    async function ordenGuardarYa() {
+        if (!ord.guardando || !ord.actual) { ord.guardando = null; return true; }
+        clearTimeout(ord.guardando);
+        ord.guardando = null;
+        const est = document.getElementById('ordGuardado');
+        try {
+            const r = await apiFetch('/api/orden/borrador', {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ruta: ord.actual.ruta, dia: ord.actual.dia, ids: ord.lista.map(c => c.id), bajas: ord.lista.filter(c => c.baja).map(c => c.id) })
+            });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(d.error || 'error');
+            ord.cambiosServidor = d.cambios;
+            const p = ord.propuestas.find(x => x.ruta === ord.actual.ruta && (x.dia || '') === ord.actual.dia);
+            if (p) { p.estado = 'borrador'; p.cambios = d.cambios; } else ord.propuestas.push({ ruta: ord.actual.ruta, dia: ord.actual.dia, estado: 'borrador', cambios: d.cambios });
+            ord.propuesta = { estado: 'borrador', cambios: d.cambios, nota: '' };
+            est.textContent = '✔ Borrador guardado ' + new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+            return true;
+        } catch (e) {
+            est.textContent = '✖ No se pudo guardar: ' + (e.message || 'sin conexión') + ' · se reintenta al mover algo';
+            return false;
+        }
+    }
+
+    function ordenCambio() { ordenPintar(); ordenProgramarGuardado(); }
+
+    function ordenAlternarBaja(id) {
+        const c = ord.lista.find(x => x.id === id);
+        if (!c) return;
+        c.baja = !c.baja;
+        ordenCambio();
+    }
+
+    // ---- Mover a una posición escribiendo el número ----
+    function ordenModal(html) {
+        const cont = document.createElement('div');
+        cont.className = 'modal-overlay';
+        cont.innerHTML = '<div class="modal-card">' + html + '</div>';
+        cont.addEventListener('click', e => { if (e.target === cont) cont.remove(); });
+        document.body.appendChild(cont);
+        return cont;
+    }
+    function ordenPedirPosicion(id) {
+        const idx = ord.lista.findIndex(x => x.id === id);
+        if (idx < 0) return;
+        const c = ord.lista[idx];
+        const total = ord.lista.filter(x => !x.baja).length;
+        const actual = ordenPosiciones()[idx];
+        const m = ordenModal(
+            '<h3 class="modal-title">Mover cliente</h3><p class="modal-sub">' + escapeHtml(c.nombre) + '</p>' +
+            '<label for="ordNumPos" style="margin-top:4px;">Nueva posición (1 a ' + total + ')</label>' +
+            '<input type="number" inputmode="numeric" min="1" max="' + total + '" id="ordNumPos" class="ord-num" value="' + (actual || '') + '">' +
+            '<div class="ord-fila"><button type="button" class="btn-ghost" data-r="ini">⬆ Al inicio</button><button type="button" class="btn-ghost" data-r="fin">⬇ Al final</button></div>' +
+            '<div class="ord-fila"><button type="button" class="btn-ghost" data-r="no">Cancelar</button><button type="button" data-r="ok">Mover</button></div>');
+        const input = m.querySelector('#ordNumPos');
+        const hacer = destino => { m.remove(); ordenMoverA(id, destino); };
+        m.querySelector('[data-r="ini"]').onclick = () => hacer(1);
+        m.querySelector('[data-r="fin"]').onclick = () => hacer(total);
+        m.querySelector('[data-r="no"]').onclick = () => m.remove();
+        m.querySelector('[data-r="ok"]').onclick = () => {
+            const n = parseInt(input.value, 10);
+            if (!Number.isFinite(n) || n < 1 || n > total) { mostrarToast('Poné un número entre 1 y ' + total + '.', 'error'); return; }
+            hacer(n);
+        };
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') m.querySelector('[data-r="ok"]').click(); });
+        setTimeout(() => { input.focus(); input.select(); }, 60);
+    }
+    function ordenMoverA(id, destino) {
+        const desde = ord.lista.findIndex(x => x.id === id);
+        if (desde < 0) return;
+        const [c] = ord.lista.splice(desde, 1);
+        c.baja = false;
+        // la posición N es la N-ésima entre los que no son baja
+        let visibles = 0, indice = ord.lista.length;
+        for (let i = 0; i < ord.lista.length; i++) {
+            if (ord.lista[i].baja) continue;
+            visibles++;
+            if (visibles === destino) { indice = i; break; }
+        }
+        ord.lista.splice(indice, 0, c);
+        ordenCambio();
+        const el = document.querySelector('#ordLista .ord-item[data-id="' + id + '"]');
+        if (el) { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); el.classList.add('destello'); }
+    }
+
+    // ---- Arrastrar con el dedo (o el mouse) desde la manija ☰ ----
+    function ordenIniciarArrastre(ev) {
+        const manija = ev.currentTarget;
+        const el = manija.closest('.ord-item');
+        const lista = el.parentNode;
+        ev.preventDefault();
+        el.classList.add('arrastrando');
+        let y = ev.clientY;
+        const reubicar = () => {
+            const hermanos = [...lista.children].filter(h => h !== el);
+            let destino = null;
+            for (const h of hermanos) { const r = h.getBoundingClientRect(); if (r.top + r.height / 2 > y) { destino = h; break; } }
+            if (destino !== el.nextSibling) lista.insertBefore(el, destino);
+        };
+        const autoscroll = setInterval(() => {
+            if (y < 110) window.scrollBy(0, -14);
+            else if (y > window.innerHeight - 150) window.scrollBy(0, 14);
+            else return;
+            reubicar();
+        }, 30);
+        // Se escucha en la ventana (no en la manija): al reubicar el elemento en la lista el navegador suelta la captura del puntero
+        const mover = e => { if (e.pointerId !== ev.pointerId) return; y = e.clientY; reubicar(); };
+        const bloquearScroll = e => e.preventDefault();
+        const soltar = e => {
+            if (e && e.pointerId !== undefined && e.pointerId !== ev.pointerId) return;
+            clearInterval(autoscroll);
+            window.removeEventListener('pointermove', mover);
+            window.removeEventListener('pointerup', soltar);
+            window.removeEventListener('pointercancel', soltar);
+            window.removeEventListener('touchmove', bloquearScroll);
+            el.classList.remove('arrastrando');
+            const ids = [...lista.children].map(h => h.dataset.id);
+            const antes = ord.lista.map(c => c.id).join();
+            if (ids.join() !== antes) {
+                const porId = new Map(ord.lista.map(c => [c.id, c]));
+                ord.lista = ids.map(i => porId.get(i));
+                ordenCambio();
+            } else ordenPintar();
+        };
+        window.addEventListener('pointermove', mover);
+        window.addEventListener('pointerup', soltar);
+        window.addEventListener('pointercancel', soltar);
+        window.addEventListener('touchmove', bloquearScroll, { passive: false });
+    }
+
+    // ---- Enviar / descartar / retirar ----
+    function ordenEnviar() {
+        const m = ordenModal(
+            '<h3 class="modal-title">Enviar al administrador</h3><p class="modal-sub">' + (ord.actual.dia ? ORD_DIAS[ord.actual.dia] + ' · ' : '') + 'Zona ' + escapeHtml(ord.actual.ruta) + '</p>' +
+            '<p style="margin:0;font-size:.9rem;line-height:1.5;">Vas a mandar tu nuevo orden de reparto para que lo revise y lo cargue en Gescom. Mientras esté en revisión no vas a poder cambiarlo.</p>' +
+            '<div class="ord-fila"><button type="button" class="btn-ghost" data-r="no">Volver</button><button type="button" data-r="ok">Enviar</button></div>');
+        m.querySelector('[data-r="no"]').onclick = () => m.remove();
+        m.querySelector('[data-r="ok"]').onclick = async () => {
+            m.remove();
+            if (!(await ordenGuardarYa())) { mostrarToast('No se pudo guardar el borrador. Revisá tu conexión.', 'error'); return; }
+            try {
+                const r = await apiFetch('/api/orden/enviar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ord.actual) });
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(d.error || 'error');
+                mostrarToast('📤 Propuesta enviada al administrador.', 'ok');
+                const p = ord.propuestas.find(x => x.ruta === ord.actual.ruta && (x.dia || '') === ord.actual.dia);
+                if (p) p.estado = 'enviada';
+                ordenPintarSelector(true);
+                ordenElegir();
+            } catch (e) {
+                mostrarToast(e.message || 'No se pudo enviar.', 'error');
+            }
+        };
+    }
+    async function ordenBorrarPropuesta(mensaje) {
+        try {
+            const r = await apiFetch('/api/orden/propuesta?ruta=' + encodeURIComponent(ord.actual.ruta) + '&dia=' + encodeURIComponent(ord.actual.dia), { method: 'DELETE' });
+            if (!r.ok) throw new Error();
+            ord.propuestas = ord.propuestas.filter(x => !(x.ruta === ord.actual.ruta && (x.dia || '') === ord.actual.dia && ['borrador', 'enviada'].includes(x.estado)));
+            mostrarToast(mensaje, 'ok');
+            ordenPintarSelector(true);
+            ordenElegir();
+        } catch (e) { mostrarToast('No se pudo completar la acción.', 'error'); }
+    }
+    function ordenDescartar() {
+        clearTimeout(ord.guardando); ord.guardando = null;
+        ordenBorrarPropuesta('Cambios descartados. Volvió el orden de Gescom.');
+    }
+    function ordenRetirar() { ordenBorrarPropuesta('Propuesta retirada. Podés volver a armarla.'); }
 
     function finalizarTurno() {
         enviarAlServidor = false;

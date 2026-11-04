@@ -293,6 +293,16 @@
         .pill-db.ok .live-dot { background: var(--ok); animation: ping 1.6s infinite; }
         .pill-db.mal { color: var(--danger); background: rgba(251, 113, 133, .12); border-color: rgba(251, 113, 133, .4); }
         .pill-db.mal .live-dot { background: var(--danger); animation: none; }
+        /* ---------- Orden de reparto ---------- */
+        .nav-btn.con-aviso { position: relative; }
+        .nav-btn.con-aviso::after { content: ''; position: absolute; top: 6px; right: calc(50% - 22px); width: 9px; height: 9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 0 3px rgba(251,191,36,.25); }
+        .ord-resumen { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+        .ord-cambio-fila td { font-size: .85rem; }
+        .ord-sube { color: var(--ok); font-weight: 700; }
+        .ord-baja-txt { color: var(--danger); font-weight: 700; }
+        #modalOrden .login-card { max-width: 760px; max-height: 88vh; overflow-y: auto; }
+        #modalOrden .table-wrap { max-height: 46vh; overflow: auto; }
+        .ord-nota { margin-top: 10px; }
         .modal-pin-fila { display: flex; gap: 8px; margin-top: 4px; }
         .modal-pin-fila button { flex: 1; padding: 11px 10px; border-radius: var(--radius-md); font-size: .85rem; }
         .modal-pin-opciones { display: grid; gap: 8px; margin-top: 12px; }
@@ -328,6 +338,26 @@
         <div class="login-error" id="errorLoginAdmin"></div>
         <button type="submit" id="btnLoginAdmin">Ingresar</button>
     </form>
+</div>
+
+<!-- DETALLE DE UNA PROPUESTA DE ORDEN -->
+<div class="login-overlay" id="modalOrden">
+    <div class="login-card">
+        <h2 id="ordenTitulo">Propuesta</h2>
+        <p id="ordenSub"></p>
+        <div class="ord-resumen" id="ordenResumen"></div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Cliente</th><th>Dirección</th><th class="num">Antes</th><th class="num">Nuevo</th><th>Qué cambia</th></tr></thead>
+                <tbody id="ordenFilas"></tbody>
+            </table>
+        </div>
+        <div class="ord-nota" id="ordenNotaWrap">
+            <input type="text" class="campo" id="ordenNota" maxlength="300" placeholder="Nota para el chofer (opcional, se muestra si la rechazás)">
+        </div>
+        <div class="modal-pin-fila" id="ordenAcciones"></div>
+        <div class="modal-pin-fila"><button type="button" class="btn-suave" onclick="cerrarOrden()">Cerrar</button></div>
+    </div>
 </div>
 
 <!-- CAMBIO DE PIN DE UN CHOFER -->
@@ -554,9 +584,44 @@
             </div>
         </div>
     </div>
+    <!-- PESTAÑA 5: ORDEN DE REPARTO -->
+    <div id="seccion-orden" class="vista-seccion">
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                </div>
+                <div>
+                    <h2 class="section-title">Orden de reparto</h2>
+                    <p class="section-sub">Propuestas de los choferes. Aprobalas y bajá el Excel para cargar el nuevo orden en Gescom (la app no modifica Gescom).</p>
+                </div>
+            </div>
+            <div class="busqueda">
+                <button type="button" class="btn-suave" onclick="cargarOrden()">Actualizar</button>
+                <button type="button" id="btnExpOrdenAprobadas" onclick="descargarOrden('', this)">📥 Excel de todas las aprobadas</button>
+            </div>
+            <div class="export-estado" id="ordenEstado"></div>
+            <div class="table-wrap">
+                <table id="tabla-orden">
+                    <thead>
+                        <tr>
+                            <th>Estado</th>
+                            <th>Chofer</th>
+                            <th>Zona</th>
+                            <th>Día</th>
+                            <th class="num">Cambios</th>
+                            <th>Enviada</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody><tr><td colspan="7" class="empty-row">Cargando…</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </main>
 
-<!-- DOCK DE NAVEGACIÓN (3 SOLAPAS) -->
+<!-- DOCK DE NAVEGACIÓN (5 SOLAPAS) -->
 <nav class="nav-island">
     <button type="button" class="nav-btn active" onclick="cambiarVistaAdmin('gps', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><path d="M8 2v16"/><path d="M16 6v16"/></svg>
@@ -573,6 +638,10 @@
     <button type="button" class="nav-btn" onclick="cambiarVistaAdmin('choferes', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Choferes
+    </button>
+    <button type="button" class="nav-btn" id="btnOrdenDock" onclick="cambiarVistaAdmin('orden', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        Orden
     </button>
 </nav>
 
@@ -873,6 +942,169 @@
     revisarBaseDatos();
     setInterval(revisarBaseDatos, 30000);
 
+    // =====================================================================
+    //  ORDEN DE REPARTO (propuestas de los choferes)
+    // =====================================================================
+    let listaOrden = [];
+    let ordenAbierta = null;
+    const ESTADOS_ORDEN = {
+        enviada: ['badge badge-warn', 'Para revisar'],
+        aprobada: ['badge badge-info', 'Aprobada · falta cargar'],
+        aplicada: ['badge badge-ok', 'Cargada en Gescom'],
+        rechazada: ['badge badge-falla', 'Rechazada']
+    };
+    const NOMBRE_DIA = { lunes: 'Lunes', martes: 'Martes', miercoles: 'Miércoles', jueves: 'Jueves', viernes: 'Viernes', sabado: 'Sábado', domingo: 'Domingo' };
+
+    function mensajeOrden(texto, tipo) {
+        const e = document.getElementById('ordenEstado');
+        e.className = 'export-estado' + (tipo ? ' ' + tipo : '');
+        e.innerText = texto || '';
+    }
+
+    async function cargarOrden() {
+        const cuerpo = document.querySelector('#tabla-orden tbody');
+        try {
+            const res = await adminFetch('/api/admin/orden');
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            listaOrden = await res.json();
+        } catch (err) {
+            if (err.message === 'SESION') return;
+            cuerpo.innerHTML = '<tr><td colspan="7" class="empty-row">No se pudieron cargar las propuestas. Revisá que la base de datos esté conectada.</td></tr>';
+            return;
+        }
+        const pendientes = listaOrden.filter(p => p.estado === 'enviada').length;
+        const btn = document.getElementById('btnOrdenDock');
+        if (btn) btn.classList.toggle('con-aviso', pendientes > 0);
+        if (!listaOrden.length) {
+            cuerpo.innerHTML = '<tr><td colspan="7" class="empty-row">Todavía no hay propuestas de orden. Cuando un chofer envíe una, aparece acá.</td></tr>';
+            return;
+        }
+        cuerpo.innerHTML = '';
+        listaOrden.forEach(p => {
+            const [clase, texto] = ESTADOS_ORDEN[p.estado] || ['badge', p.estado];
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><span class="${clase}">${escapeHtml(texto)}</span></td>
+                <td><b>${escapeHtml(p.chofer)}</b></td>
+                <td>${escapeHtml(p.ruta)}</td>
+                <td>${p.dia ? escapeHtml(NOMBRE_DIA[p.dia] || p.dia) : 'Todos'}</td>
+                <td class="num">${Number(p.cambios)}</td>
+                <td>${p.enviado ? escapeHtml(formatoFechaHora(p.enviado)) : '-'}</td>
+                <td><div class="acciones"></div></td>`;
+            const acc = tr.querySelector('.acciones');
+            const bVer = document.createElement('button');
+            bVer.type = 'button'; bVer.className = 'btn-suave'; bVer.textContent = '👁 Ver';
+            bVer.onclick = () => abrirOrden(p.id);
+            acc.appendChild(bVer);
+            if (p.estado === 'aprobada' || p.estado === 'aplicada') {
+                const bX = document.createElement('button');
+                bX.type = 'button'; bX.className = 'btn-suave'; bX.textContent = '📥 Excel';
+                bX.onclick = (ev) => descargarOrden(p.id, ev.currentTarget);
+                acc.appendChild(bX);
+            }
+            cuerpo.appendChild(tr);
+        });
+    }
+
+    async function abrirOrden(id) {
+        try {
+            const res = await adminFetch('/api/admin/orden/' + id);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            ordenAbierta = await res.json();
+        } catch (err) {
+            if (err.message !== 'SESION') mensajeOrden('No se pudo abrir la propuesta.', 'error');
+            return;
+        }
+        const p = ordenAbierta;
+        const items = p.items || [];
+        const cambian = items.filter(i => i.cambio || i.baja);
+        document.getElementById('ordenTitulo').innerText = 'Zona ' + p.ruta + (p.dia ? ' · ' + (NOMBRE_DIA[p.dia] || p.dia) : '') + ' · ' + p.chofer;
+        document.getElementById('ordenSub').innerText = cambian.length + ' de ' + items.length + ' clientes cambian de lugar o se dan de baja.';
+        const altas = items.filter(i => (i.antes === null || i.antes <= 0) && !i.baja).length;
+        const bajas = items.filter(i => i.baja).length;
+        document.getElementById('ordenResumen').innerHTML =
+            `<span class="${(ESTADOS_ORDEN[p.estado] || ['badge'])[0]}">${escapeHtml((ESTADOS_ORDEN[p.estado] || ['', p.estado])[1])}</span>` +
+            (altas ? `<span class="badge badge-warn">🆕 ${altas} alta${altas > 1 ? 's' : ''} ubicada${altas > 1 ? 's' : ''}</span>` : '') +
+            (bajas ? `<span class="badge badge-falla">🚫 ${bajas} baja${bajas > 1 ? 's' : ''}</span>` : '') +
+            (p.nota ? `<span class="badge">Nota: ${escapeHtml(p.nota)}</span>` : '');
+        const filas = document.getElementById('ordenFilas');
+        filas.innerHTML = '';
+        if (!cambian.length) filas.innerHTML = '<tr><td colspan="5" class="empty-row">Sin cambios.</td></tr>';
+        cambian.forEach(i => {
+            const tr = document.createElement('tr');
+            tr.className = 'ord-cambio-fila';
+            const antes = i.antes === null || i.antes === undefined ? '-' : (i.antes <= 0 ? i.antes + ' (alta)' : i.antes);
+            const que = i.baja ? '<span class="ord-baja-txt">BAJA</span>' : (i.antes === null || i.antes <= 0 ? '<span class="ord-sube">Alta ubicada</span>' : (i.nuevo < i.antes ? '<span class="ord-sube">▲ Sube</span>' : '▼ Baja de lugar'));
+            tr.innerHTML = `<td><b>${escapeHtml(i.nombre)}</b>${i.codigo ? '<br><span style="color:var(--muted);font-size:.75rem;">Cód. ' + escapeHtml(i.codigo) + '</span>' : ''}</td>
+                <td>${escapeHtml([i.direccion, i.localidad].filter(Boolean).join(' · '))}</td>
+                <td class="num">${escapeHtml(String(antes))}</td>
+                <td class="num"><b>${i.nuevo === null || i.nuevo === undefined ? '-' : i.nuevo}</b></td>
+                <td>${que}</td>`;
+            filas.appendChild(tr);
+        });
+        // Acciones según el estado
+        const acc = document.getElementById('ordenAcciones');
+        acc.innerHTML = '';
+        const boton = (txt, clase, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = clase; b.textContent = txt; b.onclick = fn; acc.appendChild(b); };
+        document.getElementById('ordenNota').value = '';
+        document.getElementById('ordenNotaWrap').style.display = p.estado === 'enviada' || p.estado === 'aprobada' ? '' : 'none';
+        if (p.estado === 'enviada') {
+            boton('✔ Aprobar', '', () => cambiarEstadoOrden('aprobada'));
+            boton('✖ Rechazar', 'btn-suave', () => cambiarEstadoOrden('rechazada'));
+        } else if (p.estado === 'aprobada') {
+            boton('📥 Bajar Excel', '', (ev) => descargarOrden(p.id, ev.currentTarget));
+            boton('✔ Ya la cargué en Gescom', 'btn-suave', () => cambiarEstadoOrden('aplicada'));
+            boton('✖ Rechazar', 'btn-suave', () => cambiarEstadoOrden('rechazada'));
+        } else if (p.estado === 'aplicada') {
+            boton('📥 Bajar Excel', 'btn-suave', (ev) => descargarOrden(p.id, ev.currentTarget));
+        }
+        document.getElementById('modalOrden').classList.add('on');
+    }
+    function cerrarOrden() { document.getElementById('modalOrden').classList.remove('on'); ordenAbierta = null; }
+
+    async function cambiarEstadoOrden(estado) {
+        if (!ordenAbierta) return;
+        const nota = document.getElementById('ordenNota').value.trim();
+        try {
+            const res = await adminFetch('/api/admin/orden/' + ordenAbierta.id + '/estado', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ estado, nota })
+            });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(d.error || 'No se pudo actualizar');
+            cerrarOrden();
+            mensajeOrden(estado === 'aprobada' ? '✔ Aprobada. Ya podés bajar el Excel.' : estado === 'aplicada' ? '✔ Marcada como cargada en Gescom.' : '✔ Rechazada. El chofer va a ver tu nota.', 'ok');
+            cargarOrden();
+        } catch (err) {
+            if (err.message !== 'SESION') mensajeOrden(err.message || 'No se pudo actualizar.', 'error');
+        }
+    }
+
+    async function descargarOrden(id, boton) {
+        if (boton) boton.disabled = true;
+        mensajeOrden('Generando el Excel…');
+        try {
+            const res = await adminFetch('/api/admin/exportar/orden' + (id ? '?id=' + id : '?estado=aprobada'));
+            if (!res.ok) {
+                const d = await res.json().catch(() => ({}));
+                mensajeOrden(d.error || 'No se pudo generar el Excel.', 'error');
+                return;
+            }
+            const blob = await res.blob();
+            const m = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
+            const nombre = m ? m[1] : 'orden_reparto.xlsx';
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = nombre;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            mensajeOrden('✔ Descargado: ' + nombre, 'ok');
+        } catch (err) {
+            if (err.message !== 'SESION') mensajeOrden('No se pudo conectar con el servidor.', 'error');
+        } finally {
+            if (boton) boton.disabled = false;
+        }
+    }
+
     function cambiarVistaAdmin(vista, btn) {
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -887,6 +1119,9 @@
         } else if (vista === 'choferes') {
             document.getElementById('seccion-choferes').classList.add('active');
             cargarChoferes();
+        } else if (vista === 'orden') {
+            document.getElementById('seccion-orden').classList.add('active');
+            cargarOrden();
         }
         btn.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'smooth' });
