@@ -1402,6 +1402,16 @@
     let marcadores = {};
     let lineasRecorrido = {};
     let primerEncuadre = true;
+    let vehSel = null; // el trazo celeste solo se muestra para el camión tocado
+
+    function mostrarSoloTrazo(nombre) {
+        vehSel = nombre;
+        Object.keys(lineasRecorrido).forEach(k => {
+            const linea = lineasRecorrido[k];
+            if (k === nombre) { if (!map.hasLayer(linea)) linea.addTo(map); }
+            else if (map.hasLayer(linea)) map.removeLayer(linea);
+        });
+    }
 
     const iconoVehiculo = L.divIcon({
         className: 'custom-pin',
@@ -1472,15 +1482,19 @@
                     if (marcadores[v.vehiculo]) {
                         marcadores[v.vehiculo].setLatLng([v.latitud, v.longitud]).setPopupContent(popup);
                     } else {
-                        marcadores[v.vehiculo] = L.marker([v.latitud, v.longitud], { icon: iconoVehiculo }).addTo(map).bindPopup(popup);
+                        const nombreVeh = v.vehiculo;
+                        marcadores[nombreVeh] = L.marker([v.latitud, v.longitud], { icon: iconoVehiculo }).addTo(map).bindPopup(popup);
+                        marcadores[nombreVeh].on('popupopen', () => mostrarSoloTrazo(nombreVeh));
+                        marcadores[nombreVeh].on('popupclose', () => { if (vehSel === nombreVeh) mostrarSoloTrazo(null); });
                     }
 
                     if (lineasRecorrido[v.vehiculo]) {
                         lineasRecorrido[v.vehiculo].setLatLngs(historicoPuntos[v.vehiculo]);
                     } else {
                         lineasRecorrido[v.vehiculo] = L.polyline(historicoPuntos[v.vehiculo], {
-                            color: '#22d3ee', weight: 4, opacity: 0.85
-                        }).addTo(map);
+                            color: '#38bdf8', weight: 4, opacity: 0.9
+                        });
+                        if (vehSel === v.vehiculo) lineasRecorrido[v.vehiculo].addTo(map);
                     }
 
                     const tr = document.createElement('tr');
@@ -1490,6 +1504,9 @@
                         <td class="num"><span class="badge badge-info">${escapeHtml(formatoNumero(v.distanciaTotalKm, 2))} km</span></td>
                         <td style="color: var(--muted);">${escapeHtml(formatoHora(v.fecha_hora))}</td>
                     `;
+                    tr.style.cursor = 'pointer';
+                    tr.title = 'Tocá para ver el camión y su recorrido en el mapa';
+                    tr.onclick = () => { const m = marcadores[v.vehiculo]; if (m) { map.setView(m.getLatLng(), Math.max(map.getZoom(), 15)); m.openPopup(); } };
                     tablaKmBody.appendChild(tr);
                 });
 
