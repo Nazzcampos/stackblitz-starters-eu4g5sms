@@ -434,6 +434,26 @@
     </div>
 </div>
 
+<!-- DETALLE DE UN RETORNO / PIN NUEVO DE DEPÓSITO -->
+<div class="login-overlay" id="modalRetorno">
+    <div class="login-card" style="max-width:560px;max-height:88vh;overflow:auto;">
+        <h2 id="retTitulo">Retorno</h2>
+        <p id="retSub"></p>
+        <div class="table-wrap"><table><thead><tr><th>Producto</th><th class="num">Salió</th><th class="num">Volvió</th></tr></thead><tbody id="retItems"></tbody></table></div>
+        <p id="retObs" style="margin-top:10px;"></p>
+        <div class="modal-pin-fila" id="retAcciones"></div>
+        <div class="modal-pin-fila"><button type="button" class="btn-suave" onclick="document.getElementById('modalRetorno').classList.remove('on')">Cerrar</button></div>
+    </div>
+</div>
+<div class="login-overlay" id="modalPinDeposito">
+    <div class="login-card">
+        <h2 id="pinDepTitulo">PIN del encargado</h2>
+        <p>Anotá este PIN y pasáselo al encargado: <b>solo se muestra ahora</b> (en el sistema queda cifrado).</p>
+        <div class="campo" id="pinDepValor" style="font-size:2rem;letter-spacing:8px;font-weight:800;">----</div>
+        <div class="modal-pin-fila"><button type="button" onclick="document.getElementById('modalPinDeposito').classList.remove('on')">Listo</button></div>
+    </div>
+</div>
+
 <!-- CAMBIO DE PIN DE UN CHOFER -->
 <div class="login-overlay" id="modalPin">
     <div class="login-card">
@@ -714,9 +734,47 @@
             <div class="table-wrap"><table id="docsTablaChoferes"></table></div>
         </div>
     </div>
+    <!-- PESTAÑA 7: RETORNO DE CAMIONES (DEPÓSITO) -->
+    <div id="seccion-retornos" class="vista-seccion">
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                </div>
+                <div>
+                    <h2 class="section-title">Retorno de camiones</h2>
+                    <p class="section-sub">Lo que volvió en cada camión (control del Encargado de Depósito). Buscá por fecha, chofer, reparto o producto.</p>
+                </div>
+            </div>
+            <div class="busqueda" style="flex-wrap:wrap;">
+                <input type="date" class="campo" id="retDesde" style="max-width:170px;" title="Desde">
+                <input type="date" class="campo" id="retHasta" style="max-width:170px;" title="Hasta">
+                <select class="campo" id="retChofer" style="max-width:220px;"><option value="">Todos los choferes</option></select>
+                <input type="search" class="campo" id="retTexto" placeholder="Producto, reparto, dominio…" style="max-width:240px;" onkeydown="if(event.key==='Enter')cargarRetornos()">
+                <button type="button" onclick="cargarRetornos()">Buscar</button>
+                <button type="button" class="btn-suave" onclick="descargarRetornos(this)">📥 Excel</button>
+                <a class="link-chip" href="/deposito.html" target="_blank">🏭 Pantalla de Depósito</a>
+            </div>
+            <div class="export-estado" id="retEstado"></div>
+            <div class="table-wrap">
+                <table id="tabla-retornos">
+                    <thead><tr><th>Fecha</th><th>Chofer</th><th>Reparto</th><th>Dominio</th><th class="num">Cajas</th><th class="num">Unidades</th><th class="num">Productos</th><th>Cargó</th><th></th></tr></thead>
+                    <tbody><tr><td colspan="9" class="empty-row">Cargando…</td></tr></tbody>
+                </table>
+            </div>
+            <div class="doc-sub">Usuarios del Encargado de Depósito</div>
+            <div class="busqueda" style="flex-wrap:wrap;">
+                <input type="text" class="campo" id="depNombre" placeholder="Nombre del encargado" maxlength="40" style="max-width:260px;">
+                <button type="button" onclick="crearUsuarioDeposito()">➕ Crear usuario</button>
+            </div>
+            <div class="table-wrap">
+                <table><thead><tr><th>Encargado</th><th>Estado</th><th>Último ingreso</th><th></th></tr></thead><tbody id="tablaDeposito"><tr><td colspan="4" class="empty-row">Cargando…</td></tr></tbody></table>
+            </div>
+        </div>
+    </div>
 </main>
 
-<!-- DOCK DE NAVEGACIÓN (6 SOLAPAS) -->
+<!-- DOCK DE NAVEGACIÓN (7 SOLAPAS) -->
 <nav class="nav-island">
     <button type="button" class="nav-btn active" onclick="cambiarVistaAdmin('gps', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><path d="M8 2v16"/><path d="M16 6v16"/></svg>
@@ -741,6 +799,10 @@
     <button type="button" class="nav-btn" id="btnDocsDock" onclick="cambiarVistaAdmin('docs', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
         Docs
+    </button>
+    <button type="button" class="nav-btn" id="btnRetornosDock" onclick="cambiarVistaAdmin('retornos', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        Retornos
     </button>
 </nav>
 
@@ -1366,6 +1428,124 @@
         } catch (e) { if (e.message !== 'SESION') document.getElementById('docTiposError').innerText = 'No se pudo conectar.'; }
     }
 
+    // =====================================================================
+    //  RETORNO DE CAMIONES (control del Encargado de Depósito)
+    // =====================================================================
+    let retornosAdm = [];
+    function hoyArAdm() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }); }
+    function retMensaje(t, tipo) { const e = document.getElementById('retEstado'); e.className = 'export-estado' + (tipo ? ' ' + tipo : ''); e.innerText = t || ''; }
+    function retParams() {
+        const p = new URLSearchParams({ desde: document.getElementById('retDesde').value, hasta: document.getElementById('retHasta').value });
+        if (document.getElementById('retChofer').value) p.set('chofer', document.getElementById('retChofer').value);
+        if (document.getElementById('retTexto').value.trim()) p.set('q', document.getElementById('retTexto').value.trim());
+        return p;
+    }
+    async function iniciarRetornos() {
+        if (!document.getElementById('retDesde').value) {
+            document.getElementById('retHasta').value = hoyArAdm();
+            document.getElementById('retDesde').value = new Date(Date.parse(hoyArAdm() + 'T00:00:00Z') - 30 * 86400000).toISOString().slice(0, 10);
+            try {
+                const r = await adminFetch('/api/retorno/choferes');
+                if (r.ok) document.getElementById('retChofer').innerHTML = '<option value="">Todos los choferes</option>' + (await r.json()).map(n => `<option>${escapeHtml(n)}</option>`).join('');
+            } catch (e) {}
+        }
+        cargarRetornos(); cargarUsuariosDeposito();
+    }
+    async function cargarRetornos() {
+        const cuerpo = document.querySelector('#tabla-retornos tbody');
+        try {
+            const res = await adminFetch('/api/retorno/historial?' + retParams());
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) { cuerpo.innerHTML = `<tr><td colspan="9" class="empty-row">${escapeHtml(d.error || 'No se pudo cargar')}</td></tr>`; return; }
+            retornosAdm = d;
+        } catch (e) { if (e.message !== 'SESION') cuerpo.innerHTML = '<tr><td colspan="9" class="empty-row">No se pudo conectar con el servidor.</td></tr>'; return; }
+        retMensaje(retornosAdm.length >= 500 ? 'Se muestran los primeros 500 resultados: acotá las fechas.' : '');
+        cuerpo.innerHTML = retornosAdm.length ? retornosAdm.map((r, k) =>
+            `<tr><td>${escapeHtml(docFecha(r.fecha))}</td><td><b>${escapeHtml(r.chofer)}</b></td><td>${escapeHtml(r.reparto || '—')}</td><td>${escapeHtml(r.dominio || '')}</td>
+             <td class="num">${r.cajas}</td><td class="num">${escapeHtml(String(r.total_unidades))}</td><td class="num">${r.items.length}</td><td style="color:var(--muted);">${escapeHtml(r.cargado_por)}</td>
+             <td><button type="button" class="btn-suave" onclick="verRetorno(${k})">Ver</button></td></tr>`).join('')
+            : '<tr><td colspan="9" class="empty-row">No hay retornos cargados con esos filtros.</td></tr>';
+    }
+    function verRetorno(k) {
+        const r = retornosAdm[k]; if (!r) return;
+        const q = document.getElementById('retTexto').value.trim().toLowerCase();
+        document.getElementById('retTitulo').innerText = docFecha(r.fecha) + ' · ' + r.chofer;
+        document.getElementById('retSub').innerText = `Reparto ${r.reparto || '—'}${r.dominio ? ' · ' + r.dominio : ''} · ${r.cajas} caja${r.cajas === 1 ? '' : 's'} en buen estado · cargó ${r.cargado_por}`;
+        document.getElementById('retItems').innerHTML = r.items.length ? r.items.map(i =>
+            `<tr${q && (i.descripcion.toLowerCase().includes(q) || String(i.codigo).toLowerCase().includes(q)) ? ' style="background:rgba(59,130,246,.14)"' : ''}><td>${escapeHtml(i.descripcion)} <small style="color:var(--muted)">${escapeHtml(i.codigo)}</small></td><td class="num">${i.cargada === null || i.cargada === undefined ? '—' : escapeHtml(String(i.cargada))}</td><td class="num"><b>${escapeHtml(String(i.retorno))}</b></td></tr>`).join('')
+            : '<tr><td colspan="3" class="empty-row">No volvieron productos.</td></tr>';
+        document.getElementById('retObs').innerText = r.observaciones ? '📝 ' + r.observaciones : '';
+        document.getElementById('retAcciones').innerHTML = `<button type="button" class="btn-suave" onclick="borrarRetorno(${r.id})">🗑 Borrar este registro</button>`;
+        document.getElementById('modalRetorno').classList.add('on');
+    }
+    async function borrarRetorno(id) {
+        if (!confirm('¿Borrar este registro de retorno? No se puede deshacer.')) return;
+        try {
+            const res = await adminFetch('/api/retorno/' + id, { method: 'DELETE' });
+            if (res.ok) { document.getElementById('modalRetorno').classList.remove('on'); cargarRetornos(); }
+        } catch (e) {}
+    }
+    async function descargarRetornos(boton) {
+        boton.disabled = true; retMensaje('Generando el Excel…');
+        try {
+            const res = await adminFetch('/api/retorno/exportar?' + retParams());
+            if (!res.ok) { const d = await res.json().catch(() => ({})); retMensaje(d.error || 'No se pudo generar el Excel.', 'error'); return; }
+            const blob = await res.blob();
+            const m = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
+            const nombre = m ? m[1] : 'retornos.xlsx';
+            const url = URL.createObjectURL(blob), a = document.createElement('a');
+            a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            retMensaje('✔ Descargado: ' + nombre, 'ok');
+        } catch (e) { if (e.message !== 'SESION') retMensaje('No se pudo conectar con el servidor.', 'error'); }
+        finally { boton.disabled = false; }
+    }
+
+    // ---- Usuarios del depósito ----
+    function mostrarPinDeposito(nombre, pin) {
+        document.getElementById('pinDepTitulo').innerText = 'PIN de ' + nombre;
+        document.getElementById('pinDepValor').innerText = pin;
+        document.getElementById('modalPinDeposito').classList.add('on');
+    }
+    async function cargarUsuariosDeposito() {
+        const cuerpo = document.getElementById('tablaDeposito');
+        try {
+            const res = await adminFetch('/api/admin/deposito');
+            const lista = await res.json();
+            cuerpo.innerHTML = lista.length ? lista.map(u =>
+                `<tr><td><b>${escapeHtml(u.nombre)}</b></td><td>${u.activo ? '<span class="badge badge-ok">Activo</span>' : '<span class="badge badge-falla">Desactivado</span>'}</td>
+                 <td style="color:var(--muted);">${u.ultimo_ingreso ? escapeHtml(formatoFechaHora(u.ultimo_ingreso)) : 'Nunca'}</td>
+                 <td><button type="button" class="btn-suave" onclick="pinUsuarioDeposito('${escapeHtml(u.clave)}','${escapeHtml(u.nombre)}')">Nuevo PIN</button>
+                     <button type="button" class="btn-suave" onclick="activoUsuarioDeposito('${escapeHtml(u.clave)}', ${u.activo ? 'false' : 'true'})">${u.activo ? 'Desactivar' : 'Activar'}</button></td></tr>`).join('')
+                : '<tr><td colspan="4" class="empty-row">Todavía no creaste ningún usuario de depósito.</td></tr>';
+        } catch (e) { if (e.message !== 'SESION') cuerpo.innerHTML = '<tr><td colspan="4" class="empty-row">No se pudo cargar la lista.</td></tr>'; }
+    }
+    async function crearUsuarioDeposito() {
+        const nombre = document.getElementById('depNombre').value.trim();
+        if (nombre.length < 2) { retMensaje('Escribí el nombre del encargado.', 'error'); return; }
+        try {
+            const res = await adminFetch('/api/admin/deposito', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre }) });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) { retMensaje(d.error || 'No se pudo crear el usuario.', 'error'); return; }
+            document.getElementById('depNombre').value = ''; retMensaje('');
+            mostrarPinDeposito(d.nombre, d.pin); cargarUsuariosDeposito();
+        } catch (e) { if (e.message !== 'SESION') retMensaje('No se pudo conectar con el servidor.', 'error'); }
+    }
+    async function pinUsuarioDeposito(clave, nombre) {
+        if (!confirm('¿Generar un PIN nuevo para ' + nombre + '? Se cierra su sesión actual.')) return;
+        try {
+            const res = await adminFetch('/api/admin/deposito/pin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clave }) });
+            const d = await res.json().catch(() => ({}));
+            if (res.ok) mostrarPinDeposito(d.nombre, d.pin); else retMensaje(d.error || 'No se pudo cambiar el PIN.', 'error');
+        } catch (e) {}
+    }
+    async function activoUsuarioDeposito(clave, activo) {
+        try {
+            await adminFetch('/api/admin/deposito/activo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clave, activo }) });
+            cargarUsuariosDeposito();
+        } catch (e) {}
+    }
+
     function cambiarVistaAdmin(vista, btn) {
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -1387,6 +1567,9 @@
             document.getElementById('seccion-docs').classList.add('active');
             document.getElementById('docModalFecha').style.display = '';
             cargarDocs();
+        } else if (vista === 'retornos') {
+            document.getElementById('seccion-retornos').classList.add('active');
+            iniciarRetornos();
         }
         btn.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'smooth' });

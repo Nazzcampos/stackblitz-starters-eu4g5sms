@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#060b18">
+    <title>BeniRuta · Depósito</title>
+    <style>
+        :root {
+            --bg-0: #060b18; --bg-1: #0b1428; --surface: rgba(15, 26, 51, .82); --surface-solid: #0f1a33; --surface-2: rgba(255,255,255,.045);
+            --border: rgba(148,163,184,.18); --border-strong: rgba(148,163,184,.34); --text: #eef1ff; --muted: #94a3c8;
+            --azul: #2563eb; --azul-2: #3b82f6; --claro: #60a5fa; --ok: #34d399; --danger: #fb7185; --warn: #fbbf24;
+            --radius-lg: 20px; --radius-md: 14px;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; min-height: 100vh; font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif; color: var(--text); background: linear-gradient(180deg, var(--bg-1), var(--bg-0)) fixed; -webkit-font-smoothing: antialiased; padding-bottom: 40px; }
+        body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: radial-gradient(ellipse 70% 40% at 50% -12%, rgba(59,130,246,.22), transparent 65%); }
+        .oculto { display: none !important; }
+        header.top { position: sticky; top: 0; z-index: 20; padding: calc(10px + env(safe-area-inset-top)) 14px 10px; background: linear-gradient(180deg, rgba(6,11,24,.95), rgba(6,11,24,.6)); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+        .top-in { max-width: 980px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 22px; }
+        .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+        .logo { flex: none; width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; color: #fff; background: linear-gradient(145deg, #3b82f6, #1d4ed8 62%, #1e3a8a); box-shadow: 0 8px 22px rgba(37,99,235,.45), inset 0 0 0 1px rgba(255,255,255,.22); }
+        .glifo { overflow: visible; display: block; }
+        .aro { transform-box: fill-box; transform-origin: center; animation: aro 2.4s ease-out infinite; }
+        @keyframes aro { 0% { transform: scale(.55); opacity: .9; } 100% { transform: scale(1.5); opacity: 0; } }
+        .marca { font-weight: 800; font-size: 1rem; line-height: 1.1; } .marca b { color: var(--claro); }
+        .sub { font-size: .66rem; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); }
+        .quien { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .quien span { font-size: .82rem; font-weight: 700; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        main { max-width: 980px; margin: 0 auto; padding: 8px 14px; }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 26px; padding: 18px; margin-bottom: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.4); }
+        h2 { margin: 0 0 4px; font-size: 1.15rem; } p.ayuda { margin: 0 0 12px; color: var(--muted); font-size: .86rem; line-height: 1.4; }
+        label { display: block; margin: 10px 0 5px; font-size: .74rem; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+        input, select, textarea { width: 100%; padding: 12px 13px; font-size: 1rem; font-family: inherit; color: var(--text); background: rgba(4,6,20,.55); border: 1px solid var(--border); border-radius: var(--radius-md); color-scheme: dark; outline: none; transition: border-color .2s, box-shadow .2s; }
+        input:focus, select:focus, textarea:focus { border-color: var(--azul-2); box-shadow: 0 0 0 3px rgba(59,130,246,.25); }
+        select option { background: var(--surface-solid); }
+        textarea { resize: vertical; min-height: 70px; }
+        button { font-family: inherit; font-size: .95rem; font-weight: 800; color: #fff; background: linear-gradient(135deg, var(--azul), var(--azul-2)); border: none; border-radius: 14px; padding: 12px 18px; cursor: pointer; box-shadow: 0 8px 20px rgba(37,99,235,.35); transition: transform .15s, filter .15s; }
+        button:hover { filter: brightness(1.08); } button:active { transform: scale(.98); } button:disabled { opacity: .5; cursor: not-allowed; }
+        button.suave { color: var(--text); background: rgba(255,255,255,.07); border: 1px solid var(--border); box-shadow: none; }
+        button.chico { padding: 8px 12px; font-size: .8rem; border-radius: 11px; }
+        .fila { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; } .fila > * { flex: 1 1 160px; } .fila > button { flex: 0 0 auto; }
+        .tabs { display: flex; gap: 6px; padding: 5px; margin-bottom: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 18px; }
+        .tabs button { flex: 1; background: transparent; color: var(--muted); box-shadow: none; padding: 11px 8px; border-radius: 13px; }
+        .tabs button.on { color: #fff; background: rgba(59,130,246,.18); box-shadow: inset 0 0 0 1px rgba(96,165,250,.4); }
+        .aviso { margin: 12px 0; padding: 11px 13px; border-radius: 14px; font-size: .88rem; line-height: 1.4; border: 1px solid var(--border); background: var(--surface-2); }
+        .aviso.ok { color: var(--ok); border-color: rgba(52,211,153,.4); background: rgba(52,211,153,.08); }
+        .aviso.warn { color: var(--warn); border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.08); }
+        .aviso.err { color: #ffd0d8; border-color: rgba(251,113,133,.5); background: rgba(251,113,133,.1); }
+        .chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+        .chip { padding: 9px 14px; border-radius: 999px; font-size: .85rem; font-weight: 800; color: var(--muted); background: rgba(255,255,255,.06); border: 1px solid var(--border); cursor: pointer; }
+        .chip.on { color: #fff; background: rgba(59,130,246,.22); border-color: rgba(96,165,250,.55); }
+        .lista-it { margin-top: 10px; display: grid; gap: 8px; }
+        .it { display: grid; grid-template-columns: 1fr 96px; gap: 10px; align-items: center; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 16px; transition: border-color .2s, background .2s; }
+        .it.con { border-color: rgba(96,165,250,.55); background: rgba(59,130,246,.1); }
+        .it.exceso { border-color: rgba(251,113,133,.6); background: rgba(251,113,133,.08); }
+        .it b { font-size: .95rem; line-height: 1.25; } .it small { display: block; margin-top: 3px; color: var(--muted); font-size: .76rem; }
+        .it small .sal { color: var(--claro); font-weight: 800; } .it small .ex { color: var(--danger); font-weight: 800; }
+        .it input { text-align: center; font-size: 1.15rem; font-weight: 800; padding: 10px 6px; }
+        .it .quitar { margin-left: 8px; padding: 2px 8px; font-size: .75rem; border-radius: 8px; }
+        .resul { margin-top: 8px; display: grid; gap: 6px; } .resul button { text-align: left; font-weight: 600; color: var(--text); background: rgba(255,255,255,.06); border: 1px solid var(--border); box-shadow: none; }
+        .resumen { position: sticky; bottom: 10px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 16px; padding: 12px 14px; background: rgba(11,20,40,.95); border: 1px solid var(--border-strong); border-radius: 20px; box-shadow: 0 14px 34px rgba(0,0,0,.5); }
+        .resumen .num { font-weight: 800; } .resumen .num span { color: var(--claro); }
+        .reg { margin-bottom: 10px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 18px; }
+        .reg-top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; cursor: pointer; }
+        .reg-top b { font-size: .98rem; } .reg-top small { color: var(--muted); }
+        .badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+        .badge { padding: 4px 10px; border-radius: 999px; font-size: .76rem; font-weight: 800; color: var(--claro); background: rgba(59,130,246,.12); border: 1px solid rgba(96,165,250,.35); }
+        .detalle { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+        .detalle table { width: 100%; border-collapse: collapse; font-size: .86rem; } .detalle th { text-align: left; color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .8px; padding: 4px 6px; } .detalle td { padding: 6px; border-top: 1px solid var(--border); } .detalle td.n, .detalle th.n { text-align: right; }
+        .vacio { padding: 28px 10px; text-align: center; color: var(--muted); }
+        .login { max-width: 400px; margin: 40px auto; text-align: center; }
+        .login .logo { width: 64px; height: 64px; border-radius: 21px; margin: 0 auto 12px; animation: entra .7s cubic-bezier(.2,.9,.3,1.2) both; }
+        @keyframes entra { from { opacity: 0; transform: scale(.5) rotate(-12deg); } }
+        .login label { text-align: left; }
+        .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 99; max-width: 92vw; padding: 12px 18px; border-radius: 16px; font-weight: 700; font-size: .92rem; background: #0f1a33; border: 1px solid var(--border-strong); box-shadow: 0 14px 34px rgba(0,0,0,.55); animation: sube .25s ease both; }
+        .toast.ok { border-color: rgba(52,211,153,.6); color: var(--ok); } .toast.error { border-color: rgba(251,113,133,.6); color: #ffd0d8; }
+        @keyframes sube { from { opacity: 0; transform: translate(-50%, 10px); } }
+        @media (max-width: 520px) { main { padding: 6px 10px; } .card { padding: 14px; border-radius: 22px; } .it { grid-template-columns: 1fr 84px; } .marca-sub { display: none; } }
+        @media (prefers-reduced-motion: reduce) { .aro, .login .logo { animation: none; } }
+    </style>
+</head>
+<body>
+
+<header class="top">
+    <div class="top-in">
+        <div class="brand">
+            <div class="logo"><svg class="glifo" width="26" height="26" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 45C14 38 30 41 32 32S50 27 50 14" stroke-width="4.5"/><circle cx="14" cy="50" r="4.5" stroke-width="3"/><circle class="aro" cx="50" cy="14" r="9" stroke-width="2"/><circle cx="50" cy="14" r="5.5" fill="currentColor" stroke="none"/></svg></div>
+            <div><div class="marca">Beni<b>Ruta</b> · Depósito</div><div class="sub marca-sub">Control de retorno del camión</div></div>
+        </div>
+        <div class="quien oculto" id="quien"><span id="quienNombre"></span><button type="button" class="suave chico" onclick="salir()">Salir</button></div>
+    </div>
+</header>
+
+<main>
+    <!-- INGRESO -->
+    <section id="vistaLogin" class="card login">
+        <div class="logo"><svg class="glifo" width="34" height="34" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 45C14 38 30 41 32 32S50 27 50 14" stroke-width="4.5"/><circle cx="14" cy="50" r="4.5" stroke-width="3"/><circle class="aro" cx="50" cy="14" r="9" stroke-width="2"/><circle cx="50" cy="14" r="5.5" fill="currentColor" stroke="none"/></svg></div>
+        <h2>Ingreso de depósito</h2>
+        <p class="ayuda">Elegí tu nombre e ingresá tu PIN. Si no lo sabés, pedíselo al administrador.</p>
+        <form id="formLogin" autocomplete="off">
+            <label for="loginUsuario">Encargado</label>
+            <select id="loginUsuario" required><option value="">Cargando…</option></select>
+            <label for="loginPin">Tu PIN</label>
+            <input type="password" id="loginPin" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="••••" required>
+            <div class="aviso err oculto" id="loginError"></div>
+            <button type="submit" id="btnLogin" style="width:100%;margin-top:16px;">Entrar</button>
+        </form>
+    </section>
+
+    <!-- APP -->
+    <section id="vistaApp" class="oculto">
+        <div class="tabs">
+            <button type="button" id="tabCargar" class="on" onclick="verTab('cargar')">📦 Cargar retorno</button>
+            <button type="button" id="tabHistorial" onclick="verTab('historial')">🔎 Historial</button>
+        </div>
+
+        <!-- CARGAR -->
+        <div id="panelCargar">
+            <div class="card">
+                <h2>Retorno del camión</h2>
+                <p class="ayuda">Elegí el chofer y el día. Se trae la carga del reparto desde Gescom: anotá al lado cuánto volvió de cada producto.</p>
+                <div class="fila">
+                    <div><label for="rtFecha">Fecha del reparto</label><input type="date" id="rtFecha"></div>
+                    <div><label for="rtChofer">Chofer</label><select id="rtChofer"><option value="">Cargando…</option></select></div>
+                    <button type="button" id="btnBuscar" onclick="buscarCarga()">Buscar carga</button>
+                </div>
+                <div id="rtMensaje"></div>
+                <div class="chips oculto" id="rtRepartos"></div>
+            </div>
+
+            <div class="card oculto" id="rtFormulario">
+                <div id="rtEstado"></div>
+                <div class="fila" id="rtManual" style="display:none;">
+                    <div><label for="rtRepartoManual">Número de reparto / planilla</label><input type="text" id="rtRepartoManual" maxlength="20" placeholder="Ej: 221" oninput="rt.reparto = this.value.trim()"></div>
+                </div>
+                <label for="rtFiltro">Productos que volvieron</label>
+                <input type="search" id="rtFiltro" placeholder="🔍 Filtrar la lista por nombre o código…" oninput="filtrarLista()">
+                <div class="lista-it" id="rtLista"></div>
+
+                <label for="rtBuscar">¿Volvió algo que no estaba en la carga?</label>
+                <input type="search" id="rtBuscar" placeholder="Buscar un artículo en Gescom para agregarlo…" oninput="buscarArticulo()">
+                <div class="resul" id="rtResultados"></div>
+
+                <div class="fila" style="margin-top:6px;">
+                    <div><label for="rtCajas">Cajas en buen estado que volvieron</label><input type="text" id="rtCajas" inputmode="numeric" placeholder="Ej: 52"></div>
+                    <div><label for="rtDominio">Dominio del camión (opcional)</label><input type="text" id="rtDominio" maxlength="12" placeholder="AF 189 LD" style="text-transform:uppercase;"></div>
+                </div>
+                <label for="rtObs">Observaciones</label>
+                <textarea id="rtObs" maxlength="500" placeholder="Cualquier detalle que quieras dejar anotado (opcional)"></textarea>
+
+                <div class="resumen">
+                    <div class="num" id="rtResumen">0 productos · <span>0</span> unidades</div>
+                    <button type="button" id="btnGuardar" onclick="guardarRetorno()">💾 Guardar retorno</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- HISTORIAL -->
+        <div id="panelHistorial" class="oculto">
+            <div class="card">
+                <h2>Historial de retornos</h2>
+                <p class="ayuda">Buscá por fecha, chofer o reparto, o escribí un producto para ver en qué repartos volvió.</p>
+                <div class="fila">
+                    <div><label for="hDesde">Desde</label><input type="date" id="hDesde"></div>
+                    <div><label for="hHasta">Hasta</label><input type="date" id="hHasta"></div>
+                    <div><label for="hChofer">Chofer</label><select id="hChofer"><option value="">Todos</option></select></div>
+                </div>
+                <div class="fila">
+                    <div><label for="hTexto">Buscar (producto, reparto, dominio…)</label><input type="search" id="hTexto" placeholder="Ej: lays, 221, AF189LD" onkeydown="if(event.key==='Enter')cargarHistorial()"></div>
+                    <button type="button" onclick="cargarHistorial()">Buscar</button>
+                    <button type="button" class="suave" id="btnExcel" onclick="descargarExcel(this)">📥 Excel</button>
+                </div>
+                <div id="hMensaje"></div>
+            </div>
+            <div id="hLista"></div>
+        </div>
+    </section>
+</main>
+
+<script>
+    // ---------- Utilidades ----------
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmtFecha = f => f ? f.split('-').reverse().join('/') : '';
+    const fmtHora = iso => new Date(iso).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const fmtNum = n => Number(n).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+    function hoyAR() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }); }
+    function haceDias(n) { return new Date(Date.parse(hoyAR() + 'T00:00:00Z') - n * 86400000).toISOString().slice(0, 10); }
+    function toast(t, tipo) { const e = document.createElement('div'); e.className = 'toast ' + (tipo || ''); e.textContent = t; document.body.appendChild(e); setTimeout(() => e.remove(), 3600); }
+    function guardarLocal(k, v) { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
+    function leerLocal(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+    let token = leerLocal('flota_dep_token'), nombreUsuario = '';
+    async function api(url, opciones) {
+        const o = opciones || {};
+        const r = await fetch(url, { ...o, headers: { ...(o.headers || {}), ...(token ? { Authorization: 'Bearer ' + token } : {}) } });
+        if (r.status === 401 && token) { salir(true); throw new Error('SESION'); }
+        return r;
+    }
+    async function json(url, opciones) {
+        const r = await api(url, opciones);
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || 'No se pudo completar la acción');
+        return d;
+    }
+
+    // ---------- Ingreso ----------
+    async function cargarUsuarios() {
+        try {
+            const lista = await (await fetch('/api/deposito/usuarios')).json();
+            $('loginUsuario').innerHTML = lista.length ? '<option value="">Seleccioná tu nombre</option>' + lista.map(n => `<option>${esc(n)}</option>`).join('') : '<option value="">Todavía no hay usuarios: pedile al administrador que cree el tuyo</option>';
+        } catch (e) { $('loginUsuario').innerHTML = '<option value="">No se pudo cargar la lista</option>'; }
+    }
+    $('formLogin').addEventListener('submit', async e => {
+        e.preventDefault();
+        const b = $('btnLogin'); b.disabled = true; $('loginError').classList.add('oculto');
+        try {
+            const r = await fetch('/api/deposito/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre: $('loginUsuario').value, pin: $('loginPin').value }) });
+            const d = await r.json().catch(() => ({}));
+            $('loginPin').value = '';
+            if (!r.ok) { $('loginError').textContent = d.error || 'No se pudo ingresar'; $('loginError').classList.remove('oculto'); return; }
+            token = d.token; guardarLocal('flota_dep_token', token); entrar(d.nombre);
+        } catch (err) { $('loginError').textContent = 'No se pudo conectar con el servidor.'; $('loginError').classList.remove('oculto'); }
+        finally { b.disabled = false; }
+    });
+    function entrar(nombre) {
+        nombreUsuario = nombre; $('quienNombre').textContent = nombre; $('quien').classList.remove('oculto');
+        $('vistaLogin').classList.add('oculto'); $('vistaApp').classList.remove('oculto');
+        $('rtFecha').value = hoyAR(); $('rtFecha').max = hoyAR();
+        $('hDesde').value = haceDias(30); $('hHasta').value = hoyAR();
+        cargarChoferes();
+    }
+    function salir(porVencida) {
+        token = null; guardarLocal('flota_dep_token', null);
+        $('vistaApp').classList.add('oculto'); $('vistaLogin').classList.remove('oculto'); $('quien').classList.add('oculto');
+        resetRetorno(); cargarUsuarios();
+        if (porVencida === true) toast('Tu sesión se cerró. Ingresá de nuevo.', 'error');
+    }
+    async function recuperarSesion() {
+        if (!token) return;
+        try { const d = await json('/api/retorno/me'); entrar(d.nombre); } catch (e) { /* queda el login */ }
+    }
+
+    // ---------- Pestañas ----------
+    function verTab(t) {
+        $('tabCargar').classList.toggle('on', t === 'cargar'); $('tabHistorial').classList.toggle('on', t === 'historial');
+        $('panelCargar').classList.toggle('oculto', t !== 'cargar'); $('panelHistorial').classList.toggle('oculto', t !== 'historial');
+        if (t === 'historial') cargarHistorial();
+    }
+    async function cargarChoferes() {
+        try {
+            const lista = await json('/api/retorno/choferes');
+            $('rtChofer').innerHTML = '<option value="">Elegí el chofer</option>' + lista.map(n => `<option>${esc(n)}</option>`).join('');
+            $('hChofer').innerHTML = '<option value="">Todos</option>' + lista.map(n => `<option>${esc(n)}</option>`).join('');
+        } catch (e) {
+            if (e.message !== 'SESION') { $('rtChofer').innerHTML = '<option value="">No se pudo leer Gescom</option>'; $('rtMensaje').innerHTML = '<div class="aviso err">No se pudo leer la lista de choferes de Gescom. Probá de nuevo en un momento.</div>'; }
+        }
+    }
+
+    // ---------- Cargar retorno ----------
+    let rt = null;
+    function resetRetorno() { rt = { fecha: '', chofer: '', reparto: '', items: [], repartos: [], existentes: [], borradores: {}, gescom: true }; $('rtFormulario').classList.add('oculto'); $('rtRepartos').classList.add('oculto'); $('rtMensaje').innerHTML = ''; }
+    resetRetorno();
+
+    async function buscarCarga(repartoPreferido) {
+        const fecha = $('rtFecha').value, chofer = $('rtChofer').value;
+        if (!chofer || !fecha) { toast('Elegí el chofer y la fecha.', 'error'); return; }
+        const b = $('btnBuscar'); b.disabled = true; $('rtMensaje').innerHTML = '<div class="aviso">Buscando la carga en Gescom…</div>';
+        try {
+            const d = await json(`/api/retorno/carga?chofer=${encodeURIComponent(chofer)}&fecha=${fecha}`);
+            resetRetorno();
+            rt.fecha = fecha; rt.chofer = chofer; rt.gescom = d.gescom; rt.existentes = d.existentes;
+            const nombres = new Set(d.repartos.map(r => r.reparto));
+            rt.repartos = d.repartos.map(r => ({ reparto: r.reparto, items: r.items }));
+            d.existentes.forEach(x => { if (!nombres.has(x.reparto)) rt.repartos.push({ reparto: x.reparto, items: [] }); });
+            let msg = '';
+            if (!d.gescom) msg = '<div class="aviso warn">No se pudo leer la carga en Gescom. Podés anotar igual buscando los artículos a mano.</div>';
+            else if (!d.repartos.length) msg = '<div class="aviso warn">Gescom no muestra carga para ese chofer ese día. Verificá la fecha, o anotá igual buscando los artículos a mano.</div>';
+            $('rtMensaje').innerHTML = msg;
+            if (rt.repartos.length > 1) {
+                $('rtRepartos').classList.remove('oculto');
+                $('rtRepartos').innerHTML = '<span style="color:var(--muted);font-size:.85rem;align-self:center;">Repartos del día:</span>' + rt.repartos.map(r => `<button type="button" class="chip" data-rep="${esc(r.reparto)}" onclick="elegirReparto(this.dataset.rep)">Reparto ${esc(r.reparto || '—')}</button>`).join('');
+            }
+            if (typeof repartoPreferido === 'string' && rt.repartos.some(r => r.reparto === repartoPreferido)) elegirReparto(repartoPreferido);
+            else if (rt.repartos.length === 1) elegirReparto(rt.repartos[0].reparto);
+            else if (!rt.repartos.length) elegirReparto('', true);
+        } catch (e) { if (e.message !== 'SESION') $('rtMensaje').innerHTML = `<div class="aviso err">${esc(e.message)}</div>`; }
+        finally { b.disabled = false; }
+    }
+
+    function guardarBorrador() {
+        if (!rt || rt.reparto === null || !$('rtFormulario') || $('rtFormulario').classList.contains('oculto')) return;
+        rt.borradores[rt.reparto] = { items: rt.items, cajas: $('rtCajas').value, dominio: $('rtDominio').value, obs: $('rtObs').value };
+    }
+    function elegirReparto(rep, manual) {
+        guardarBorrador();
+        rt.reparto = rep;
+        document.querySelectorAll('#rtRepartos .chip').forEach(c => c.classList.toggle('on', c.dataset.rep === rep));
+        const bor = rt.borradores[rep];
+        const base = rt.repartos.find(r => r.reparto === rep);
+        const ex = rt.existentes.find(x => x.reparto === rep);
+        if (bor) {
+            rt.items = bor.items; $('rtCajas').value = bor.cajas; $('rtDominio').value = bor.dominio; $('rtObs').value = bor.obs;
+        } else {
+            rt.items = (base ? base.items : []).map(i => ({ codigo: i.codigo, descripcion: i.descripcion, cargada: i.cantidad, retorno: '', extra: false }));
+            if (ex) ex.items.forEach(x => {
+                const f = rt.items.find(i => i.codigo === x.codigo);
+                if (f) f.retorno = String(x.retorno);
+                else rt.items.push({ codigo: x.codigo, descripcion: x.descripcion, cargada: x.cargada, retorno: String(x.retorno), extra: true });
+            });
+            $('rtCajas').value = ex ? ex.cajas || '' : ''; $('rtDominio').value = ex ? ex.dominio || '' : ''; $('rtObs').value = ex ? ex.observaciones || '' : '';
+        }
+        $('rtManual').style.display = manual || (rt.repartos.length === 0) ? 'flex' : 'none';
+        $('rtRepartoManual').value = rep;
+        $('rtEstado').innerHTML = ex ? `<div class="aviso ok">✔ Este retorno ya fue cargado por <b>${esc(ex.cargado_por)}</b> el ${esc(fmtHora(ex.actualizado))}. Podés corregirlo y volver a guardar.</div>` : '';
+        $('rtFiltro').value = ''; $('rtBuscar').value = ''; $('rtResultados').innerHTML = '';
+        $('rtFormulario').classList.remove('oculto');
+        pintarLista();
+        $('rtFormulario').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function pintarLista() {
+        const cont = $('rtLista');
+        if (!rt.items.length) { cont.innerHTML = '<div class="vacio">No hay productos en la lista. Buscá abajo los que volvieron.</div>'; actualizarResumen(); return; }
+        cont.innerHTML = rt.items.map((it, i) => `<div class="it" data-i="${i}" data-txt="${esc((it.descripcion + ' ' + it.codigo).toLowerCase())}">
+            <div><b>${esc(it.descripcion)}</b><small>${esc(it.codigo)}${it.cargada !== null && it.cargada !== undefined ? ` · Salió: <span class="sal">${esc(fmtNum(it.cargada))}</span>` : ' · <i>agregado a mano</i>'}<span class="ex"></span>${it.extra && !it.retorno ? `<button type="button" class="suave quitar" onclick="quitarItem(${i})">Quitar</button>` : ''}</small></div>
+            <input type="text" inputmode="decimal" placeholder="0" value="${esc(it.retorno)}" data-i="${i}" aria-label="Volvió: ${esc(it.descripcion)}"></div>`).join('');
+        cont.querySelectorAll('input').forEach(inp => {
+            inp.addEventListener('input', () => { rt.items[+inp.dataset.i].retorno = inp.value.trim(); marcarFila(inp.closest('.it')); actualizarResumen(); });
+            inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const vis = [...cont.querySelectorAll('.it:not(.oculto) input')]; const k = vis.indexOf(inp); (vis[k + 1] || $('rtCajas')).focus(); } });
+            inp.addEventListener('focus', () => inp.select());
+        });
+        cont.querySelectorAll('.it').forEach(marcarFila);
+        filtrarLista(); actualizarResumen();
+    }
+    function marcarFila(fila) {
+        const it = rt.items[+fila.dataset.i], n = Number(String(it.retorno).replace(',', '.'));
+        const con = it.retorno !== '' && Number.isFinite(n) && n > 0;
+        const exceso = con && it.cargada !== null && it.cargada !== undefined && n > it.cargada;
+        fila.classList.toggle('con', con && !exceso); fila.classList.toggle('exceso', exceso);
+        fila.querySelector('.ex').textContent = exceso ? ' · ⚠ volvió más de lo que salió' : '';
+    }
+    function filtrarLista() {
+        const q = $('rtFiltro').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        document.querySelectorAll('#rtLista .it').forEach(f => f.classList.toggle('oculto', q.length > 0 && !q.every(p => f.dataset.txt.includes(p))));
+    }
+    function quitarItem(i) { rt.items.splice(i, 1); pintarLista(); }
+    function actualizarResumen() {
+        let prods = 0, unid = 0;
+        rt.items.forEach(it => { const n = Number(String(it.retorno).replace(',', '.')); if (it.retorno !== '' && Number.isFinite(n) && n > 0) { prods++; unid += n; } });
+        $('rtResumen').innerHTML = `${prods} producto${prods === 1 ? '' : 's'} · <span>${fmtNum(unid)}</span> unidades`;
+    }
+
+    let temporizadorBusqueda = null;
+    function buscarArticulo() {
+        clearTimeout(temporizadorBusqueda);
+        const q = $('rtBuscar').value.trim();
+        if (q.length < 2) { $('rtResultados').innerHTML = ''; return; }
+        temporizadorBusqueda = setTimeout(async () => {
+            try {
+                const lista = await json('/api/retorno/articulos?q=' + encodeURIComponent(q));
+                $('rtResultados').innerHTML = lista.length ? lista.map(a => `<button type="button" data-c="${esc(a.codigo)}" data-d="${esc(a.descripcion)}">${esc(a.descripcion)} <small style="color:var(--muted)">· ${esc(a.codigo)}</small></button>`).join('') : '<div class="vacio" style="padding:10px;">No se encontró ningún artículo.</div>';
+                $('rtResultados').querySelectorAll('button').forEach(b => b.onclick = () => agregarArticulo(b.dataset.c, b.dataset.d));
+            } catch (e) { if (e.message !== 'SESION') $('rtResultados').innerHTML = `<div class="aviso err">${esc(e.message)}</div>`; }
+        }, 300);
+    }
+    function agregarArticulo(codigo, descripcion) {
+        let i = rt.items.findIndex(x => x.codigo === codigo);
+        if (i < 0) { rt.items.push({ codigo, descripcion, cargada: null, retorno: '', extra: true }); i = rt.items.length - 1; }
+        $('rtBuscar').value = ''; $('rtResultados').innerHTML = ''; $('rtFiltro').value = '';
+        pintarLista();
+        const inp = document.querySelector(`#rtLista input[data-i="${i}"]`);
+        if (inp) { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); inp.focus(); }
+    }
+
+    async function guardarRetorno() {
+        if (!rt.chofer || !rt.fecha) return;
+        const reparto = (rt.reparto || '').trim();
+        if (!reparto && rt.repartos.length === 0 && !confirm('No escribiste el número de reparto. ¿Guardar igual sin número?')) return;
+        for (const it of rt.items) {
+            if (it.retorno === '') continue;
+            const n = Number(String(it.retorno).replace(',', '.'));
+            if (!Number.isFinite(n) || n < 0) { toast(`La cantidad de "${it.descripcion}" no es válida.`, 'error'); return; }
+        }
+        const cajas = $('rtCajas').value.trim();
+        if (cajas !== '' && !/^\d+$/.test(cajas)) { toast('Las cajas tienen que ser un número entero.', 'error'); return; }
+        const b = $('btnGuardar'); b.disabled = true;
+        try {
+            const d = await json('/api/retorno', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                fecha: rt.fecha, chofer: rt.chofer, reparto, dominio: $('rtDominio').value, cajas: cajas === '' ? 0 : Number(cajas), observaciones: $('rtObs').value,
+                items: rt.items.map(i => ({ codigo: i.codigo, descripcion: i.descripcion, cargada: i.cargada, retorno: i.retorno === '' ? 0 : i.retorno })) }) });
+            toast(`✔ Guardado: ${d.articulos} producto${d.articulos === 1 ? '' : 's'}, ${fmtNum(d.unidades)} unidades, ${cajas || 0} cajas.`, 'ok');
+            const nuevo = await json(`/api/retorno/carga?chofer=${encodeURIComponent(rt.chofer)}&fecha=${rt.fecha}`);
+            rt.existentes = nuevo.existentes; delete rt.borradores[reparto];
+            const ex = rt.existentes.find(x => x.reparto === reparto);
+            if (ex) $('rtEstado').innerHTML = `<div class="aviso ok">✔ Guardado por <b>${esc(ex.cargado_por)}</b> el ${esc(fmtHora(ex.actualizado))}. Podés corregirlo y volver a guardar.</div>`;
+        } catch (e) { if (e.message !== 'SESION') toast(e.message, 'error'); }
+        finally { b.disabled = false; }
+    }
+
+    // ---------- Historial ----------
+    function paramsHistorial() {
+        const p = new URLSearchParams({ desde: $('hDesde').value, hasta: $('hHasta').value });
+        if ($('hChofer').value) p.set('chofer', $('hChofer').value);
+        if ($('hTexto').value.trim()) p.set('q', $('hTexto').value.trim());
+        return p;
+    }
+    let historial = [];
+    async function cargarHistorial() {
+        $('hMensaje').innerHTML = '<div class="aviso">Buscando…</div>';
+        try {
+            historial = await json('/api/retorno/historial?' + paramsHistorial());
+            $('hMensaje').innerHTML = historial.length ? `<div class="aviso ok">${historial.length} retorno${historial.length === 1 ? '' : 's'} encontrado${historial.length === 1 ? '' : 's'}${historial.length >= 500 ? ' (se muestran los primeros 500)' : ''}.</div>` : '';
+            const q = $('hTexto').value.trim().toLowerCase();
+            $('hLista').innerHTML = historial.length ? historial.map((r, k) => `<div class="reg"><div class="reg-top" onclick="$('det${k}').classList.toggle('oculto')">
+                <div><b>${esc(fmtFecha(r.fecha))} · ${esc(r.chofer)}</b><br><small>Reparto ${esc(r.reparto || '—')}${r.dominio ? ' · ' + esc(r.dominio) : ''} · cargó ${esc(r.cargado_por)} el ${esc(fmtHora(r.actualizado))}</small></div>
+                <div class="badges"><span class="badge">📦 ${r.cajas} caja${r.cajas === 1 ? '' : 's'}</span><span class="badge">🔁 ${fmtNum(r.total_unidades)} unid.</span><span class="badge">${r.items.length} producto${r.items.length === 1 ? '' : 's'}</span></div></div>
+                <div class="detalle oculto" id="det${k}">${r.items.length ? `<table><thead><tr><th>Producto</th><th class="n">Salió</th><th class="n">Volvió</th></tr></thead><tbody>${r.items.map(i => `<tr${q && (i.descripcion.toLowerCase().includes(q) || i.codigo.toLowerCase().includes(q)) ? ' style="background:rgba(59,130,246,.14)"' : ''}><td>${esc(i.descripcion)} <small style="color:var(--muted)">${esc(i.codigo)}</small></td><td class="n">${i.cargada === null || i.cargada === undefined ? '—' : esc(fmtNum(i.cargada))}</td><td class="n"><b>${esc(fmtNum(i.retorno))}</b></td></tr>`).join('')}</tbody></table>` : '<div class="vacio" style="padding:8px;">No volvieron productos.</div>'}
+                ${r.observaciones ? `<p class="ayuda" style="margin-top:8px;">📝 ${esc(r.observaciones)}</p>` : ''}
+                <button type="button" class="suave chico" onclick="corregir(${k})">✏ Corregir este retorno</button></div></div>`).join('') : '<div class="vacio">No hay retornos cargados con esos filtros.</div>';
+        } catch (e) { if (e.message !== 'SESION') $('hMensaje').innerHTML = `<div class="aviso err">${esc(e.message)}</div>`; }
+    }
+    function corregir(k) {
+        const r = historial[k]; if (!r) return;
+        verTab('cargar');
+        $('rtFecha').value = r.fecha;
+        if (![...$('rtChofer').options].some(o => o.value === r.chofer)) $('rtChofer').insertAdjacentHTML('beforeend', `<option>${esc(r.chofer)}</option>`);
+        $('rtChofer').value = r.chofer;
+        buscarCarga(r.reparto);
+    }
+    async function descargarExcel(boton) {
+        boton.disabled = true;
+        try {
+            const r = await api('/api/retorno/exportar?' + paramsHistorial());
+            if (!r.ok) { const d = await r.json().catch(() => ({})); toast(d.error || 'No se pudo generar el Excel.', 'error'); return; }
+            const blob = await r.blob();
+            const m = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '');
+            const url = URL.createObjectURL(blob), a = document.createElement('a');
+            a.href = url; a.download = m ? m[1] : 'retornos.xlsx'; document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            toast('✔ Excel descargado.', 'ok');
+        } catch (e) { if (e.message !== 'SESION') toast('No se pudo descargar.', 'error'); }
+        finally { boton.disabled = false; }
+    }
+
+    cargarUsuarios();
+    recuperarSesion();
+</script>
+</body>
+</html>
