@@ -322,6 +322,26 @@
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { animation: none !important; transition: none !important; }
         }
+
+        /* ---------- Documentación ---------- */
+        #seccion-docs .busqueda { flex-wrap: wrap; }
+        .doc-cont { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 14px; }
+        .doc-cont .badge { font-size: .8rem; padding: 6px 11px; }
+        .doc-sub { margin: 18px 0 8px; font-size: .78rem; font-weight: 800; letter-spacing: 1.1px; text-transform: uppercase; color: var(--muted); }
+        .doc-celda { display: inline-block; min-width: 88px; padding: 6px 8px; border-radius: 10px; font-size: .74rem; font-weight: 700; text-align: center; cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,.04); color: var(--muted); }
+        .doc-celda.ok { color: var(--ok); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
+        .doc-celda.aviso { color: var(--warn); border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.1); }
+        .doc-celda.ultimo, .doc-celda.vencido, .doc-celda.falta { color: #ffd0d8; border-color: rgba(251,113,133,.55); background: rgba(251,113,133,.14); }
+        .doc-celda.na { opacity: .6; }
+        .doc-celda small { display: block; font-weight: 600; opacity: .85; }
+        .doc-alerta { padding: 10px 12px; margin-bottom: 8px; border: 1px solid rgba(251,113,133,.5); background: rgba(251,113,133,.08); border-radius: 12px; font-size: .84rem; line-height: 1.4; }
+        .doc-alerta small { color: var(--muted); display: block; margin-top: 2px; }
+        #modalDoc .login-card, #modalDocTipos .login-card { max-width: 520px; max-height: 88vh; overflow: auto; }
+        .doc-hist { margin-top: 12px; font-size: .78rem; color: var(--muted); max-height: 200px; overflow: auto; }
+        .doc-hist div { padding: 4px 0; border-bottom: 1px solid var(--border); }
+        .doc-tipo-fila { display: flex; gap: 6px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+        .doc-tipo-fila .campo { flex: 1 1 140px; margin: 0; }
+        @media (max-width: 440px) { .nav-btn { font-size: .62rem; padding: 9px 1px; letter-spacing: 0; } .nav-btn svg { width: 20px; height: 20px; } }
     </style>
 </head>
 <body>
@@ -357,6 +377,36 @@
         </div>
         <div class="modal-pin-fila" id="ordenAcciones"></div>
         <div class="modal-pin-fila"><button type="button" class="btn-suave" onclick="cerrarOrden()">Cerrar</button></div>
+    </div>
+</div>
+
+<!-- EDITAR UN DOCUMENTO / VER HISTORIAL -->
+<div class="login-overlay" id="modalDoc">
+    <div class="login-card">
+        <h2 id="docModalTitulo">Documento</h2>
+        <p id="docModalSub"></p>
+        <input type="date" class="campo" id="docModalFecha">
+        <div class="login-error" id="docModalError"></div>
+        <div class="modal-pin-fila" id="docModalAcciones"></div>
+        <div class="doc-hist" id="docModalHist"></div>
+        <div class="modal-pin-fila"><button type="button" class="btn-suave" onclick="cerrarModalDoc()">Cerrar</button></div>
+    </div>
+</div>
+
+<!-- DOCUMENTOS A CONTROLAR -->
+<div class="login-overlay" id="modalDocTipos">
+    <div class="login-card">
+        <h2>Documentos a controlar</h2>
+        <p>Agregá, renombrá o desactivá los documentos que piden los choferes cada mes.</p>
+        <div id="docTiposLista"></div>
+        <div class="doc-sub">Agregar uno nuevo</div>
+        <div class="doc-tipo-fila">
+            <input type="text" class="campo" id="docNuevoNombre" maxlength="60" placeholder="Nombre (ej: Habilitación municipal)">
+            <select class="campo" id="docNuevoAplica"><option value="camion">De camión</option><option value="chofer">De chofer</option></select>
+            <button type="button" onclick="agregarTipoDoc()">Agregar</button>
+        </div>
+        <div class="login-error" id="docTiposError"></div>
+        <div class="modal-pin-fila"><button type="button" class="btn-suave" onclick="document.getElementById('modalDocTipos').classList.remove('on'); cargarDocs();">Cerrar</button></div>
     </div>
 </div>
 
@@ -619,9 +669,37 @@
             </div>
         </div>
     </div>
+    <!-- PESTAÑA 6: DOCUMENTACIÓN -->
+    <div id="seccion-docs" class="vista-seccion">
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                </div>
+                <div>
+                    <h2 class="section-title">Documentación y vencimientos</h2>
+                    <p class="section-sub">Estado de la documentación por camión y por chofer. Los choferes la confirman o actualizan una vez por mes.</p>
+                </div>
+            </div>
+            <div class="busqueda">
+                <button type="button" class="btn-suave" onclick="cargarDocs()">Actualizar</button>
+                <button type="button" id="btnExpDocs" onclick="descargarDocs(this)">📥 Excel de documentación</button>
+                <button type="button" class="btn-suave" onclick="abrirTiposDoc()">⚙ Documentos a controlar</button>
+            </div>
+            <div class="export-estado" id="docsEstadoAdm"></div>
+            <div class="doc-cont" id="docsContadores"></div>
+            <div id="docsAlertas"></div>
+            <div class="doc-sub">Qué atender</div>
+            <div class="table-wrap"><table><thead><tr><th>Estado</th><th>De</th><th>Documento</th><th>Vence</th></tr></thead><tbody id="docsAtencion"><tr><td colspan="4" class="empty-row">Cargando…</td></tr></tbody></table></div>
+            <div class="doc-sub">Camiones</div>
+            <div class="table-wrap"><table id="docsTablaCamiones"></table></div>
+            <div class="doc-sub">Choferes</div>
+            <div class="table-wrap"><table id="docsTablaChoferes"></table></div>
+        </div>
+    </div>
 </main>
 
-<!-- DOCK DE NAVEGACIÓN (5 SOLAPAS) -->
+<!-- DOCK DE NAVEGACIÓN (6 SOLAPAS) -->
 <nav class="nav-island">
     <button type="button" class="nav-btn active" onclick="cambiarVistaAdmin('gps', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><path d="M8 2v16"/><path d="M16 6v16"/></svg>
@@ -642,6 +720,10 @@
     <button type="button" class="nav-btn" id="btnOrdenDock" onclick="cambiarVistaAdmin('orden', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
         Orden
+    </button>
+    <button type="button" class="nav-btn" id="btnDocsDock" onclick="cambiarVistaAdmin('docs', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+        Docs
     </button>
 </nav>
 
@@ -1105,6 +1187,168 @@
         }
     }
 
+    // =====================================================================
+    //  DOCUMENTACIÓN: panel por camión y por chofer
+    // =====================================================================
+    let docsAdm = null, docEdit = null;
+    const DOC_ETIQ = { vencido: '⛔ Vencido', ultimo: '🚨 Último aviso', aviso: '⚠ Por vencer', falta: 'Sin cargar', ok: 'Vigente', na: 'No aplica' };
+
+    function docFecha(f) { return f ? f.split('-').reverse().join('/') : ''; }
+    function docMensajeAdm(t, tipo) { const e = document.getElementById('docsEstadoAdm'); e.className = 'export-estado' + (tipo ? ' ' + tipo : ''); e.innerText = t || ''; }
+
+    async function cargarDocs() {
+        try {
+            const res = await adminFetch('/api/admin/docs/resumen');
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            docsAdm = await res.json();
+        } catch (err) {
+            if (err.message === 'SESION') return;
+            document.getElementById('docsAtencion').innerHTML = '<tr><td colspan="4" class="empty-row">No se pudo cargar la documentación. Revisá que la base de datos esté conectada.</td></tr>';
+            return;
+        }
+        const d = docsAdm, c = d.contadores;
+        const btn = document.getElementById('btnDocsDock');
+        if (btn) btn.classList.toggle('con-aviso', c.vencidos + c.ultimo + c.alertasCarga > 0);
+        document.getElementById('docsContadores').innerHTML =
+            `<span class="badge badge-falla">⛔ ${c.vencidos} vencido${c.vencidos === 1 ? '' : 's'}</span>` +
+            `<span class="badge badge-falla">🚨 ${c.ultimo} último aviso (≤${d.diasUltimo} días)</span>` +
+            `<span class="badge badge-warn">⚠ ${c.aviso} por vencer (≤${d.diasAviso} días)</span>` +
+            `<span class="badge">Sin cargar: ${c.faltan}</span>` +
+            `<span class="badge ${c.sinMensual ? 'badge-warn' : 'badge-ok'}">Choferes sin check-list de ${escapeHtml(d.periodo)}: ${c.sinMensual}</span>`;
+        document.getElementById('docsAlertas').innerHTML = d.alertas.length
+            ? '<div class="doc-sub">🔔 Cargas con alerta (últimos 60 días)</div>' + d.alertas.map(a =>
+                `<div class="doc-alerta"><b>${escapeHtml(a.nombre)}</b> · ${escapeHtml(a.doc)}: ${a.alerta === 'vencida_al_cargar' ? 'se cargó una fecha YA VENCIDA' : 'se cargó una fecha MENOR a la anterior'} (${escapeHtml(docFecha(a.fecha_nueva))}${a.fecha_anterior ? ', antes ' + escapeHtml(docFecha(a.fecha_anterior)) : ''})<small>${escapeHtml(formatoFechaHora(a.creado))} · por ${escapeHtml(a.por || '')}</small></div>`).join('')
+            : '';
+        document.getElementById('docsAtencion').innerHTML = d.atencion.length ? d.atencion.map(a => {
+            const cls = a.estado === 'aviso' ? 'badge-warn' : a.estado === 'falta' ? '' : 'badge-falla';
+            const cuando = a.estado === 'falta' ? '—' : docFecha(a.fecha) + (a.dias < 0 ? ` (hace ${-a.dias} d)` : ` (en ${a.dias} d)`);
+            return `<tr><td><span class="badge ${cls}">${DOC_ETIQ[a.estado]}</span></td><td>${escapeHtml(a.de === 'camion' ? '🚚 ' + a.nombre : '👤 ' + a.nombre)}</td><td>${escapeHtml(a.doc)}</td><td>${cuando}</td></tr>`;
+        }).join('') : '<tr><td colspan="4" class="empty-row">✅ Todo vigente. No hay nada para atender.</td></tr>';
+        const tCam = d.tipos.filter(t => t.aplica === 'camion'), tCho = d.tipos.filter(t => t.aplica === 'chofer');
+        const celda = (aplica, sujeto, nombre, x) => {
+            const txt = x.estado === 'falta' ? 'Sin cargar' : x.estado === 'na' ? 'No aplica' : x.sin_fecha === 'no_vence' ? 'No vence' : docFecha(x.fecha);
+            const sub = x.dias != null && x.fecha ? (x.dias < 0 ? `hace ${-x.dias} d` : x.dias + ' d') : '';
+            return `<td><span class="doc-celda ${x.estado}" onclick="abrirDoc('${aplica}','${escapeHtml(sujeto).replace(/'/g, '&#39;')}','${x.tipo}')">${escapeHtml(txt)}${sub ? '<small>' + sub + '</small>' : ''}</span></td>`;
+        };
+        document.getElementById('docsTablaCamiones').innerHTML = d.camiones.length
+            ? '<thead><tr><th>Camión</th>' + tCam.map(t => `<th>${escapeHtml(t.nombre)}</th>`).join('') + '<th></th></tr></thead><tbody>' +
+              d.camiones.map(c => `<tr><td><b>${escapeHtml(c.dominio)}</b></td>${c.docs.map(x => celda('camion', c.dominio, c.dominio, x)).join('')}<td><button type="button" class="btn-suave" onclick="verHistorialDoc('camion','${escapeHtml(c.dominio)}','${escapeHtml(c.dominio)}')">Historial</button></td></tr>`).join('') + '</tbody>'
+            : '<tbody><tr><td class="empty-row">Todavía no hay camiones. Aparecen cuando un chofer hace un check-list o carga documentación.</td></tr></tbody>';
+        document.getElementById('docsTablaChoferes').innerHTML = d.choferes.length
+            ? '<thead><tr><th>Chofer</th><th>Check-list del mes</th>' + tCho.map(t => `<th>${escapeHtml(t.nombre)}</th>`).join('') + '<th></th></tr></thead><tbody>' +
+              d.choferes.map(c => `<tr><td><b>${escapeHtml(c.nombre)}</b></td><td>${c.mensual.hecho ? '<span class="badge badge-ok">✔ Hecho' + (c.mensual.dominio ? ' · ' + escapeHtml(c.mensual.dominio) : '') + '</span>' : '<span class="badge badge-warn">Pendiente</span>'}</td>${c.docs.map(x => celda('chofer', c.clave, c.nombre, x)).join('')}<td><button type="button" class="btn-suave" onclick="verHistorialDoc('chofer','${escapeHtml(c.clave)}','${escapeHtml(c.nombre)}')">Historial</button></td></tr>`).join('') + '</tbody>'
+            : '<tbody><tr><td class="empty-row">No hay choferes activos.</td></tr></tbody>';
+    }
+
+    function abrirDoc(aplica, sujeto, tipo) {
+        const lista = aplica === 'camion' ? docsAdm.camiones.find(c => c.dominio === sujeto) : docsAdm.choferes.find(c => c.clave === sujeto);
+        const x = lista && lista.docs.find(d => d.tipo === tipo);
+        if (!x) return;
+        const nombre = aplica === 'camion' ? sujeto : lista.nombre;
+        docEdit = { aplica, sujeto, tipo };
+        document.getElementById('docModalFecha').style.display = '';
+        document.getElementById('docModalTitulo').innerText = x.nombre;
+        document.getElementById('docModalSub').innerText = (aplica === 'camion' ? 'Camión ' : 'Chofer ') + nombre + ' · ' + (x.estado === 'falta' ? 'sin cargar' : x.estado === 'na' ? 'no aplica' : x.sin_fecha === 'no_vence' ? 'no vence' : 'vence el ' + docFecha(x.fecha));
+        document.getElementById('docModalFecha').value = x.fecha || '';
+        document.getElementById('docModalError').innerText = '';
+        document.getElementById('docModalAcciones').innerHTML =
+            '<button type="button" onclick="guardarDocAdm(\'fecha\')">Guardar fecha</button>' +
+            (x.permite_sin_fecha ? '<button type="button" class="btn-suave" onclick="guardarDocAdm(\'no_vence\')">No vence</button><button type="button" class="btn-suave" onclick="guardarDocAdm(\'no_aplica\')">No aplica</button>' : '');
+        document.getElementById('docModalHist').innerHTML = '';
+        document.getElementById('modalDoc').classList.add('on');
+        cargarHistorialDoc(aplica, sujeto, tipo);
+    }
+    function cerrarModalDoc() { document.getElementById('modalDoc').classList.remove('on'); }
+    async function cargarHistorialDoc(aplica, sujeto, tipo) {
+        try {
+            const r = await adminFetch('/api/admin/docs/historial?aplica=' + aplica + '&sujeto=' + encodeURIComponent(sujeto));
+            const h = (await r.json()).filter(f => !tipo || f.tipo === tipo);
+            const acc = { nuevo: 'Cargó', actualizo: 'Actualizó', confirmo: 'Confirmó' };
+            document.getElementById('docModalHist').innerHTML = h.length ? '<b>Historial</b>' + h.map(f =>
+                `<div>${escapeHtml(formatoFechaHora(f.creado))} · ${escapeHtml(tipo ? '' : f.doc + ' · ')}${acc[f.accion] || f.accion} ${f.sin_fecha ? escapeHtml(f.sin_fecha === 'no_vence' ? '"no vence"' : '"no aplica"') : escapeHtml(docFecha(f.fecha_nueva))} (${escapeHtml(f.por || '')})${f.alerta ? ' 🔔' : ''}</div>`).join('') : 'Sin movimientos todavía.';
+        } catch (e) { if (e.message !== 'SESION') document.getElementById('docModalHist').innerText = 'No se pudo leer el historial.'; }
+    }
+    function verHistorialDoc(aplica, sujeto, nombre) {
+        docEdit = null;
+        document.getElementById('docModalTitulo').innerText = 'Historial';
+        document.getElementById('docModalSub').innerText = nombre;
+        document.getElementById('docModalFecha').style.display = 'none';
+        document.getElementById('docModalAcciones').innerHTML = '';
+        document.getElementById('docModalError').innerText = '';
+        document.getElementById('modalDoc').classList.add('on');
+        cargarHistorialDoc(aplica, sujeto, '');
+    }
+    async function guardarDocAdm(accion) {
+        if (!docEdit) return;
+        const fecha = document.getElementById('docModalFecha').value;
+        try {
+            const r = await adminFetch('/api/admin/docs/valor', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...docEdit, accion, fecha }) });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) { document.getElementById('docModalError').innerText = d.error || 'No se pudo guardar'; return; }
+            cerrarModalDoc();
+            cargarDocs();
+        } catch (e) { if (e.message !== 'SESION') document.getElementById('docModalError').innerText = 'No se pudo conectar con el servidor.'; }
+    }
+
+    async function descargarDocs(boton) {
+        boton.disabled = true; docMensajeAdm('Generando el Excel…');
+        try {
+            const res = await adminFetch('/api/admin/exportar/documentos');
+            if (!res.ok) { const d = await res.json().catch(() => ({})); docMensajeAdm(d.error || 'No se pudo generar el Excel.', 'error'); return; }
+            const blob = await res.blob();
+            const m = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
+            const nombre = m ? m[1] : 'documentacion.xlsx';
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = nombre;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            docMensajeAdm('✔ Descargado: ' + nombre, 'ok');
+        } catch (e) { if (e.message !== 'SESION') docMensajeAdm('No se pudo conectar con el servidor.', 'error'); }
+        finally { boton.disabled = false; }
+    }
+
+    // ---- Documentos a controlar (tipos) ----
+    async function abrirTiposDoc() {
+        document.getElementById('docTiposError').innerText = '';
+        document.getElementById('modalDocTipos').classList.add('on');
+        await pintarTiposDoc();
+    }
+    async function pintarTiposDoc() {
+        try {
+            const r = await adminFetch('/api/admin/docs/tipos');
+            const t = await r.json();
+            document.getElementById('docTiposLista').innerHTML = t.map(x =>
+                `<div class="doc-tipo-fila"><input type="text" class="campo" value="${escapeHtml(x.nombre)}" maxlength="60" id="dt_${x.clave}">` +
+                `<span class="badge badge-info">${x.aplica === 'camion' ? '🚚' : '👤'}</span>` +
+                `<button type="button" class="btn-suave" onclick="guardarTipoDoc('${x.clave}','${x.aplica}',${x.orden},${x.permite_sin_fecha ? 'true' : 'false'},${x.activo ? 'false' : 'true'},true)">Renombrar</button>` +
+                `<button type="button" class="btn-suave" onclick="guardarTipoDoc('${x.clave}','${x.aplica}',${x.orden},${x.permite_sin_fecha ? 'true' : 'false'},${x.activo ? 'false' : 'true'},false)">${x.activo ? 'Desactivar' : 'Activar'}</button></div>`).join('');
+        } catch (e) { if (e.message !== 'SESION') document.getElementById('docTiposError').innerText = 'No se pudieron leer los documentos.'; }
+    }
+    async function guardarTipoDoc(clave, aplica, orden, permite, nuevoActivoInverso, soloNombre) {
+        const nombre = document.getElementById('dt_' + clave).value.trim();
+        // nuevoActivoInverso = estado contrario al actual; si solo renombra, se mantiene el actual
+        const activoActual = !nuevoActivoInverso;
+        const activo = soloNombre ? activoActual : nuevoActivoInverso;
+        try {
+            const r = await adminFetch('/api/admin/docs/tipos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clave, nombre, aplica, orden, permite_sin_fecha: permite, activo }) });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) { document.getElementById('docTiposError').innerText = d.error || 'No se pudo guardar'; return; }
+            await pintarTiposDoc();
+        } catch (e) { if (e.message !== 'SESION') document.getElementById('docTiposError').innerText = 'No se pudo conectar.'; }
+    }
+    async function agregarTipoDoc() {
+        const nombre = document.getElementById('docNuevoNombre').value.trim();
+        const aplica = document.getElementById('docNuevoAplica').value;
+        try {
+            const r = await adminFetch('/api/admin/docs/tipos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre, aplica, orden: 60 }) });
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) { document.getElementById('docTiposError').innerText = d.error || 'No se pudo guardar'; return; }
+            document.getElementById('docNuevoNombre').value = '';
+            document.getElementById('docTiposError').innerText = '';
+            await pintarTiposDoc();
+        } catch (e) { if (e.message !== 'SESION') document.getElementById('docTiposError').innerText = 'No se pudo conectar.'; }
+    }
+
     function cambiarVistaAdmin(vista, btn) {
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -1122,6 +1366,10 @@
         } else if (vista === 'orden') {
             document.getElementById('seccion-orden').classList.add('active');
             cargarOrden();
+        } else if (vista === 'docs') {
+            document.getElementById('seccion-docs').classList.add('active');
+            document.getElementById('docModalFecha').style.display = '';
+            cargarDocs();
         }
         btn.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1337,6 +1585,7 @@
 
     cargarDatos();
     setInterval(cargarDatos, 10000);
+    setTimeout(() => { try { cargarDocs(); } catch (e) {} }, 1500);
 </script>
 </body>
 </html>

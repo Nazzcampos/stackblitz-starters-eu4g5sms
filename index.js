@@ -118,6 +118,63 @@ CREATE TABLE IF NOT EXISTS flota_orden_propuesta (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS flota_orden_borrador_uq ON flota_orden_propuesta (chofer, ruta, dia) WHERE estado = 'borrador';
 CREATE INDEX IF NOT EXISTS flota_orden_estado_idx ON flota_orden_propuesta (estado, id DESC);
+-- Documentación con vencimiento (camión y chofer)
+CREATE TABLE IF NOT EXISTS flota_doc_tipo (
+    clave text PRIMARY KEY,
+    nombre text NOT NULL,
+    aplica text NOT NULL,
+    orden integer NOT NULL DEFAULT 0,
+    activo boolean NOT NULL DEFAULT true,
+    permite_sin_fecha boolean NOT NULL DEFAULT false
+);
+INSERT INTO flota_doc_tipo (clave, nombre, aplica, orden, permite_sin_fecha) VALUES
+    ('tarjeta_verde', 'Tarjeta Verde', 'camion', 1, true),
+    ('senasa', 'SENASA', 'camion', 2, false),
+    ('itv', 'ITV / VTV / RTO', 'camion', 3, false),
+    ('seguro_camion', 'Seguro del camión', 'camion', 4, false),
+    ('matafuegos', 'Matafuegos', 'camion', 5, false),
+    ('carnet_conducir', 'Carnet de Conducir', 'chofer', 1, false),
+    ('carnet_alimentos', 'Carnet de Manipulación de Alimentos', 'chofer', 2, false),
+    ('cnrt_cargas', 'CNRT Cargas Generales', 'chofer', 3, true),
+    ('cnrt_psicofisico', 'CNRT Psicofísico', 'chofer', 4, false),
+    ('seguro_art', 'Seguro de Accidente o ART', 'chofer', 5, false)
+ON CONFLICT (clave) DO NOTHING;
+-- Valor vigente de cada documento (uno por camión/chofer y tipo)
+CREATE TABLE IF NOT EXISTS flota_doc_valor (
+    aplica text NOT NULL,
+    sujeto text NOT NULL,
+    tipo text NOT NULL,
+    fecha date,
+    sin_fecha text,
+    actualizado timestamptz NOT NULL DEFAULT now(),
+    actualizado_por text,
+    PRIMARY KEY (aplica, sujeto, tipo)
+);
+-- Cada carga queda registrada: así se ve si el mes siguiente se actualizó o no el vencimiento
+CREATE TABLE IF NOT EXISTS flota_doc_historial (
+    id bigserial PRIMARY KEY,
+    creado timestamptz NOT NULL DEFAULT now(),
+    periodo text NOT NULL,
+    aplica text NOT NULL,
+    sujeto text NOT NULL,
+    tipo text NOT NULL,
+    accion text NOT NULL,
+    fecha_anterior date,
+    fecha_nueva date,
+    sin_fecha text,
+    por text NOT NULL,
+    alerta text
+);
+CREATE INDEX IF NOT EXISTS flota_doc_historial_sujeto_idx ON flota_doc_historial (aplica, sujeto, tipo, id DESC);
+CREATE INDEX IF NOT EXISTS flota_doc_historial_alerta_idx ON flota_doc_historial (creado) WHERE alerta IS NOT NULL;
+-- Check-list mensual de documentación: una fila por chofer y mes
+CREATE TABLE IF NOT EXISTS flota_doc_mensual (
+    chofer text NOT NULL,
+    periodo text NOT NULL,
+    dominio text,
+    creado timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (chofer, periodo)
+);
 -- Seguridad: nadie puede leer estas tablas desde la API pública de Supabase; solo este servidor
 ALTER TABLE flota_chofer ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flota_checklist ENABLE ROW LEVEL SECURITY;
@@ -125,6 +182,10 @@ ALTER TABLE flota_combustible ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flota_posicion ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flota_odometro_dia ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flota_orden_propuesta ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flota_doc_tipo ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flota_doc_valor ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flota_doc_historial ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flota_doc_mensual ENABLE ROW LEVEL SECURITY;
 `;
 
 async function iniciarBase() {
@@ -1080,7 +1141,7 @@ function xmlTexto(t) {
 function letraColumna(n) { let s = ''; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
 
 // Estilos (índice en cellXfs): 0 normal · 1 encabezado · 2 número 0,00 · 3 falla (rojo) · 4 ok (verde) · 5 negrita · 6 negrita 0,00
-const ESTILO = { normal: 0, encabezado: 1, numero: 2, falla: 3, ok: 4, negrita: 5, negritaNumero: 6 };
+const ESTILO = { normal: 0, encabezado: 1, numero: 2, falla: 3, ok: 4, negrita: 5, negritaNumero: 6, aviso: 7 };
 function hojaXml(filas, anchos) {
     const maxCol = Math.max(...filas.map(f => f.length), 1);
     const cols = anchos.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('');
@@ -1103,10 +1164,10 @@ function crearXlsx(hojas) { // hojas: [{ nombre, filas, anchos }]
     const estilos = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
 <fonts count="4"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FF9C0006"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>
-<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF4F46E5"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFC7CE"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFC6EFCE"/><bgColor indexed="64"/></patternFill></fill></fills>
+<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF4F46E5"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFC7CE"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFC6EFCE"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2A8"/><bgColor indexed="64"/></patternFill></fill></fills>
 <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD0D0D0"/></left><right style="thin"><color rgb="FFD0D0D0"/></right><top style="thin"><color rgb="FFD0D0D0"/></top><bottom style="thin"><color rgb="FFD0D0D0"/></bottom><diagonal/></border></borders>
 <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="7">
+<cellXfs count="8">
 <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
 <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
 <xf numFmtId="2" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
@@ -1114,6 +1175,7 @@ function crearXlsx(hojas) { // hojas: [{ nombre, filas, anchos }]
 <xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>
 <xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1"/>
 <xf numFmtId="2" fontId="3" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="0" fillId="5" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center"/></xf>
 </cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
     const archivos = [
         { nombre: '[Content_Types].xml', datos: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1639,6 +1701,316 @@ app.get('/api/admin/exportar/orden', requireAdmin, requireDb, async (req, res) =
         ]));
     } catch (err) {
         console.error('❌ Error al exportar el orden:', err.message);
+        res.status(500).json({ error: 'No se pudo generar el Excel' });
+    }
+});
+
+// =====================================================================
+//  DOCUMENTACIÓN CON VENCIMIENTO (obligatoria para Pepsico)
+//  - Cada chofer completa una vez por mes la documentación propia y la del camión que maneja.
+//  - Avisos: desde 29 días antes ("cuidado"), desde 15 días antes ("último aviso"), y vencido.
+//  - Cada carga queda en un historial: el mes siguiente se ve si se actualizó el vencimiento o no.
+//  - Si se carga algo ya vencido (o con una fecha menor a la anterior), queda marcado para el administrador.
+// =====================================================================
+const DIAS_AVISO_DOC = Number(process.env.DOCS_DIAS_AVISO) || 29;
+const DIAS_ULTIMO_DOC = Number(process.env.DOCS_DIAS_ULTIMO) || 15;
+
+function hoyArgentina() { return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }); }
+function diasEntre(desde, hasta) { // AAAA-MM-DD → días de diferencia (hasta - desde)
+    const a = Date.parse(desde + 'T00:00:00Z'), b = Date.parse(hasta + 'T00:00:00Z');
+    return Math.round((b - a) / 86400000);
+}
+function fechaValida(f) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(f || ''))) return false;
+    const t = Date.parse(f + 'T00:00:00Z');
+    if (!Number.isFinite(t) || new Date(t).toISOString().slice(0, 10) !== f) return false;
+    return f >= '2000-01-01' && f <= (Number(hoyArgentina().slice(0, 4)) + 20) + '-12-31';
+}
+function normalizarDominio(d) { return String(d || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10); }
+
+// Estado de un documento: ok / aviso (≤29 días) / ultimo (≤15 días) / vencido / falta / na
+function estadoDocumento(v, hoy) {
+    if (v && v.sin_fecha === 'no_vence') return { estado: 'ok', dias: null, texto: 'No vence' };
+    if (v && v.sin_fecha === 'no_aplica') return { estado: 'na', dias: null, texto: 'No aplica' };
+    if (!v || !v.fecha) return { estado: 'falta', dias: null, texto: 'Sin cargar' };
+    const dias = diasEntre(hoy, v.fecha);
+    const estado = dias < 0 ? 'vencido' : dias <= DIAS_ULTIMO_DOC ? 'ultimo' : dias <= DIAS_AVISO_DOC ? 'aviso' : 'ok';
+    return { estado, dias, texto: null };
+}
+const GRAVEDAD_DOC = { vencido: 0, falta: 1, ultimo: 2, aviso: 3, ok: 9, na: 9 };
+
+async function tiposDocumento(soloActivos) {
+    const r = await db.query(
+        `SELECT clave, nombre, aplica, orden::int AS orden, activo, permite_sin_fecha
+         FROM flota_doc_tipo ${soloActivos ? 'WHERE activo = true' : ''} ORDER BY aplica, orden, nombre`);
+    return r.rows;
+}
+function mapaValores(filas, hoy) {
+    const m = new Map();
+    filas.forEach(f => m.set(f.aplica + '|' + f.sujeto + '|' + f.tipo, { ...f, ...estadoDocumento(f, hoy) }));
+    return m;
+}
+function docsDeSujeto(tipos, aplica, sujeto, valores, hoy) {
+    return tipos.filter(t => t.aplica === aplica).map(t => {
+        const v = valores.get(aplica + '|' + sujeto + '|' + t.clave);
+        const est = v || { ...estadoDocumento(null, hoy), fecha: null, sin_fecha: null, actualizado: null, actualizado_por: null };
+        return { tipo: t.clave, nombre: t.nombre, permite_sin_fecha: !!t.permite_sin_fecha,
+                 fecha: est.fecha || null, sin_fecha: est.sin_fecha || null, estado: est.estado, dias: est.dias, texto: est.texto,
+                 actualizado: est.actualizado || null, por: est.actualizado_por || null };
+    });
+}
+const SQL_VALORES = `SELECT aplica, sujeto, tipo, to_char(fecha, 'YYYY-MM-DD') AS fecha, sin_fecha, actualizado, actualizado_por FROM flota_doc_valor`;
+
+// Guarda un lote de valores y su historial (un solo pedido por tabla)
+async function guardarLoteDocumentos(lote, periodo, por) {
+    if (!lote.length) return;
+    const json = JSON.stringify(lote.map(i => ({ aplica: i.aplica, sujeto: i.sujeto, tipo: i.tipo, fecha: i.fecha || null, sin_fecha: i.sin_fecha || null,
+        accion: i.accion, fecha_anterior: i.fecha_anterior || null, alerta: i.alerta || null, por })));
+    await db.query(
+        `INSERT INTO flota_doc_valor (aplica, sujeto, tipo, fecha, sin_fecha, actualizado, actualizado_por)
+         SELECT x.aplica, x.sujeto, x.tipo, x.fecha::date, x.sin_fecha, now(), x.por
+         FROM jsonb_to_recordset($1::jsonb) AS x(aplica text, sujeto text, tipo text, fecha text, sin_fecha text, por text)
+         ON CONFLICT (aplica, sujeto, tipo) DO UPDATE SET fecha = EXCLUDED.fecha, sin_fecha = EXCLUDED.sin_fecha,
+            actualizado = now(), actualizado_por = EXCLUDED.actualizado_por`, [json]);
+    await db.query(
+        `INSERT INTO flota_doc_historial (periodo, aplica, sujeto, tipo, accion, fecha_anterior, fecha_nueva, sin_fecha, por, alerta)
+         SELECT $2, x.aplica, x.sujeto, x.tipo, x.accion, x.fecha_anterior::date, x.fecha::date, x.sin_fecha, x.por, x.alerta
+         FROM jsonb_to_recordset($1::jsonb) AS x(aplica text, sujeto text, tipo text, fecha text, sin_fecha text, accion text, fecha_anterior text, alerta text, por text)`,
+        [json, periodo]);
+}
+
+// Calcula qué se guarda para un documento según lo que eligió quien carga
+function resolverCarga(item, tipo, previo, hoy) {
+    const accion = String(item.accion || '');
+    const salida = { aplica: tipo.aplica, tipo: tipo.clave, fecha_anterior: previo && previo.fecha ? previo.fecha : null };
+    if (accion === 'confirmar') {
+        if (!previo || (!previo.fecha && !previo.sin_fecha)) return { error: `${tipo.nombre}: todavía no tiene fecha cargada. Ingresala.` };
+        if (previo.fecha && previo.fecha < hoy) return { error: `${tipo.nombre} está vencido (${previo.fecha.split('-').reverse().join('/')}). Cargá la fecha nueva.` };
+        return { ...salida, fecha: previo.fecha || null, sin_fecha: previo.sin_fecha || null, accion: 'confirmo' };
+    }
+    if (accion === 'no_vence' || accion === 'no_aplica') {
+        if (!tipo.permite_sin_fecha) return { error: `${tipo.nombre} necesita una fecha de vencimiento.` };
+        return { ...salida, fecha: null, sin_fecha: accion, accion: previo && previo.sin_fecha === accion ? 'confirmo' : 'actualizo' };
+    }
+    if (accion === 'fecha') {
+        if (!fechaValida(item.fecha)) return { error: `${tipo.nombre}: la fecha no es válida.` };
+        let alerta = null;
+        if (item.fecha < hoy) alerta = 'vencida_al_cargar';
+        else if (previo && previo.fecha && item.fecha < previo.fecha) alerta = 'fecha_menor';
+        const igual = previo && previo.fecha === item.fecha;
+        return { ...salida, fecha: item.fecha, sin_fecha: null, accion: igual ? 'confirmo' : (previo && (previo.fecha || previo.sin_fecha) ? 'actualizo' : 'nuevo'), alerta };
+    }
+    return { error: `${tipo.nombre}: falta elegir una opción.` };
+}
+
+// --- Chofer: su estado, el de su camión y si ya hizo el check-list del mes ---
+app.get('/api/docs/mi-estado', requireChofer, requireDb, async (req, res) => {
+    try {
+        const hoy = hoyArgentina(), periodo = hoy.slice(0, 7);
+        const clave = claveNombre(req.chofer);
+        const rec = await db.query(
+            `SELECT dominio, max(creado) AS ultimo FROM flota_checklist WHERE chofer = $1 AND creado > now() - interval '120 days'
+             GROUP BY dominio ORDER BY 2 DESC LIMIT 12`, [req.chofer]);
+        const sugeridos = [];
+        rec.rows.forEach(f => { const d = normalizarDominio(f.dominio); if (d && !sugeridos.includes(d)) sugeridos.push(d); });
+        const dominio = normalizarDominio(req.query.dominio) || sugeridos[0] || '';
+        const tipos = await tiposDocumento(true);
+        const vals = await db.query(`${SQL_VALORES} WHERE (aplica = 'chofer' AND sujeto = $1) OR (aplica = 'camion' AND sujeto = $2)`, [clave, dominio || '-']);
+        const valores = mapaValores(vals.rows, hoy);
+        const mens = await db.query(`SELECT to_char(creado AT TIME ZONE ${TZ_AR}, 'DD/MM/YYYY') AS cuando FROM flota_doc_mensual WHERE chofer = $1 AND periodo = $2`, [clave, periodo]);
+        const propios = docsDeSujeto(tipos, 'chofer', clave, valores, hoy);
+        const camion = dominio ? docsDeSujeto(tipos, 'camion', dominio, valores, hoy) : [];
+        const avisos = [];
+        propios.forEach(d => { if (['vencido', 'ultimo', 'aviso'].includes(d.estado)) avisos.push({ ...d, de: 'chofer', sujeto: req.chofer }); });
+        camion.forEach(d => { if (['vencido', 'ultimo', 'aviso'].includes(d.estado)) avisos.push({ ...d, de: 'camion', sujeto: dominio }); });
+        avisos.sort((a, b) => GRAVEDAD_DOC[a.estado] - GRAVEDAD_DOC[b.estado] || (a.dias ?? 0) - (b.dias ?? 0));
+        res.json({ hoy, periodo, dominio, dominios: sugeridos, chofer: propios, camion,
+                   mensual: { hecho: mens.rows.length > 0, cuando: mens.rows[0] ? mens.rows[0].cuando : null },
+                   avisos, diasAviso: DIAS_AVISO_DOC, diasUltimo: DIAS_ULTIMO_DOC });
+    } catch (err) {
+        console.error('❌ Error al leer documentación del chofer:', err.message);
+        res.status(500).json({ error: 'No se pudo cargar tu documentación' });
+    }
+});
+
+// Chofer: envía el check-list mensual (confirma o actualiza cada documento)
+app.post('/api/docs/mensual', requireChofer, requireDb, async (req, res) => {
+    const b = req.body || {};
+    const hoy = hoyArgentina(), periodo = hoy.slice(0, 7);
+    const clave = claveNombre(req.chofer);
+    const dominio = normalizarDominio(b.dominio);
+    if (!Array.isArray(b.items) || b.items.length > 60) return res.status(400).json({ error: 'Faltan datos' });
+    try {
+        const tipos = await tiposDocumento(true);
+        if (tipos.some(t => t.aplica === 'camion') && dominio.length < 5) return res.status(400).json({ error: 'Indicá el dominio del camión que manejás.' });
+        const vals = await db.query(`${SQL_VALORES} WHERE (aplica = 'chofer' AND sujeto = $1) OR (aplica = 'camion' AND sujeto = $2)`, [clave, dominio || '-']);
+        const previos = new Map(vals.rows.map(f => [f.aplica + '|' + f.sujeto + '|' + f.tipo, f]));
+        const porClave = new Map(b.items.map(i => [String(i.aplica) + '|' + String(i.tipo), i]));
+        const lote = [], faltan = [], errores = [];
+        tipos.forEach(t => {
+            const it = porClave.get(t.aplica + '|' + t.clave);
+            if (!it) { faltan.push(t.nombre); return; }
+            const sujeto = t.aplica === 'camion' ? dominio : clave;
+            const r = resolverCarga(it, t, previos.get(t.aplica + '|' + sujeto + '|' + t.clave), hoy);
+            if (r.error) errores.push(r.error); else lote.push({ ...r, sujeto });
+        });
+        if (faltan.length) return res.status(400).json({ error: 'Falta completar: ' + faltan.join(', ') + '.' });
+        if (errores.length) return res.status(400).json({ error: errores[0], errores });
+        await guardarLoteDocumentos(lote, periodo, req.chofer);
+        await db.query(
+            `INSERT INTO flota_doc_mensual (chofer, periodo, dominio) VALUES ($1, $2, $3)
+             ON CONFLICT (chofer, periodo) DO UPDATE SET dominio = EXCLUDED.dominio, creado = now()`, [clave, periodo, dominio]);
+        const alertas = lote.filter(i => i.alerta).map(i => ({ tipo: i.tipo, alerta: i.alerta }));
+        res.status(201).json({ exito: true, alertas });
+    } catch (err) {
+        console.error('❌ Error al guardar la documentación mensual:', err.message);
+        res.status(500).json({ error: 'No se pudo guardar la documentación' });
+    }
+});
+
+// --- Administración ---
+async function armarResumenDocumentos() {
+    const hoy = hoyArgentina(), periodo = hoy.slice(0, 7);
+    const tipos = await tiposDocumento(true);
+    const vals = await db.query(SQL_VALORES);
+    const valores = mapaValores(vals.rows, hoy);
+    const chof = await db.query(`SELECT clave, nombre, activo FROM flota_chofer ORDER BY nombre`);
+    const nombres = new Map(chof.rows.map(c => [c.clave, c.nombre]));
+    const mens = await db.query(`SELECT chofer, dominio FROM flota_doc_mensual WHERE periodo = $1`, [periodo]);
+    const mensuales = new Map(mens.rows.map(m => [m.chofer, m.dominio]));
+    const doms = new Set(vals.rows.filter(v => v.aplica === 'camion').map(v => v.sujeto));
+    const rec = await db.query(`SELECT DISTINCT dominio FROM flota_checklist WHERE creado > now() - interval '180 days'`);
+    rec.rows.forEach(f => { const d = normalizarDominio(f.dominio); if (d.length >= 5) doms.add(d); });
+    const camiones = [...doms].sort().map(d => ({ dominio: d, docs: docsDeSujeto(tipos, 'camion', d, valores, hoy) }));
+    const choferes = chof.rows.filter(c => c.activo).map(c => ({
+        clave: c.clave, nombre: c.nombre, docs: docsDeSujeto(tipos, 'chofer', c.clave, valores, hoy),
+        mensual: { hecho: mensuales.has(c.clave), dominio: mensuales.get(c.clave) || null }
+    }));
+    // Qué atender: todo lo vencido, por vencer o sin cargar
+    const atencion = [];
+    const sumar = (de, sujeto, nombre, docs) => docs.forEach(d => {
+        if (['vencido', 'ultimo', 'aviso', 'falta'].includes(d.estado)) atencion.push({ de, sujeto, nombre, tipo: d.tipo, doc: d.nombre, fecha: d.fecha, estado: d.estado, dias: d.dias });
+    });
+    camiones.forEach(c => sumar('camion', c.dominio, c.dominio, c.docs));
+    choferes.forEach(c => sumar('chofer', c.clave, c.nombre, c.docs));
+    atencion.sort((a, b) => GRAVEDAD_DOC[a.estado] - GRAVEDAD_DOC[b.estado] || (a.dias ?? -9999) - (b.dias ?? -9999));
+    const al = await db.query(
+        `SELECT id::int AS id, creado, aplica, sujeto, tipo, accion, to_char(fecha_anterior, 'YYYY-MM-DD') AS fecha_anterior,
+                to_char(fecha_nueva, 'YYYY-MM-DD') AS fecha_nueva, por, alerta
+         FROM flota_doc_historial WHERE alerta IS NOT NULL AND creado > now() - interval '60 days' ORDER BY id DESC LIMIT 100`);
+    const nombreTipo = new Map(tipos.map(t => [t.clave, t.nombre]));
+    const alertas = al.rows.map(a => ({ ...a, doc: nombreTipo.get(a.tipo) || a.tipo, nombre: a.aplica === 'chofer' ? (nombres.get(a.sujeto) || a.sujeto) : a.sujeto }));
+    const cuenta = e => atencion.filter(a => a.estado === e).length;
+    return { hoy, periodo, tipos, camiones, choferes, atencion, alertas,
+             contadores: { vencidos: cuenta('vencido'), ultimo: cuenta('ultimo'), aviso: cuenta('aviso'), faltan: cuenta('falta'),
+                           sinMensual: choferes.filter(c => !c.mensual.hecho).length, alertasCarga: alertas.length },
+             diasAviso: DIAS_AVISO_DOC, diasUltimo: DIAS_ULTIMO_DOC };
+}
+
+app.get('/api/admin/docs/resumen', requireAdmin, requireDb, async (req, res) => {
+    try { res.json(await armarResumenDocumentos()); }
+    catch (err) { console.error('❌ Error al armar el resumen de documentación:', err.message); res.status(500).json({ error: 'No se pudo cargar la documentación' }); }
+});
+
+// El administrador puede corregir o cargar una fecha directamente
+app.post('/api/admin/docs/valor', requireAdmin, requireDb, async (req, res) => {
+    const b = req.body || {};
+    const aplica = b.aplica === 'camion' ? 'camion' : b.aplica === 'chofer' ? 'chofer' : null;
+    if (!aplica) return res.status(400).json({ error: 'Indicá si es de un camión o de un chofer.' });
+    const sujeto = aplica === 'camion' ? normalizarDominio(b.sujeto) : String(b.sujeto || '');
+    if (aplica === 'camion' ? sujeto.length < 5 : !sujeto) return res.status(400).json({ error: 'Falta el dominio o el chofer.' });
+    try {
+        const hoy = hoyArgentina();
+        const tipos = (await tiposDocumento(false)).filter(t => t.clave === b.tipo && t.aplica === aplica);
+        if (!tipos[0]) return res.status(404).json({ error: 'Ese documento no existe.' });
+        if (aplica === 'chofer') {
+            const c = await db.query(`SELECT 1 FROM flota_chofer WHERE clave = $1`, [sujeto]);
+            if (!c.rows.length) return res.status(404).json({ error: 'Ese chofer no existe.' });
+        }
+        const pv = await db.query(`${SQL_VALORES} WHERE aplica = $1 AND sujeto = $2 AND tipo = $3`, [aplica, sujeto, tipos[0].clave]);
+        const r = resolverCarga({ accion: b.accion === 'fecha' || b.accion === 'no_vence' || b.accion === 'no_aplica' ? b.accion : '', fecha: b.fecha }, tipos[0], pv.rows[0], hoy);
+        if (r.error) return res.status(400).json({ error: r.error });
+        await guardarLoteDocumentos([{ ...r, sujeto, alerta: null }], hoy.slice(0, 7), 'ADMIN');
+        res.json({ exito: true });
+    } catch (err) {
+        console.error('❌ Error al guardar documento (admin):', err.message);
+        res.status(500).json({ error: 'No se pudo guardar' });
+    }
+});
+
+// Tipos de documento: el administrador puede agregar, renombrar o desactivar
+app.get('/api/admin/docs/tipos', requireAdmin, requireDb, async (req, res) => {
+    try { res.json(await tiposDocumento(false)); }
+    catch (err) { res.status(500).json({ error: 'No se pudieron leer los documentos' }); }
+});
+app.post('/api/admin/docs/tipos', requireAdmin, requireDb, async (req, res) => {
+    const b = req.body || {};
+    const nombre = String(b.nombre || '').trim().slice(0, 60);
+    const aplica = b.aplica === 'camion' ? 'camion' : b.aplica === 'chofer' ? 'chofer' : null;
+    if (nombre.length < 2 || !aplica) return res.status(400).json({ error: 'Poné un nombre y elegí si es de camión o de chofer.' });
+    let clave = String(b.clave || '').trim();
+    if (!clave) clave = nombre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+    if (!/^[a-z0-9_]{2,40}$/.test(clave)) return res.status(400).json({ error: 'Nombre inválido.' });
+    try {
+        const ex = await db.query(`SELECT aplica FROM flota_doc_tipo WHERE clave = $1`, [clave]);
+        if (ex.rows[0] && ex.rows[0].aplica !== aplica) return res.status(409).json({ error: 'Ya existe un documento con ese nombre para otro tipo.' });
+        await db.query(
+            `INSERT INTO flota_doc_tipo (clave, nombre, aplica, orden, activo, permite_sin_fecha) VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (clave) DO UPDATE SET nombre = EXCLUDED.nombre, orden = EXCLUDED.orden, activo = EXCLUDED.activo, permite_sin_fecha = EXCLUDED.permite_sin_fecha`,
+            [clave, nombre, aplica, Number.isFinite(Number(b.orden)) ? Math.max(0, Math.min(999, Math.round(Number(b.orden)))) : 50, b.activo !== false, !!b.permite_sin_fecha]);
+        res.json({ exito: true, clave });
+    } catch (err) {
+        console.error('❌ Error al guardar el tipo de documento:', err.message);
+        res.status(500).json({ error: 'No se pudo guardar' });
+    }
+});
+
+// Historial de un camión o chofer (qué se cargó y cuándo)
+app.get('/api/admin/docs/historial', requireAdmin, requireDb, async (req, res) => {
+    const aplica = req.query.aplica === 'camion' ? 'camion' : 'chofer';
+    const sujeto = aplica === 'camion' ? normalizarDominio(req.query.sujeto) : String(req.query.sujeto || '');
+    if (!sujeto) return res.status(400).json({ error: 'Falta el camión o chofer.' });
+    try {
+        const r = await db.query(
+            `SELECT creado, periodo, tipo, accion, to_char(fecha_anterior, 'YYYY-MM-DD') AS fecha_anterior, to_char(fecha_nueva, 'YYYY-MM-DD') AS fecha_nueva,
+                    sin_fecha, por, alerta FROM flota_doc_historial WHERE aplica = $1 AND sujeto = $2 ORDER BY id DESC LIMIT 200`, [aplica, sujeto]);
+        const tipos = await tiposDocumento(false);
+        const nt = new Map(tipos.map(t => [t.clave, t.nombre]));
+        res.json(r.rows.map(f => ({ ...f, doc: nt.get(f.tipo) || f.tipo })));
+    } catch (err) { res.status(500).json({ error: 'No se pudo leer el historial' }); }
+});
+
+// Excel: estado de toda la documentación (rojo = vencido o sin cargar, amarillo = por vencer)
+app.get('/api/admin/exportar/documentos', requireAdmin, requireDb, async (req, res) => {
+    try {
+        const r = await armarResumenDocumentos();
+        const celda = d => {
+            const fmt = f => f.split('-').reverse().join('/');
+            if (d.estado === 'falta') return { v: 'FALTA', s: ESTILO.falla };
+            if (d.estado === 'na') return { v: 'NO APLICA', s: ESTILO.normal };
+            if (d.sin_fecha === 'no_vence') return { v: 'NO VENCE', s: ESTILO.normal };
+            if (d.estado === 'vencido') return { v: fmt(d.fecha) + ' (VENCIDO)', s: ESTILO.falla };
+            if (d.estado === 'ultimo' || d.estado === 'aviso') return { v: fmt(d.fecha), s: ESTILO.aviso };
+            return fmt(d.fecha);
+        };
+        const tc = r.tipos.filter(t => t.aplica === 'camion'), th = r.tipos.filter(t => t.aplica === 'chofer');
+        const cam = [['Dominio', ...tc.map(t => t.nombre)]];
+        r.camiones.forEach(c => cam.push([c.dominio, ...tc.map(t => celda(c.docs.find(d => d.tipo === t.clave)))]));
+        const cho = [['Chofer', ...th.map(t => t.nombre), 'Check-list del mes']];
+        r.choferes.forEach(c => cho.push([c.nombre, ...th.map(t => celda(c.docs.find(d => d.tipo === t.clave))),
+            c.mensual.hecho ? { v: 'Hecho', s: ESTILO.ok } : { v: 'Pendiente', s: ESTILO.falla }]));
+        const aten = [['Corresponde a', 'Quién', 'Documento', 'Vence', 'Días', 'Estado']];
+        const nombreEstado = { vencido: 'VENCIDO', falta: 'SIN CARGAR', ultimo: 'ÚLTIMO AVISO', aviso: 'POR VENCER' };
+        r.atencion.forEach(a => aten.push([a.de === 'camion' ? 'Camión' : 'Chofer', a.nombre, a.doc, a.fecha ? a.fecha.split('-').reverse().join('/') : '',
+            a.dias === null || a.dias === undefined ? '' : { v: a.dias, s: ESTILO.numero },
+            { v: nombreEstado[a.estado], s: a.estado === 'vencido' || a.estado === 'falta' ? ESTILO.falla : ESTILO.aviso }]));
+        enviarXlsx(res, `documentacion_${r.hoy}.xlsx`, crearXlsx([
+            { nombre: 'Qué atender', filas: aten, anchos: [14, 30, 34, 14, 8, 16] },
+            { nombre: 'Camiones', filas: cam, anchos: [14, ...tc.map(() => 20)] },
+            { nombre: 'Choferes', filas: cho, anchos: [30, ...th.map(() => 22), 18] }
+        ]));
+    } catch (err) {
+        console.error('❌ Error al exportar la documentación:', err.message);
         res.status(500).json({ error: 'No se pudo generar el Excel' });
     }
 });

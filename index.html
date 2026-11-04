@@ -445,6 +445,36 @@
         .aviso-actions { display: flex; gap: 8px; margin-top: 12px; }
         .aviso-actions button { margin: 0; padding: 11px 12px; font-size: .85rem; }
 
+
+        /* ---------- Documentación con vencimiento ---------- */
+        .doc-titulo { margin: 18px 2px 4px; font-size: .74rem; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+        .doc-item { margin-top: 8px; padding: 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 16px; }
+        .doc-item.vencido, .doc-item.falta { border-color: rgba(251,113,133,.6); background: rgba(251,113,133,.07); }
+        .doc-item.ultimo { border-color: rgba(251,113,133,.45); background: rgba(251,113,133,.05); }
+        .doc-item.aviso { border-color: rgba(251,191,36,.55); background: rgba(251,191,36,.06); }
+        .doc-item.listo { border-color: rgba(52,211,153,.45); }
+        .doc-nom { font-weight: 800; font-size: .92rem; }
+        .doc-estado { margin-top: 3px; font-size: .78rem; font-weight: 700; color: var(--muted); }
+        .doc-item.vencido .doc-estado, .doc-item.falta .doc-estado, .doc-item.ultimo .doc-estado { color: var(--danger); }
+        .doc-item.aviso .doc-estado { color: var(--warn); }
+        .doc-item.listo .doc-estado { color: var(--ok); }
+        .doc-opc { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+        .doc-opc button { width: auto; flex: 1 1 auto; margin: 0; padding: 9px 10px; font-size: .8rem; background: rgba(255,255,255,.07); border: 1px solid var(--border); box-shadow: none; border-radius: 12px; }
+        .doc-opc button.on { background: linear-gradient(135deg, var(--violet), var(--violet-2)); border-color: transparent; box-shadow: 0 6px 16px rgba(124,92,255,.35); }
+        .doc-fecha { margin-top: 8px; }
+        .doc-fecha label { margin: 0 0 4px; font-size: .74rem; }
+        .doc-fecha .doc-nota { margin-top: 5px; font-size: .74rem; color: var(--warn); font-weight: 700; }
+        .doc-progreso { margin-top: 14px; font-size: .8rem; font-weight: 700; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .doc-progreso button { width: auto; margin: 0; padding: 7px 12px; font-size: .76rem; border-radius: 10px; }
+        .doc-linea { margin: 8px 0 0; font-size: .88rem; line-height: 1.45; }
+        .nav-btn.con-aviso { position: relative; }
+        .nav-btn.con-aviso::after { content: ''; position: absolute; top: 5px; right: calc(50% - 20px); width: 9px; height: 9px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 3px rgba(251,113,133,.25); }
+        @media (max-width: 440px) {
+            .nav-island { gap: 2px; padding: 6px; }
+            .nav-btn { font-size: .62rem; padding: 9px 1px; letter-spacing: 0; }
+            .nav-btn svg { width: 20px; height: 20px; }
+        }
+
         @media (max-width: 560px) {
             .brand-text { display: none; }
             .topbar-right { gap: 6px; }
@@ -538,6 +568,8 @@
                     <p class="section-sub">Completalo antes de salir a ruta</p>
                 </div>
             </div>
+
+            <div class="ord-banner" id="docsBanner" style="display:none;"></div>
 
             <form id="checklistForm">
                 <label for="dominio">Dominio / Patente del vehículo</label>
@@ -661,12 +693,33 @@
             <div class="ord-barra" id="ordBarra" style="display:none;"></div>
         </div>
     </div>
+    <!-- SECCIÓN 5: DOCUMENTACIÓN CON VENCIMIENTO -->
+    <div id="seccion-docs" class="vista-seccion">
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+                </div>
+                <div>
+                    <h3 class="section-title">Documentación</h3>
+                    <p class="section-sub">Check-list mensual de vencimientos (obligatorio)</p>
+                </div>
+            </div>
+            <div class="ord-banner" id="docsEstadoMes">Cargando…</div>
+            <label for="docsDominio">Dominio del camión que manejás</label>
+            <input type="text" id="docsDominio" list="docsDominios" placeholder="Ej: AF 189 LD" autocapitalize="characters" autocomplete="off" onchange="docsCambiarDominio()">
+            <datalist id="docsDominios"></datalist>
+            <div id="docsFormulario"></div>
+            <div class="doc-progreso" id="docsProgreso" style="display:none;"></div>
+            <button type="button" id="docsEnviar" onclick="docsEnviarMensual()" style="display:none;">📤 Enviar documentación del mes</button>
+        </div>
+    </div>
 </main>
 
 <div class="toast-wrap" id="toastWrap"></div>
 <div class="aviso-wrap" id="avisoWrap"></div>
 
-<!-- DOCK DE NAVEGACIÓN (4 SOLAPAS) -->
+<!-- DOCK DE NAVEGACIÓN (5 SOLAPAS) -->
 <nav class="nav-island" id="navIsland">
     <button type="button" class="nav-btn active" onclick="cambiarVista('checklist', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
@@ -683,6 +736,10 @@
     <button type="button" class="nav-btn" onclick="cambiarVista('orden', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
         Orden
+    </button>
+    <button type="button" class="nav-btn" onclick="cambiarVista('docs', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+        Docs
     </button>
 </nav>
 
@@ -814,6 +871,7 @@
         if (!MODO_PRUEBA) iniciarSeguimientoGPS();
         actualizarEstadoAlertas();
         if (NATIVO) setTimeout(() => abrirBienvenidaNativa(false), 600);
+        docsRevisarAvisos();
     }
 
     // Login: nombre + PIN. El servidor devuelve una sesión que solo da acceso al reparto de ese chofer
@@ -924,6 +982,7 @@
         clientesPorId = {};
         clientesAvisados.clear();
         ordenReset();
+        docsReset();
         choferActual = "";
         actualizarEstadoAlertas();
         document.querySelectorAll('.vista-seccion').forEach(sec => sec.classList.remove('active'));
@@ -951,6 +1010,9 @@
         } else if (vista === 'orden') {
             document.getElementById('seccion-orden').classList.add('active');
             ordenAbrir();
+        } else if (vista === 'docs') {
+            document.getElementById('seccion-docs').classList.add('active');
+            docsAbrir();
         }
         if (vista !== 'orden') ordenGuardarYa();
         btn.classList.add('active');
@@ -2108,6 +2170,223 @@
                 ordenElegir();
             } catch (e) { mostrarToast(e.message || 'No se pudo reabrir.', 'error'); }
         };
+    }
+
+    // =====================================================================
+    //  DOCUMENTACIÓN CON VENCIMIENTO: check-list mensual y avisos (29 y 15 días antes)
+    // =====================================================================
+    let docs = { dato: null, sel: {}, fechas: {}, abierto: false };
+
+    function docsReset() {
+        docs = { dato: null, sel: {}, fechas: {}, abierto: false };
+        const b = document.getElementById('docsBanner'); if (b) b.style.display = 'none';
+        const nb = document.querySelectorAll('#navIsland .nav-btn')[4]; if (nb) nb.classList.remove('con-aviso');
+    }
+    function docsHoy() { return fechaLocalHoy(); }
+    function docsPlural(n, uno, varios) { return n + ' ' + (n === 1 ? uno : varios); }
+
+    // Frase del aviso según el estado del documento
+    function docsFrase(a) {
+        const de = a.de === 'camion' ? 'del camión ' + a.sujeto : 'tuyo';
+        const cuando = formatoFecha(a.fecha);
+        if (a.estado === 'vencido') return '⛔ ' + a.nombre + ' (' + de + ') está VENCIDO desde el ' + cuando + '. Renovalo y cargá la fecha nueva.';
+        if (a.estado === 'ultimo') return '🚨 ÚLTIMO AVISO: ' + a.nombre + ' (' + de + ') vence el ' + cuando + ' (' + (a.dias === 0 ? 'vence hoy' : 'faltan ' + docsPlural(a.dias, 'día', 'días')) + '). Renovalo ya.';
+        return '⚠ Cuidado con el vencimiento de ' + a.nombre + ' (' + de + '): vence el ' + cuando + ' (faltan ' + docsPlural(a.dias, 'día', 'días') + ').';
+    }
+
+    async function docsTraer(dominio) {
+        const r = await apiFetch('/api/docs/mi-estado' + (dominio ? '?dominio=' + encodeURIComponent(dominio) : ''));
+        if (!r.ok) throw new Error('error');
+        return r.json();
+    }
+
+    // Se llama al entrar: actualiza el cartel del check-list, el punto rojo del menú y, una vez por día, muestra el aviso
+    async function docsRevisarAvisos() {
+        let d;
+        try { d = await docsTraer(''); } catch (e) { return; }
+        if (!choferActual) return;
+        docs.dato = d;
+        docsPintarBanner();
+        const nb = document.querySelectorAll('#navIsland .nav-btn')[4];
+        const urgente = d.avisos.some(a => a.estado === 'vencido' || a.estado === 'ultimo') || !d.mensual.hecho;
+        if (nb) nb.classList.toggle('con-aviso', urgente);
+        let visto = null;
+        try { visto = localStorage.getItem('flota_docs_aviso'); } catch (e) {}
+        if ((d.avisos.length || !d.mensual.hecho) && visto !== docsHoy()) {
+            const mostrar = () => {
+                if (!choferActual) return;
+                if (document.getElementById('modalBienvenidaNativa')) { setTimeout(mostrar, 5000); return; }
+                try { localStorage.setItem('flota_docs_aviso', docsHoy()); } catch (e) {}
+                docsMostrarAviso(d);
+            };
+            setTimeout(mostrar, 2200);
+        }
+    }
+
+    function docsPintarBanner() {
+        const b = document.getElementById('docsBanner');
+        const d = docs.dato;
+        if (!b || !d) return;
+        const venc = d.avisos.filter(a => a.estado === 'vencido').length;
+        const ult = d.avisos.filter(a => a.estado === 'ultimo').length;
+        const av = d.avisos.filter(a => a.estado === 'aviso').length;
+        const partes = [];
+        if (!d.mensual.hecho) partes.push('📋 Te falta la documentación de este mes');
+        if (venc) partes.push('⛔ ' + docsPlural(venc, 'vencido', 'vencidos'));
+        if (ult) partes.push('🚨 ' + docsPlural(ult, 'último aviso', 'últimos avisos'));
+        if (av) partes.push('⚠ ' + docsPlural(av, 'por vencer', 'por vencer'));
+        if (!partes.length) { b.style.display = 'none'; return; }
+        b.style.display = 'block';
+        b.className = 'ord-banner ' + (venc || ult ? 'err' : 'warn');
+        b.style.cursor = 'pointer';
+        b.innerHTML = '<b>Documentación:</b> ' + escapeHtml(partes.join(' · ')) + ' <span style="text-decoration:underline;">Tocá para verlo</span>';
+        b.onclick = irADocs;
+    }
+    function irADocs() {
+        const btn = document.querySelectorAll('#navIsland .nav-btn')[4];
+        const m = document.getElementById('modalAvisoDocs'); if (m) m.remove();
+        if (btn) cambiarVista('docs', btn);
+    }
+
+    function docsMostrarAviso(d) {
+        const lineas = d.avisos.map(a => '<p class="doc-linea" style="color:' + (a.estado === 'aviso' ? 'var(--warn)' : 'var(--danger)') + ';font-weight:700;">' + escapeHtml(docsFrase(a)) + '</p>');
+        if (!d.mensual.hecho) lineas.push('<p class="doc-linea" style="font-weight:700;">📋 Todavía no hiciste la documentación de este mes. Es obligatoria: tardás un minuto.</p>');
+        const m = ordenModal(
+            '<h3 class="modal-title">📄 Documentación</h3><p class="modal-sub">Revisá tus vencimientos</p>' + lineas.join('') +
+            '<div class="ord-fila"><button type="button" class="btn-ghost" data-r="no">Más tarde</button><button type="button" data-r="ok">Ver y actualizar</button></div>');
+        m.id = 'modalAvisoDocs';
+        m.querySelector('[data-r="no"]').onclick = () => m.remove();
+        m.querySelector('[data-r="ok"]').onclick = irADocs;
+        const resumen = d.avisos.slice(0, 3).map(a => docsFrase(a)).join(' ') || 'Te falta la documentación de este mes.';
+        notificarSistema('Documentación: revisá tus vencimientos', resumen, 'docs');
+    }
+
+    // ---- Pantalla Documentación ----
+    async function docsAbrir() {
+        const estado = document.getElementById('docsEstadoMes');
+        try {
+            const d = await docsTraer((document.getElementById('docsDominio').value || '').trim());
+            docs.dato = d;
+        } catch (e) { estado.className = 'ord-banner err'; estado.textContent = 'No se pudo cargar tu documentación. Probá de nuevo.'; return; }
+        const campo = document.getElementById('docsDominio');
+        if (!campo.value) campo.value = docs.dato.dominio || '';
+        document.getElementById('docsDominios').innerHTML = (docs.dato.dominios || []).map(x => '<option value="' + escapeHtml(x) + '">').join('');
+        docs.abierto = true;
+        docsPintarBanner();
+        docsPintar();
+    }
+    async function docsCambiarDominio() {
+        const campo = document.getElementById('docsDominio');
+        let nuevo;
+        try { nuevo = await docsTraer(campo.value.trim()); } catch (e) { mostrarToast('No se pudo cargar ese camión.', 'error'); return; }
+        Object.keys(docs.sel).filter(k => k.startsWith('camion|')).forEach(k => { delete docs.sel[k]; delete docs.fechas[k]; });
+        docs.dato = nuevo;
+        docsPintar();
+    }
+
+    function docsClave(aplica, tipo) { return aplica + '|' + tipo; }
+    function docsCompleto(aplica, d) {
+        const k = docsClave(aplica, d.tipo), s = docs.sel[k];
+        if (s === 'fecha') return /^\d{4}-\d{2}-\d{2}$/.test(docs.fechas[k] || '');
+        return !!s;
+    }
+    function docsPuedeConfirmar(d) {
+        return d.estado !== 'vencido' && d.estado !== 'falta' && (d.fecha || d.sin_fecha);
+    }
+    function docsEstadoTexto(d) {
+        if (d.estado === 'falta') return 'Sin cargar todavía';
+        if (d.estado === 'na') return 'No aplica';
+        if (d.sin_fecha === 'no_vence') return 'No vence';
+        if (d.estado === 'vencido') return 'VENCIDO el ' + formatoFecha(d.fecha) + ' (hace ' + docsPlural(-d.dias, 'día', 'días') + ')';
+        if (d.estado === 'ultimo') return 'Vence el ' + formatoFecha(d.fecha) + ' · ÚLTIMO AVISO (' + (d.dias === 0 ? 'hoy' : docsPlural(d.dias, 'día', 'días')) + ')';
+        if (d.estado === 'aviso') return 'Vence el ' + formatoFecha(d.fecha) + ' · faltan ' + docsPlural(d.dias, 'día', 'días');
+        return 'Vence el ' + formatoFecha(d.fecha) + ' · faltan ' + d.dias + ' días';
+    }
+
+    function docsFila(aplica, d) {
+        const k = docsClave(aplica, d.tipo), s = docs.sel[k];
+        const completo = docsCompleto(aplica, d);
+        const op = (val, txt) => '<button type="button" class="' + (s === val ? 'on' : '') + '" onclick="docsElegir(\'' + aplica + '\',\'' + d.tipo + '\',\'' + val + '\')">' + txt + '</button>';
+        let botones = '';
+        if (docsPuedeConfirmar(d)) botones += op('confirmar', '✔ Sigue igual');
+        botones += op('fecha', d.estado === 'vencido' || d.estado === 'falta' ? '📅 Cargar fecha nueva' : '📅 Cambió la fecha');
+        if (d.permite_sin_fecha) botones += op('no_vence', 'No vence') + op('no_aplica', 'No aplica');
+        let fecha = '';
+        if (s === 'fecha') {
+            const v = docs.fechas[k] || '';
+            const pasada = v && v < docsHoy();
+            fecha = '<div class="doc-fecha"><label>Nueva fecha de vencimiento</label><input type="date" value="' + escapeHtml(v) + '" onchange="docsFecha(\'' + aplica + '\',\'' + d.tipo + '\', this.value)">' +
+                    (pasada ? '<div class="doc-nota">⚠ Esa fecha ya pasó: el administrador va a recibir un aviso.</div>' : '') + '</div>';
+        }
+        return '<div class="doc-item ' + (completo ? 'listo' : d.estado) + '"><div class="doc-nom">' + escapeHtml(d.nombre) + '</div>' +
+               '<div class="doc-estado">' + escapeHtml(docsEstadoTexto(d)) + '</div><div class="doc-opc">' + botones + '</div>' + fecha + '</div>';
+    }
+
+    function docsPintar() {
+        const d = docs.dato;
+        const estado = document.getElementById('docsEstadoMes');
+        if (d.mensual.hecho) { estado.className = 'ord-banner ok'; estado.textContent = '✅ Ya hiciste la documentación de ' + d.periodo + ' (el ' + d.mensual.cuando + '). Si renovaste algo, actualizalo acá.'; }
+        else { estado.className = 'ord-banner warn'; estado.textContent = '📋 Falta la documentación de ' + d.periodo + '. Es obligatoria: confirmá o actualizá cada vencimiento.'; }
+        let html = '<div class="doc-titulo">🪪 Tus documentos</div>' + d.chofer.map(x => docsFila('chofer', x)).join('');
+        if (d.dominio) html += '<div class="doc-titulo">🚚 Camión ' + escapeHtml(d.dominio) + '</div>' + d.camion.map(x => docsFila('camion', x)).join('');
+        else html += '<p class="empty-state">Escribí arriba el dominio del camión que manejás para cargar también sus documentos.</p>';
+        document.getElementById('docsFormulario').innerHTML = html;
+        const todos = d.chofer.map(x => ['chofer', x]).concat(d.dominio ? d.camion.map(x => ['camion', x]) : []);
+        const hechos = todos.filter(([a, x]) => docsCompleto(a, x)).length;
+        const falta = todos.length - hechos;
+        const prog = document.getElementById('docsProgreso');
+        prog.style.display = todos.length ? 'flex' : 'none';
+        prog.innerHTML = '<span>Completaste ' + hechos + ' de ' + todos.length + '</span><button type="button" class="btn-ghost" onclick="docsTodoIgual()">✔ Todo lo vigente sigue igual</button>';
+        const bt = document.getElementById('docsEnviar');
+        bt.style.display = todos.length && d.dominio ? 'block' : 'none';
+        bt.disabled = falta > 0;
+        bt.style.opacity = falta > 0 ? '.5' : '1';
+        bt.textContent = falta > 0 ? 'Te faltan ' + falta + ' por completar' : '📤 Enviar documentación del mes';
+    }
+    function docsElegir(aplica, tipo, valor) {
+        const k = docsClave(aplica, tipo);
+        docs.sel[k] = valor;
+        if (valor === 'fecha' && !docs.fechas[k]) docs.fechas[k] = '';
+        docsPintar();
+    }
+    function docsFecha(aplica, tipo, valor) {
+        docs.fechas[docsClave(aplica, tipo)] = valor;
+        docsPintar();
+    }
+    function docsTodoIgual() {
+        const d = docs.dato;
+        d.chofer.forEach(x => { if (docsPuedeConfirmar(x) && !docs.sel[docsClave('chofer', x.tipo)]) docs.sel[docsClave('chofer', x.tipo)] = 'confirmar'; });
+        if (d.dominio) d.camion.forEach(x => { if (docsPuedeConfirmar(x) && !docs.sel[docsClave('camion', x.tipo)]) docs.sel[docsClave('camion', x.tipo)] = 'confirmar'; });
+        docsPintar();
+    }
+
+    async function docsEnviarMensual() {
+        const d = docs.dato;
+        const items = [];
+        d.chofer.forEach(x => items.push({ aplica: 'chofer', tipo: x.tipo }));
+        d.camion.forEach(x => items.push({ aplica: 'camion', tipo: x.tipo }));
+        items.forEach(i => { const k = docsClave(i.aplica, i.tipo); i.accion = docs.sel[k]; i.fecha = docs.fechas[k] || undefined; });
+        const bt = document.getElementById('docsEnviar');
+        bt.disabled = true;
+        try {
+            const r = await apiFetch('/api/docs/mensual', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dominio: d.dominio, items }) });
+            const res = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(res.error || 'No se pudo enviar');
+            const venc = (res.alertas || []).length;
+            mostrarToast(venc ? '📄 Enviada. Ojo: cargaste documentación vencida o con fecha menor; se avisó al administrador.' : '📄 ¡Documentación del mes enviada!', venc ? 'error' : 'ok');
+            docs.sel = {}; docs.fechas = {};
+            await docsAbrir();
+            docsRevisarAvisosSilencioso();
+        } catch (e) {
+            mostrarToast(e.message || 'No se pudo enviar.', 'error');
+            docsPintar();
+        }
+    }
+    async function docsRevisarAvisosSilencioso() {
+        try { docs.dato = await docsTraer(document.getElementById('docsDominio').value.trim()); } catch (e) { return; }
+        docsPintarBanner();
+        const nb = document.querySelectorAll('#navIsland .nav-btn')[4];
+        if (nb) nb.classList.toggle('con-aviso', docs.dato.avisos.some(a => a.estado === 'vencido' || a.estado === 'ultimo') || !docs.dato.mensual.hecho);
     }
 
     function finalizarTurno() {
