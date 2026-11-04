@@ -1481,6 +1481,26 @@ app.post('/api/orden/enviar', requireChofer, requireDb, async (req, res) => {
     }
 });
 
+// Vuelve a abrir para editar una propuesta enviada o aprobada (conserva todos los cambios; el administrador deja de verla hasta que se reenvíe)
+app.post('/api/orden/reabrir', requireChofer, requireDb, async (req, res) => {
+    const v = validarRutaDia((req.body || {}).ruta, (req.body || {}).dia);
+    if (!v) return res.status(400).json({ error: 'Zona o día inválido' });
+    try {
+        const prop = await ultimaPropuesta(req.chofer, v.ruta, v.dia);
+        if (!prop || !['enviada', 'aprobada'].includes(prop.estado)) return res.status(409).json({ error: 'No hay una propuesta para reabrir.' });
+        const r = await db.query(
+            `UPDATE flota_orden_propuesta SET estado = 'borrador', enviado = NULL, resuelto = NULL, nota = NULL, actualizado = now()
+             WHERE id = $1 AND estado IN ('enviada', 'aprobada')
+               AND NOT EXISTS (SELECT 1 FROM flota_orden_propuesta WHERE chofer = $2 AND ruta = $3 AND dia = $4 AND estado = 'borrador')
+             RETURNING id`, [prop.id, req.chofer, v.ruta, v.dia]);
+        if (!r.rows.length) return res.status(409).json({ error: 'La propuesta cambió de estado. Actualizá la pantalla.' });
+        res.json({ exito: true, estabaAprobada: prop.estado === 'aprobada' });
+    } catch (err) {
+        console.error('❌ Error al reabrir el orden:', err.message);
+        res.status(500).json({ error: 'No se pudo reabrir la propuesta' });
+    }
+});
+
 // Descarta el borrador o retira una propuesta ya enviada (si todavía no se aprobó)
 app.delete('/api/orden/propuesta', requireChofer, requireDb, async (req, res) => {
     const v = validarRutaDia(req.query.ruta, req.query.dia);

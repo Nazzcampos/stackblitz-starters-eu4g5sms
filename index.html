@@ -1888,8 +1888,8 @@
         const ayuda = document.getElementById('ordAyuda');
         const p = ord.propuesta;
         let txt = '', cls = '';
-        if (p && p.estado === 'enviada') { txt = '📤 Ya enviaste esta propuesta (' + p.cambios + ' cambios). Esperando que el administrador la revise.'; cls = 'warn'; }
-        else if (p && p.estado === 'aprobada') { txt = '✅ El administrador aprobó tu propuesta. Falta que la cargue en Gescom; cuando esté cargada vas a ver el orden nuevo.'; cls = 'ok'; }
+        if (p && p.estado === 'enviada') { txt = '📤 Ya enviaste esta propuesta (' + p.cambios + ' cambios). Esperando que el administrador la revise. Si te olvidaste de algo, tocá «Seguir editando».'; cls = 'warn'; }
+        else if (p && p.estado === 'aprobada') { txt = '✅ El administrador aprobó tu propuesta. Falta que la cargue en Gescom; cuando esté cargada vas a ver el orden nuevo. Si querés cambiar algo más, tocá «Seguir editando».'; cls = 'ok'; }
         else if (p && p.estado === 'rechazada') { txt = '❌ El administrador no aprobó la última propuesta' + (p.nota ? ': «' + p.nota + '»' : '.') + ' Podés armar una nueva.'; cls = 'err'; }
         else if (ord.lista.some(c => c.sin_ubicar && !c.baja)) { txt = '🆕 Hay clientes nuevos sin lugar en el recorrido (marcados en amarillo). Ubicalos donde corresponda.'; cls = 'warn'; }
         banner.style.display = txt ? 'block' : 'none';
@@ -1902,7 +1902,9 @@
         if (ord.editable && hayCambios) {
             html = '<button type="button" class="btn-ghost" onclick="ordenDescartar()">↺ Descartar</button><button type="button" onclick="ordenEnviar()">📤 Enviar al administrador</button>';
         } else if (p && p.estado === 'enviada') {
-            html = '<button type="button" class="btn-ghost" onclick="ordenRetirar()">Retirar propuesta</button>';
+            html = '<button type="button" class="btn-ghost" onclick="ordenRetirar()">Descartar todo</button><button type="button" onclick="ordenReabrir()">✏ Seguir editando</button>';
+        } else if (p && p.estado === 'aprobada') {
+            html = '<button type="button" onclick="ordenReabrir()">✏ Seguir editando</button>';
         }
         barra.style.display = html ? 'flex' : 'none';
         barra.innerHTML = html;
@@ -2082,7 +2084,31 @@
         clearTimeout(ord.guardando); ord.guardando = null;
         ordenBorrarPropuesta('Cambios descartados. Volvió el orden de Gescom.');
     }
-    function ordenRetirar() { ordenBorrarPropuesta('Propuesta retirada. Podés volver a armarla.'); }
+    function ordenRetirar() { ordenBorrarPropuesta('Propuesta descartada. Volvió el orden de Gescom.'); }
+
+    // Volver a editar una propuesta ya enviada o aprobada: se conservan todos los cambios y hay que reenviarla
+    function ordenReabrir() {
+        const aprobada = ord.propuesta && ord.propuesta.estado === 'aprobada';
+        const m = ordenModal(
+            '<h3 class="modal-title">Seguir editando</h3><p class="modal-sub">' + (ord.actual.dia ? ORD_DIAS[ord.actual.dia] + ' · ' : '') + 'Zona ' + escapeHtml(ord.actual.ruta) + '</p>' +
+            '<p style="margin:0;font-size:.9rem;line-height:1.5;">Se conservan todos tus cambios. El administrador va a dejar de ver esta propuesta hasta que la vuelvas a enviar.' +
+            (aprobada ? '<br><br><b>Ojo:</b> ya estaba aprobada. Si el administrador ya la cargó en Gescom, avisale que vas a mandar otra.' : '') + '</p>' +
+            '<div class="ord-fila"><button type="button" class="btn-ghost" data-r="no">Volver</button><button type="button" data-r="ok">Seguir editando</button></div>');
+        m.querySelector('[data-r="no"]').onclick = () => m.remove();
+        m.querySelector('[data-r="ok"]').onclick = async () => {
+            m.remove();
+            try {
+                const r = await apiFetch('/api/orden/reabrir', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ord.actual) });
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(d.error || 'error');
+                const p = ord.propuestas.find(x => x.ruta === ord.actual.ruta && (x.dia || '') === ord.actual.dia);
+                if (p) p.estado = 'borrador';
+                mostrarToast('✏ Podés seguir editando. Acordate de volver a enviarla.', 'ok');
+                ordenPintarSelector(true);
+                ordenElegir();
+            } catch (e) { mostrarToast(e.message || 'No se pudo reabrir.', 'error'); }
+        };
+    }
 
     function finalizarTurno() {
         enviarAlServidor = false;
