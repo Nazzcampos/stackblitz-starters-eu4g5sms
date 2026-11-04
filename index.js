@@ -1315,6 +1315,51 @@ function validarRutaDia(ruta, dia) {
     return { ruta, dia };
 }
 
+// Código de cliente (el "Número" de Gescom) para una lista de clientes, buscándolo en todas las fuentes disponibles:
+// 1) cliente_hist.codigo  2) cuenta corriente  3) el último comprobante de venta del cliente
+let promesaFuentesCodigo = null;
+function fuentesCodigoCliente() {
+    if (!promesaFuentesCodigo) {
+        promesaFuentesCodigo = pool.query(`
+            SELECT table_name, column_name FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND ((table_name = 'venta' AND column_name = 'cliente_codigo') OR (table_name = 'cliente_hist' AND column_name = 'codigo'))`)
+            .then(r => ({
+                hist: r.rows.some(x => x.table_name === 'cliente_hist'),
+                venta: r.rows.some(x => x.table_name === 'venta')
+            }))
+            .catch(err => { promesaFuentesCodigo = null; return { hist: false, venta: false }; });
+    }
+    return promesaFuentesCodigo;
+}
+async function codigosDeClientes(ids) {
+    const lista = [...new Set(ids.map(String).filter(id => /^\d+$/.test(id)))];
+    const mapa = new Map();
+    if (!lista.length) return mapa;
+    const fuentes = await fuentesCodigoCliente();
+    const poner = (id, cod) => { if (cod !== null && cod !== undefined && String(cod).trim() !== '' && !mapa.has(String(id))) mapa.set(String(id), String(cod).trim()); };
+    if (fuentes.hist) {
+        try {
+            const r = await pool.query(`SELECT id::text AS id, codigo::text AS codigo FROM cliente_hist WHERE actual = true AND id = ANY($1::bigint[])`, [lista]);
+            r.rows.forEach(f => poner(f.id, f.codigo));
+        } catch (e) { console.error('⚠️ Código desde cliente_hist:', e.message); }
+    }
+    if (lista.some(id => !mapa.has(id))) {
+        try { const d = await obtenerDeudas(); lista.forEach(id => poner(id, d.codigos.get(id))); } catch (e) { /* solo informativo */ }
+    }
+    const faltan = lista.filter(id => !mapa.has(id));
+    if (fuentes.venta && faltan.length) {
+        try {
+            const r = await pool.query(`
+                SELECT DISTINCT ON (cliente_id) cliente_id::text AS id, cliente_codigo::text AS codigo
+                FROM venta WHERE cliente_id = ANY($1::bigint[]) AND cliente_codigo IS NOT NULL
+                ORDER BY cliente_id, fecha_entrega DESC NULLS LAST`, [faltan]);
+            r.rows.forEach(f => poner(f.id, f.codigo));
+        } catch (e) { console.error('⚠️ Código desde venta:', e.message); }
+    }
+    return mapa;
+}
+
 // Clientes de una zona (opcionalmente solo los de un día) con su orden actual en Gescom
 async function clientesDeRuta(ruta, dia) {
     const filtroDia = dia ? ` AND rh.${dia} = 1` : '';
@@ -1325,8 +1370,7 @@ async function clientesDeRuta(ruta, dia) {
         WHERE rh.actual = true AND rh.ruta_codigo::text = $1${filtroDia}
         ORDER BY rh.orden ASC NULLS FIRST, c.razon_social ASC
         LIMIT ${MAX_CLIENTES_ORDEN}`, [ruta]);
-    let codigos = new Map();
-    try { codigos = (await obtenerDeudas()).codigos; } catch (e) { /* el código es solo informativo */ }
+    const codigos = await codigosDeClientes(r.rows.map(f => f.id));
     return r.rows.map(f => ({
         id: String(f.id),
         codigo: codigos.get(String(f.id)) || null,
@@ -1568,6 +1612,13 @@ app.get('/api/admin/exportar/orden', requireAdmin, requireDb, async (req, res) =
             r = await db.query(`SELECT ${COLS_PROPUESTA}, items FROM flota_orden_propuesta WHERE estado = 'aprobada' ORDER BY ruta, dia, id`);
         }
         if (!r.rows.length) return res.status(404).json({ error: 'No hay propuestas para exportar.' });
+        // Propuestas armadas antes de que existiera esta búsqueda pueden no traer el código: se completa ahora
+        const sinCodigo = [];
+        r.rows.forEach(p => (p.items || []).forEach(i => { if (!i.codigo) sinCodigo.push(i.id); }));
+        if (sinCodigo.length) {
+            const cods = await codigosDeClientes(sinCodigo);
+            r.rows.forEach(p => (p.items || []).forEach(i => { if (!i.codigo && cods.has(String(i.id))) i.codigo = cods.get(String(i.id)); }));
+        }
         const enc = ['Zona', 'Día', 'Código cliente', 'ID cliente', 'Cliente', 'Dirección', 'Localidad', 'Orden anterior', 'Orden nuevo', 'Qué cambió', 'Chofer', 'Propuesta N°'];
         const todo = [enc], cambios = [enc];
         r.rows.forEach(p => {
