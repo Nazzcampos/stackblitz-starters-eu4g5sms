@@ -2736,6 +2736,33 @@ app.get('/api/resumen-reparto', requireChofer, async (req, res) => {
     }
 });
 
+// --- Diagnóstico (solo con ADMIN_TOKEN): compara lo que Gescom tiene en un reparto con lo que cuenta la app ---
+// /api/diagnostico-reparto?token=...&reparto=2447  (sin datos personales: solo códigos, fechas e importes)
+app.get('/api/diagnostico-reparto', async (req, res) => {
+    const tokenAdmin = process.env.ADMIN_TOKEN;
+    if (!tokenAdmin || req.query.token !== tokenAdmin) return res.status(404).json({ error: 'No encontrado' });
+    const reparto = String(req.query.reparto || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 30);
+    if (!reparto) return res.status(400).json({ error: 'Falta reparto' });
+    try {
+        const filas = await pool.query(`/*DIAG*/ SELECT v.id::text AS id, v.cliente_id::text AS cliente, v.empleado_chofer_nombre AS chofer,
+                v.reparto_codigo AS reparto, to_char(v.fecha_entrega, 'YYYY-MM-DD') AS entrega, v.tipo_comprobante_codigo AS tipo,
+                v.importe_total AS total, v.rechazada, v.no_entregada, v.es_adicional, v.entregada, v.cerrada
+            FROM venta v WHERE v.reparto_codigo = $1 ORDER BY v.id LIMIT 600`, [reparto]);
+        const grupos = {};
+        filas.rows.forEach(f => {
+            const k = [f.chofer, f.entrega, f.tipo, 'rech:' + f.rechazada, 'noent:' + f.no_entregada, 'adic:' + f.es_adicional].join(' | ');
+            const g = grupos[k] || (grupos[k] = { ventas: 0, clientes: new Set(), total: 0 });
+            g.ventas++; g.clientes.add(f.cliente); g.total += Number(f.total) || 0;
+        });
+        const salida = Object.entries(grupos).map(([grupo, g]) => ({ grupo, ventas: g.ventas, clientes: g.clientes.size, total: Number(g.total.toFixed(2)) }));
+        const choferes = [...new Set(filas.rows.map(f => f.chofer))];
+        res.json({ reparto, ventas_en_reparto: filas.rows.length, clientes_en_reparto: new Set(filas.rows.map(f => f.cliente)).size, choferes, grupos: salida });
+    } catch (err) {
+        console.error('❌ Error en el diagnóstico del reparto:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // --- COMPROBANTES DEL REPARTO (copia informativa en PDF, solo lectura de Gescom) ---
 // Gescom no guarda el PDF fiscal (CAE): se arma una copia con los datos de la boleta y así se aclara en el documento.
 const COLS_COMPROBANTE = `v.id::text AS id, v.tipo_comprobante_codigo AS tipo, v.punto_venta_codigo AS pv, v.numero_comprobante AS numero,
