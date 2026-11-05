@@ -500,7 +500,6 @@
         <div class="topbar-right">
             <span class="live-pill"><span class="live-dot"></span><span class="txt" id="lblActualizado">En vivo · cada 10 s</span></span>
             <span class="live-pill pill-db" id="pillDb" title="Estado de la base de datos (Supabase)"><span class="live-dot"></span><span class="txt" id="lblDb">Base de datos…</span></span>
-            <a class="link-chip" href="/index.html">📱 App Chofer</a>
             <button type="button" onclick="cargarDatos()">Actualizar</button>
             <button type="button" class="btn-suave" onclick="cerrarSesionAdmin()">Salir</button>
         </div>
@@ -856,7 +855,7 @@
     }
     function cerrarSesionAdmin() {
         borrarTokenAdmin();
-        mostrarLoginAdmin();
+        location.replace('/?cambiar=1');   // vuelve a la pantalla de ingreso para elegir el rol
     }
 
     // Igual que fetch, pero con la clave de administrador. Si el servidor la rechaza, se pide ingresar de nuevo.
