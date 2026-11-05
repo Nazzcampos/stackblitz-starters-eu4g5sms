@@ -1416,7 +1416,7 @@
         const puntos = [];
         const conGPS = !!ultimaPosicion;
         if (conGPS) puntos.push([ultimaPosicion.lat, ultimaPosicion.lon]);
-        const lote = pend.slice(0, conGPS ? 49 : 50);
+        const lote = pend.slice(0, 1);   // solo se traza hasta la próxima parada, así el mapa no se llena de líneas
         lote.forEach(c => puntos.push([Number(c.lat), Number(c.lon)]));
         if (puntos.length < 2) { ruta = null; rutaDibujar(); rutaPintarResumen(); navActualizar(); pintarPines(); return; }
         const espera = rutaUltimoCalculo + 3000 - Date.now();
@@ -1444,8 +1444,9 @@
         if (!rutaVigente) { el.innerHTML = '🧭 La ruta sugerida está disponible para el reparto de hoy.'; return; }
         if (!paradasRuta.length) { el.innerHTML = '🧭 Ruta sugerida: no hay clientes con ubicación.'; return; }
         if (!pend.length) { el.innerHTML = '🏁 <b>Recorrido completo.</b> Visitaste todas las paradas.'; return; }
-        if (!ruta) { el.innerHTML = `🧭 Ruta sugerida: calculando… · ${pend.length} paradas pendientes`; return; }
-        el.innerHTML = `🧭 Ruta sugerida: <b>${fmtDist(ruta.distancia)}</b> · <b>${fmtTiempo(ruta.duracion)}</b> · ${pend.length} ${pend.length === 1 ? 'parada pendiente' : 'paradas pendientes'}`;
+        const resto = `${pend.length} ${pend.length === 1 ? 'parada pendiente' : 'paradas pendientes'}`;
+        if (!ruta) { el.innerHTML = ultimaPosicion ? `🧭 Calculando la ruta a la próxima parada… · ${resto}` : `🧭 Tocá ◎ para activar el GPS y ver la ruta a tu próxima parada · ${resto}`; return; }
+        el.innerHTML = `🧭 Hasta <b>${escapeHtml(pend[0].nombre)}</b>: <b>${fmtDist(ruta.distancia)}</b> · <b>${fmtTiempo(ruta.duracion)}</b> · ${resto}`;
     }
 
     // Posición del GPS sobre el trazado (busca cerca de la anterior para no confundirse si el recorrido pasa dos veces por el mismo lugar)
@@ -1483,10 +1484,9 @@
             const resta = Math.max(0, ruta.cum[ruta.fin[k]] - ruta.cum[pi]);
             const tr = ruta.tramos[k];
             const tiempo = tr && tr.distancia > 0 ? tr.duracion * Math.min(1, resta / tr.distancia) : 0;
-            const totalResta = Math.max(0, ruta.cum[ruta.cum.length - 1] - ruta.cum[pi]);
-            met = `Faltan <b>${fmtDist(resta)}</b> · ${fmtTiempo(tiempo)} · Resto del recorrido: ${fmtDist(totalResta)}`;
+            met = `Faltan <b>${fmtDist(resta)}</b> · ${fmtTiempo(tiempo)} · ${pend.length} ${pend.length === 1 ? 'parada pendiente' : 'paradas pendientes'}`;
         } else if (ruta) {
-            met = `Recorrido: ${fmtDist(ruta.distancia)} · ${fmtTiempo(ruta.duracion)} (esperando tu ubicación)`;
+            met = `${fmtDist(ruta.distancia)} · ${fmtTiempo(ruta.duracion)}`;
         }
         document.getElementById('navMetricas').innerHTML = met;
         // Indicación de giro
