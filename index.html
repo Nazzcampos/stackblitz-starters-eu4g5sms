@@ -1708,6 +1708,7 @@
                         <div class="cliente-foot">
                             <span class="chip">Reparto ${escapeHtml(c.reparto_codigo || 'General')}</span>
                             ${estadoCuenta}
+                            <button type="button" class="btn-ghost" style="padding:6px 12px; font-size:.78rem;" onclick="verComprobantes('${idSeguro}')">🧾 Comprobante</button>
                         </div>
                     </div>
                 `;
@@ -1725,6 +1726,73 @@
             console.error("Error al cargar la ruta real del chofer:", err);
             document.getElementById('contenedor-clientes').innerHTML = '<p class="empty-state" style="color: var(--danger);">Error al conectar con Gescom.</p>';
         }
+    }
+
+
+    // =====================================================================
+    // --- COMPROBANTES DEL DÍA: ver, descargar PDF y compartir por WhatsApp ---
+    // Es una copia informativa armada con los datos de Gescom (no el comprobante fiscal)
+    let comprobantesAbiertos = [];
+    function fechaDeReparto() {
+        return (document.getElementById('inputFechaRuta') || {}).value || docsHoy();
+    }
+    function nombreComprobante(c) {
+        return (c.tipo || 'Comprobante') + ' ' + String(c.pv || '').padStart(4, '0') + '-' + String(c.numero || '').padStart(8, '0');
+    }
+    function textoComprobante(c) {
+        const l = [nombreComprobante(c) + ' · ' + (c.cliente || ''), 'Fecha: ' + (c.fecha || '')];
+        (c.items || []).forEach(i => l.push('• ' + Number(i.cantidad) + ' × ' + (i.descripcion || i.codigo) + '  ' + formatoPesos(i.importe)));
+        l.push('TOTAL: ' + formatoPesos(c.total), '(Copia informativa, no es el comprobante fiscal)');
+        return l.join('\n');
+    }
+    async function verComprobantes(clienteId) {
+        const cliente = clientesPorId[clienteId];
+        let lista;
+        try {
+            const r = await apiFetch('/api/comprobantes?cliente_id=' + encodeURIComponent(clienteId) + '&fecha=' + encodeURIComponent(fechaDeReparto()));
+            if (!r.ok) throw new Error('error');
+            lista = await r.json();
+        } catch (e) { mostrarToast('No se pudieron cargar los comprobantes.', 'error'); return; }
+        comprobantesAbiertos = lista;
+        let cuerpo;
+        if (!lista.length) cuerpo = '<p class="empty-state">No hay comprobantes de este cliente para el día elegido.</p>';
+        else cuerpo = lista.map((c, n) =>
+            '<div class="doc-item"><div class="doc-nom">🧾 ' + escapeHtml(nombreComprobante(c)) + '</div>' +
+            '<div class="doc-estado">' + escapeHtml(c.fecha || '') + (c.condicion ? ' · ' + escapeHtml(c.condicion) : '') + '</div>' +
+            '<table class="tabla-cc"><tbody>' + (c.items || []).map(i =>
+                '<tr><td>' + escapeHtml(Number(i.cantidad) + ' × ' + (i.descripcion || i.codigo)) + '</td><td class="num">' + formatoPesos(i.importe) + '</td></tr>').join('') + '</tbody></table>' +
+            '<div class="cc-total"><span>Total</span><span class="monto">' + formatoPesos(c.total) + '</span></div>' +
+            '<div class="doc-opc"><button type="button" onclick="comprobanteAccion(' + n + ',\'ver\')">📄 Ver PDF</button>' +
+            '<button type="button" onclick="comprobanteAccion(' + n + ',\'bajar\')">⬇ Descargar</button>' +
+            '<button type="button" onclick="comprobanteAccion(' + n + ',\'compartir\')">📲 WhatsApp</button></div></div>').join('') +
+            '<p class="doc-nota">Copia informativa con los datos del sistema. No es el comprobante fiscal.</p>';
+        const m = ordenModal('<h3 class="modal-title">🧾 ' + escapeHtml(cliente ? cliente.nombre : 'Cliente') + '</h3><p class="modal-sub">Comprobantes del ' + escapeHtml(formatoFecha(fechaDeReparto())) + '</p>' + cuerpo +
+            '<button type="button" class="btn-ghost" onclick="this.closest(\'.modal-overlay\').remove()">Cerrar</button>');
+        m.style.zIndex = 2000;
+    }
+    async function comprobanteAccion(n, accion) {
+        const c = comprobantesAbiertos[n];
+        if (!c) return;
+        try {
+            const r = await apiFetch('/api/comprobantes/' + encodeURIComponent(c.id) + '/pdf?fecha=' + encodeURIComponent(fechaDeReparto()));
+            if (!r.ok) throw new Error('error');
+            const blob = await r.blob();
+            const archivo = nombreComprobante(c).replace(/[^A-Za-z0-9_-]+/g, '_') + '.pdf';
+            const file = new File([blob], archivo, { type: 'application/pdf' });
+            if (accion === 'compartir') {
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    try { await navigator.share({ files: [file], title: nombreComprobante(c), text: nombreComprobante(c) + ' · ' + (c.cliente || '') }); return; }
+                    catch (e) { if (e && e.name === 'AbortError') return; }
+                }
+                // Sin compartir archivos en este equipo: se manda el detalle como texto por WhatsApp
+                window.open('https://wa.me/?text=' + encodeURIComponent(textoComprobante(c)), '_blank');
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            if (accion === 'ver') { window.open(url, '_blank'); }
+            else { const a = document.createElement('a'); a.href = url; a.download = archivo; document.body.appendChild(a); a.click(); a.remove(); }
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch (e) { mostrarToast('No se pudo generar el comprobante.', 'error'); }
     }
 
     // --- FUNCIÓN: CONSULTAR Y MOSTRAR LA CUENTA CORRIENTE DEL CLIENTE ---
