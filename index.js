@@ -16,12 +16,16 @@ app.set('trust proxy', 1);
 app.use(express.json());
 
 // --- CONFIGURACIÓN DE CONEXIÓN A GESCOM (PostgreSQL, SOLO LECTURA) ---
-// Si existen variables de entorno en Render se usan; si no, toma los valores de abajo.
+// La contraseña NUNCA va en el código: se carga como variable de entorno DB_PASSWORD en Render
+// (Environment). Usuario, servidor y base no son secretos y tienen valor por defecto.
+if (!process.env.DB_PASSWORD) {
+    console.error('⛔ Falta la variable DB_PASSWORD (contraseña de Gescom). Cargala en Render > Environment: sin ella no se pueden leer los repartos.');
+}
 const pool = new Pool({
     user: process.env.DB_USER || 'gcw-bido',
     host: process.env.DB_HOST || 'bi.data.gescom.online',
     database: process.env.DB_NAME || 'gcwbi',
-    password: process.env.DB_PASSWORD || 'f1dqTqpo9Iwf4wTJ8ziUnDubh',
+    password: process.env.DB_PASSWORD || undefined,
     port: Number(process.env.DB_PORT) || 5432,
     ssl: {
         rejectUnauthorized: false
@@ -266,7 +270,7 @@ const INICIO_DIA_AR = `((date_trunc('day', now() AT TIME ZONE 'America/Argentina
 //  Variables de entorno recomendadas en Render: AUTH_SECRET, ADMIN_PASSWORD (y PIN_VERSION para renovar los PIN iniciales).
 // =====================================================================
 const crypto = require('crypto');
-const AUTH_SECRET = process.env.AUTH_SECRET || ('flota-temporal-' + pool.options.password);
+const AUTH_SECRET = process.env.AUTH_SECRET || ('flota-temporal-' + (pool.options.password || ''));
 const PIN_VERSION = process.env.PIN_VERSION || '1';
 const HORAS_SESION_CHOFER = 12;
 const HORAS_SESION_ADMIN = 12;
