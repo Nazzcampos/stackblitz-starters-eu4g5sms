@@ -896,14 +896,20 @@ app.post('/api/admin/chofer/activo', requireAdmin, requireDb, async (req, res) =
 // Un reparto de Gescom puede llevar ventas con otra fecha de entrega (ej. pedidos del día siguiente cargados en el mismo reparto).
 // Los repartos del chofer en esa fecha se toman de la tabla reparto, y se cuentan todas las ventas que lleva cada uno.
 async function codigosReparto(chofer, fecha) {
+    const codigos = new Set();
+    // 1) Repartos de las propias ventas del chofer en esa fecha (no depende de la tabla reparto)
     try {
-        const r = await pool.query(`/*REPARTOCOD*/ SELECT DISTINCT reparto_codigo::text AS reparto_codigo FROM reparto
-            WHERE empleado_chofer_nombre = $1 AND fecha_entrega = $2::date AND COALESCE(cancelado::text, 'f') NOT IN ('t', 'true', '1') AND reparto_codigo IS NOT NULL`, [chofer, fecha]);
-        return r.rows.map(f => String(f.reparto_codigo));
-    } catch (err) {
-        console.error('⚠️ No se pudieron leer los repartos del chofer:', err.message);
-        return [];
-    }
+        const r = await pool.query(`/*REPARTOCOD1*/ SELECT DISTINCT reparto_codigo::text AS c FROM venta
+            WHERE empleado_chofer_nombre = $1 AND fecha_entrega::date = $2::date AND reparto_codigo IS NOT NULL`, [chofer, fecha]);
+        r.rows.forEach(f => codigos.add(String(f.c)));
+    } catch (err) { console.error('⚠️ Repartos por ventas:', err.message); }
+    // 2) Repartos de la tabla reparto (por si el reparto no tiene ventas ese día)
+    try {
+        const r = await pool.query(`/*REPARTOCOD2*/ SELECT DISTINCT reparto_codigo::text AS c FROM reparto
+            WHERE empleado_chofer_nombre = $1 AND fecha_entrega = $2::date AND reparto_codigo IS NOT NULL`, [chofer, fecha]);
+        r.rows.forEach(f => codigos.add(String(f.c)));
+    } catch (err) { console.error('⚠️ Repartos por tabla reparto:', err.message); }
+    return [...codigos];
 }
 const esNotaCredito = tipo => /^NC/i.test(String(tipo || ''));
 
