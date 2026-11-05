@@ -893,6 +893,20 @@ app.post('/api/admin/chofer/activo', requireAdmin, requireDb, async (req, res) =
 });
 
 // --- MÓDULO DE HOJA DE RUTA CON SALDO TOTAL (DÉBITOS - CRÉDITOS) ---
+// Un reparto de Gescom puede llevar ventas con otra fecha de entrega (ej. pedidos del día siguiente cargados en el mismo reparto).
+// Los repartos del chofer en esa fecha se toman de la tabla reparto, y se cuentan todas las ventas que lleva cada uno.
+async function codigosReparto(chofer, fecha) {
+    try {
+        const r = await pool.query(`/*REPARTOCOD*/ SELECT DISTINCT reparto_codigo::text AS reparto_codigo FROM reparto
+            WHERE empleado_chofer_nombre = $1 AND fecha_entrega = $2::date AND COALESCE(cancelado::text, 'f') NOT IN ('t', 'true', '1') AND reparto_codigo IS NOT NULL`, [chofer, fecha]);
+        return r.rows.map(f => String(f.reparto_codigo));
+    } catch (err) {
+        console.error('⚠️ No se pudieron leer los repartos del chofer:', err.message);
+        return [];
+    }
+}
+const esNotaCredito = tipo => /^NC/i.test(String(tipo || ''));
+
 app.get('/api/ventas-chofer/:nombre', requireChofer, async (req, res) => {
     // Cada chofer solo puede ver su propio reparto
     if (claveNombre(decodeURIComponent(req.params.nombre)) !== claveNombre(req.chofer)) {
@@ -916,7 +930,7 @@ app.get('/api/ventas-chofer/:nombre', requireChofer, async (req, res) => {
                 rh.orden AS orden_ruta,
                 v.reparto_codigo,
                 v.empleado_chofer_nombre AS chofer,
-                v.fecha_entrega
+                $2::date AS fecha_entrega
             FROM venta v
             JOIN cliente_hist c ON v.cliente_id = c.id AND c.actual = true
             JOIN cliente_ruta_hist rh ON v.cliente_id = rh.cliente_id AND rh.actual = true
@@ -927,14 +941,10 @@ app.get('/api/ventas-chofer/:nombre', requireChofer, async (req, res) => {
               AND rh.longitud != 0
         `;
 
-        let params = [choferNombre];
-
-        if (fechaSeleccionada) {
-            query += ` AND v.fecha_entrega::date = $2 `;
-            params.push(fechaSeleccionada);
-        } else {
-            query += ` AND v.fecha_entrega::date = CURRENT_DATE `;
-        }
+        const fechaEf = (fechaSeleccionada && RE_FECHA.test(fechaSeleccionada) && fechaValida(fechaSeleccionada)) ? fechaSeleccionada : hoyArgentina();
+        const codigos = await codigosReparto(choferNombre, fechaEf);
+        const params = [choferNombre, fechaEf, codigos];
+        query += ` AND (v.fecha_entrega::date = $2::date OR v.reparto_codigo::text = ANY($3::text[])) `;
 
         query += ` ORDER BY reparto_codigo, orden_ruta ASC NULLS LAST, orden_planeado ASC;`;
 
@@ -2700,8 +2710,9 @@ app.get('/api/resumen-reparto', requireChofer, async (req, res) => {
         const palabras = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
         const claveChofer = palabras(req.chofer);
         const excluidos = new Set((process.env.CLIENTES_EXCLUIDOS_REPARTO || '').split(',').map(x => x.trim()).filter(Boolean));
-        const cab = await pool.query(`SELECT v.id::text AS id, v.cliente_id::text AS cliente_id, v.razon_social AS nombre, v.importe_total AS total
-            FROM venta v WHERE v.empleado_chofer_nombre = $1 AND v.fecha_entrega::date = $2${filtro}`, [req.chofer, fecha]);
+        const codigos = await codigosReparto(req.chofer, fecha);
+        const cab = await pool.query(`SELECT v.id::text AS id, v.cliente_id::text AS cliente_id, v.razon_social AS nombre, v.importe_total AS total, v.tipo_comprobante_codigo AS tipo
+            FROM venta v WHERE v.empleado_chofer_nombre = $1 AND (v.fecha_entrega::date = $2::date OR v.reparto_codigo::text = ANY($3::text[]))${filtro}`, [req.chofer, fecha, codigos]);
         // Igual que la lista de paradas: el remito de cajas a nombre del chofer y los clientes excluidos no cuentan
         const ventas = cab.rows.filter(f => palabras(f.nombre) !== claveChofer && !excluidos.has(String(f.cliente_id)));
         // Antes de facturar, la cabecera puede venir en $0: en ese caso se estima con el importe de los renglones
@@ -2716,6 +2727,7 @@ app.get('/api/resumen-reparto', requireChofer, async (req, res) => {
         }
         let kg = 0, importe = 0, estimado = false;
         ventas.forEach(v => {
+            if (esNotaCredito(v.tipo)) return; // las notas de crédito no suman al reparto
             const it = porVenta.get(v.id);
             if (it) kg += Number(it.gramos) / PESO_DIVISOR;
             const cab = Number(v.total) || 0;
@@ -2725,7 +2737,7 @@ app.get('/api/resumen-reparto', requireChofer, async (req, res) => {
         res.json({
             fecha,
             clientes: new Set(ventas.map(v => v.cliente_id)).size,
-            comprobantes: ventas.length,
+            comprobantes: ventas.filter(v => !esNotaCredito(v.tipo)).length,
             importe: Number(importe.toFixed(2)),
             estimado,
             kg: Number(kg.toFixed(1))
