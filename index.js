@@ -181,6 +181,12 @@ CREATE TABLE IF NOT EXISTS flota_doc_mensual (
     creado timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (chofer, periodo)
 );
+-- Camiones que el administrador quitó de la lista de documentación (ej. vehículos de prueba)
+CREATE TABLE IF NOT EXISTS flota_camion_oculto (
+    dominio text PRIMARY KEY,
+    creado timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE flota_camion_oculto ENABLE ROW LEVEL SECURITY;
 -- Seguridad: nadie puede leer estas tablas desde la API pública de Supabase; solo este servidor
 ALTER TABLE flota_chofer ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flota_checklist ENABLE ROW LEVEL SECURITY;
@@ -1890,7 +1896,12 @@ function resolverCarga(item, tipo, previo, hoy) {
     return { error: `${tipo.nombre}: falta elegir una opción.` };
 }
 
-// --- Chofer: su estado, el de su camión y si ya hizo el check-list del mes ---
+async function dominiosOcultos() {
+    const r = await db.query(`SELECT dominio FROM flota_camion_oculto`);
+    return new Set(r.rows.map(x => x.dominio));
+}
+
+// --- Chofer: su estado, el aviso de su camión (solo lectura: lo carga el administrador) y si ya hizo el check-list del mes ---
 app.get('/api/docs/mi-estado', requireChofer, requireDb, async (req, res) => {
     try {
         const hoy = hoyArgentina(), periodo = hoy.slice(0, 7);
@@ -1898,9 +1909,10 @@ app.get('/api/docs/mi-estado', requireChofer, requireDb, async (req, res) => {
         const rec = await db.query(
             `SELECT dominio, max(creado) AS ultimo FROM flota_checklist WHERE chofer = $1 AND creado > now() - interval '120 days'
              GROUP BY dominio ORDER BY 2 DESC LIMIT 12`, [req.chofer]);
+        const ocultos = await dominiosOcultos();
         const sugeridos = [];
-        rec.rows.forEach(f => { const d = normalizarDominio(f.dominio); if (d && !sugeridos.includes(d)) sugeridos.push(d); });
-        const dominio = normalizarDominio(req.query.dominio) || sugeridos[0] || '';
+        rec.rows.forEach(f => { const d = normalizarDominio(f.dominio); if (d && !ocultos.has(d) && !sugeridos.includes(d)) sugeridos.push(d); });
+        const dominio = sugeridos[0] || '';
         const tipos = await tiposDocumento(true);
         const vals = await db.query(`${SQL_VALORES} WHERE (aplica = 'chofer' AND sujeto = $1) OR (aplica = 'camion' AND sujeto = $2)`, [clave, dominio || '-']);
         const valores = mapaValores(vals.rows, hoy);
@@ -1928,16 +1940,16 @@ app.post('/api/docs/mensual', requireChofer, requireDb, async (req, res) => {
     const dominio = normalizarDominio(b.dominio);
     if (!Array.isArray(b.items) || b.items.length > 60) return res.status(400).json({ error: 'Faltan datos' });
     try {
-        const tipos = await tiposDocumento(true);
-        if (tipos.some(t => t.aplica === 'camion') && dominio.length < 5) return res.status(400).json({ error: 'Indicá el dominio del camión que manejás.' });
-        const vals = await db.query(`${SQL_VALORES} WHERE (aplica = 'chofer' AND sujeto = $1) OR (aplica = 'camion' AND sujeto = $2)`, [clave, dominio || '-']);
+        // El chofer confirma solo sus documentos personales; los del camión los carga el administrador
+        const tipos = (await tiposDocumento(true)).filter(t => t.aplica === 'chofer');
+        const vals = await db.query(`${SQL_VALORES} WHERE aplica = 'chofer' AND sujeto = $1`, [clave]);
         const previos = new Map(vals.rows.map(f => [f.aplica + '|' + f.sujeto + '|' + f.tipo, f]));
         const porClave = new Map(b.items.map(i => [String(i.aplica) + '|' + String(i.tipo), i]));
         const lote = [], faltan = [], errores = [];
         tipos.forEach(t => {
             const it = porClave.get(t.aplica + '|' + t.clave);
             if (!it) { faltan.push(t.nombre); return; }
-            const sujeto = t.aplica === 'camion' ? dominio : clave;
+            const sujeto = clave;
             const r = resolverCarga(it, t, previos.get(t.aplica + '|' + sujeto + '|' + t.clave), hoy);
             if (r.error) errores.push(r.error); else lote.push({ ...r, sujeto });
         });
@@ -1946,7 +1958,7 @@ app.post('/api/docs/mensual', requireChofer, requireDb, async (req, res) => {
         await guardarLoteDocumentos(lote, periodo, req.chofer);
         await db.query(
             `INSERT INTO flota_doc_mensual (chofer, periodo, dominio) VALUES ($1, $2, $3)
-             ON CONFLICT (chofer, periodo) DO UPDATE SET dominio = EXCLUDED.dominio, creado = now()`, [clave, periodo, dominio]);
+             ON CONFLICT (chofer, periodo) DO UPDATE SET dominio = EXCLUDED.dominio, creado = now()`, [clave, periodo, dominio || null]);
         const alertas = lote.filter(i => i.alerta).map(i => ({ tipo: i.tipo, alerta: i.alerta }));
         res.status(201).json({ exito: true, alertas });
     } catch (err) {
@@ -1968,7 +1980,9 @@ async function armarResumenDocumentos() {
     const doms = new Set(vals.rows.filter(v => v.aplica === 'camion').map(v => v.sujeto));
     const rec = await db.query(`SELECT DISTINCT dominio FROM flota_checklist WHERE creado > now() - interval '180 days'`);
     rec.rows.forEach(f => { const d = normalizarDominio(f.dominio); if (d.length >= 5) doms.add(d); });
-    const camiones = [...doms].sort().map(d => ({ dominio: d, docs: docsDeSujeto(tipos, 'camion', d, valores, hoy) }));
+    const ocultosSet = await dominiosOcultos();
+    const camionesOcultos = [...ocultosSet].sort();
+    const camiones = [...doms].filter(d => !ocultosSet.has(d)).sort().map(d => ({ dominio: d, docs: docsDeSujeto(tipos, 'camion', d, valores, hoy) }));
     const choferes = chof.rows.filter(c => c.activo).map(c => ({
         clave: c.clave, nombre: c.nombre, docs: docsDeSujeto(tipos, 'chofer', c.clave, valores, hoy),
         mensual: { hecho: mensuales.has(c.clave), dominio: mensuales.get(c.clave) || null }
@@ -1988,7 +2002,7 @@ async function armarResumenDocumentos() {
     const nombreTipo = new Map(tipos.map(t => [t.clave, t.nombre]));
     const alertas = al.rows.map(a => ({ ...a, doc: nombreTipo.get(a.tipo) || a.tipo, nombre: a.aplica === 'chofer' ? (nombres.get(a.sujeto) || a.sujeto) : a.sujeto }));
     const cuenta = e => atencion.filter(a => a.estado === e).length;
-    return { hoy, periodo, tipos, camiones, choferes, atencion, alertas,
+    return { hoy, periodo, tipos, camiones, camionesOcultos, choferes, atencion, alertas,
              contadores: { vencidos: cuenta('vencido'), ultimo: cuenta('ultimo'), aviso: cuenta('aviso'), faltan: cuenta('falta'),
                            sinMensual: choferes.filter(c => !c.mensual.hecho).length, alertasCarga: alertas.length },
              diasAviso: DIAS_AVISO_DOC, diasUltimo: DIAS_ULTIMO_DOC };
@@ -1997,6 +2011,21 @@ async function armarResumenDocumentos() {
 app.get('/api/admin/docs/resumen', requireAdmin, requireDb, async (req, res) => {
     try { res.json(await armarResumenDocumentos()); }
     catch (err) { console.error('❌ Error al armar el resumen de documentación:', err.message); res.status(500).json({ error: 'No se pudo cargar la documentación' }); }
+});
+
+// Administrador: quitar un camión de la lista de documentación {dominio, oculto:true} o volver a mostrarlo {dominio, oculto:false}
+app.post('/api/admin/docs/camion-oculto', requireAdmin, requireDb, async (req, res) => {
+    const dominio = normalizarDominio((req.body || {}).dominio);
+    const oculto = (req.body || {}).oculto;
+    if (dominio.length < 5 || typeof oculto !== 'boolean') return res.status(400).json({ error: 'Faltan datos' });
+    try {
+        if (oculto) await db.query(`INSERT INTO flota_camion_oculto (dominio) VALUES ($1) ON CONFLICT DO NOTHING`, [dominio]);
+        else await db.query(`DELETE FROM flota_camion_oculto WHERE dominio = $1`, [dominio]);
+        res.json({ exito: true, oculto });
+    } catch (err) {
+        console.error('❌ Error al ocultar/restaurar camión:', err.message);
+        res.status(500).json({ error: 'No se pudo actualizar el camión' });
+    }
 });
 
 // El administrador puede corregir o cargar una fecha directamente

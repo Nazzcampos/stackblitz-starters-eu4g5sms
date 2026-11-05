@@ -876,9 +876,6 @@
                 </div>
             </div>
             <div class="ord-banner" id="docsEstadoMes">Cargando…</div>
-            <label for="docsDominio">Dominio del camión que manejás</label>
-            <input type="text" id="docsDominio" list="docsDominios" placeholder="Ej: AF 189 LD" autocapitalize="characters" autocomplete="off" onchange="docsCambiarDominio()">
-            <datalist id="docsDominios"></datalist>
             <div id="docsFormulario"></div>
             <div class="doc-progreso" id="docsProgreso" style="display:none;"></div>
             <button type="button" id="docsEnviar" onclick="docsEnviarMensual()" style="display:none;">📤 Enviar documentación del mes</button>
@@ -2814,25 +2811,13 @@
     async function docsAbrir() {
         const estado = document.getElementById('docsEstadoMes');
         try {
-            const d = await docsTraer((document.getElementById('docsDominio').value || '').trim());
+            const d = await docsTraer('');
             docs.dato = d;
         } catch (e) { estado.className = 'ord-banner err'; estado.textContent = 'No se pudo cargar tu documentación. Probá de nuevo.'; return; }
-        const campo = document.getElementById('docsDominio');
-        if (!campo.value) campo.value = docs.dato.dominio || '';
-        document.getElementById('docsDominios').innerHTML = (docs.dato.dominios || []).map(x => '<option value="' + escapeHtml(x) + '">').join('');
         docs.abierto = true;
         docsPintarBanner();
         docsPintar();
     }
-    async function docsCambiarDominio() {
-        const campo = document.getElementById('docsDominio');
-        let nuevo;
-        try { nuevo = await docsTraer(campo.value.trim()); } catch (e) { mostrarToast('No se pudo cargar ese camión.', 'error'); return; }
-        Object.keys(docs.sel).filter(k => k.startsWith('camion|')).forEach(k => { delete docs.sel[k]; delete docs.fechas[k]; });
-        docs.dato = nuevo;
-        docsPintar();
-    }
-
     function docsClave(aplica, tipo) { return aplica + '|' + tipo; }
     function docsCompleto(aplica, d) {
         const k = docsClave(aplica, d.tipo), s = docs.sel[k];
@@ -2877,17 +2862,23 @@
         if (d.mensual.hecho) { estado.className = 'ord-banner ok'; estado.textContent = '✅ Ya hiciste la documentación de ' + d.periodo + ' (el ' + d.mensual.cuando + '). Si renovaste algo, actualizalo acá.'; }
         else { estado.className = 'ord-banner warn'; estado.textContent = '📋 Falta la documentación de ' + d.periodo + '. Es obligatoria: confirmá o actualizá cada vencimiento.'; }
         let html = '<div class="doc-titulo">🪪 Tus documentos</div>' + d.chofer.map(x => docsFila('chofer', x)).join('');
-        if (d.dominio) html += '<div class="doc-titulo">🚚 Camión ' + escapeHtml(d.dominio) + '</div>' + d.camion.map(x => docsFila('camion', x)).join('');
-        else html += '<p class="empty-state">Escribí arriba el dominio del camión que manejás para cargar también sus documentos.</p>';
+        if (d.dominio) {
+            const alertas = d.camion.filter(x => ['vencido', 'ultimo', 'aviso'].includes(x.estado));
+            html += '<div class="doc-titulo">🚚 Tu camión ' + escapeHtml(d.dominio) + '</div>' +
+                (alertas.length
+                    ? alertas.map(x => '<div class="doc-item ' + x.estado + '"><div class="doc-nom">' + escapeHtml(x.nombre) + '</div><div class="doc-estado">' + escapeHtml(docsEstadoTexto(x)) + '</div></div>').join('') +
+                      '<p class="doc-nota">Los documentos del camión los actualiza el administrador. Si renovaste alguno, avisale.</p>'
+                    : '<p class="doc-nota">✅ Documentación del camión al día. La controla el administrador.</p>');
+        }
         document.getElementById('docsFormulario').innerHTML = html;
-        const todos = d.chofer.map(x => ['chofer', x]).concat(d.dominio ? d.camion.map(x => ['camion', x]) : []);
+        const todos = d.chofer.map(x => ['chofer', x]);
         const hechos = todos.filter(([a, x]) => docsCompleto(a, x)).length;
         const falta = todos.length - hechos;
         const prog = document.getElementById('docsProgreso');
         prog.style.display = todos.length ? 'flex' : 'none';
         prog.innerHTML = '<span>Completaste ' + hechos + ' de ' + todos.length + '</span><button type="button" class="btn-ghost" onclick="docsTodoIgual()">✔ Todo lo vigente sigue igual</button>';
         const bt = document.getElementById('docsEnviar');
-        bt.style.display = todos.length && d.dominio ? 'block' : 'none';
+        bt.style.display = todos.length ? 'block' : 'none';
         bt.disabled = falta > 0;
         bt.style.opacity = falta > 0 ? '.5' : '1';
         bt.textContent = falta > 0 ? 'Te faltan ' + falta + ' por completar' : '📤 Enviar documentación del mes';
@@ -2905,7 +2896,6 @@
     function docsTodoIgual() {
         const d = docs.dato;
         d.chofer.forEach(x => { if (docsPuedeConfirmar(x) && !docs.sel[docsClave('chofer', x.tipo)]) docs.sel[docsClave('chofer', x.tipo)] = 'confirmar'; });
-        if (d.dominio) d.camion.forEach(x => { if (docsPuedeConfirmar(x) && !docs.sel[docsClave('camion', x.tipo)]) docs.sel[docsClave('camion', x.tipo)] = 'confirmar'; });
         docsPintar();
     }
 
@@ -2913,7 +2903,6 @@
         const d = docs.dato;
         const items = [];
         d.chofer.forEach(x => items.push({ aplica: 'chofer', tipo: x.tipo }));
-        d.camion.forEach(x => items.push({ aplica: 'camion', tipo: x.tipo }));
         items.forEach(i => { const k = docsClave(i.aplica, i.tipo); i.accion = docs.sel[k]; i.fecha = docs.fechas[k] || undefined; });
         const bt = document.getElementById('docsEnviar');
         bt.disabled = true;
@@ -2932,7 +2921,7 @@
         }
     }
     async function docsRevisarAvisosSilencioso() {
-        try { docs.dato = await docsTraer(document.getElementById('docsDominio').value.trim()); } catch (e) { return; }
+        try { docs.dato = await docsTraer(''); } catch (e) { return; }
         docsPintarBanner();
         const nb = document.querySelectorAll('#navIsland .nav-btn')[4];
         if (nb) nb.classList.toggle('con-aviso', docs.dato.avisos.some(a => a.estado === 'vencido' || a.estado === 'ultimo') || !docs.dato.mensual.hecho);

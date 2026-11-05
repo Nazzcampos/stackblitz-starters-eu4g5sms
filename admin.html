@@ -725,7 +725,7 @@
                 </div>
                 <div>
                     <h2 class="section-title">Documentación y vencimientos</h2>
-                    <p class="section-sub">Estado de la documentación por camión y por chofer. Los choferes la confirman o actualizan una vez por mes.</p>
+                    <p class="section-sub">Estado de la documentación por camión y por chofer. Los choferes confirman solo sus documentos personales una vez por mes; los del camión los cargás vos.</p>
                 </div>
             </div>
             <div class="busqueda">
@@ -740,6 +740,7 @@
             <div class="table-wrap"><table><thead><tr><th>Estado</th><th>De</th><th>Documento</th><th>Vence</th></tr></thead><tbody id="docsAtencion"><tr><td colspan="4" class="empty-row">Cargando…</td></tr></tbody></table></div>
             <div class="doc-sub">Camiones</div>
             <div class="table-wrap"><table id="docsTablaCamiones"></table></div>
+            <div id="docsCamionesOcultos" style="margin:8px 0 14px;"></div>
             <div class="doc-sub">Choferes</div>
             <div class="table-wrap"><table id="docsTablaChoferes"></table></div>
         </div>
@@ -1387,12 +1388,24 @@
         };
         document.getElementById('docsTablaCamiones').innerHTML = d.camiones.length
             ? '<thead><tr><th>Camión</th>' + tCam.map(t => `<th>${escapeHtml(t.nombre)}</th>`).join('') + '<th></th></tr></thead><tbody>' +
-              d.camiones.map(c => `<tr><td><b>${escapeHtml(c.dominio)}</b></td>${c.docs.map(x => celda('camion', c.dominio, c.dominio, x)).join('')}<td><button type="button" class="btn-suave" onclick="verHistorialDoc('camion','${escapeHtml(c.dominio)}','${escapeHtml(c.dominio)}')">Historial</button></td></tr>`).join('') + '</tbody>'
+              d.camiones.map(c => `<tr><td><b>${escapeHtml(c.dominio)}</b></td>${c.docs.map(x => celda('camion', c.dominio, c.dominio, x)).join('')}<td><button type="button" class="btn-suave" onclick="verHistorialDoc('camion','${escapeHtml(c.dominio)}','${escapeHtml(c.dominio)}')">Historial</button> <button type="button" class="btn-suave" onclick="quitarCamionDoc('${escapeHtml(c.dominio)}', true)">Quitar</button></td></tr>`).join('') + '</tbody>'
             : '<tbody><tr><td class="empty-row">Todavía no hay camiones. Aparecen cuando un chofer hace un check-list o carga documentación.</td></tr></tbody>';
+        document.getElementById('docsCamionesOcultos').innerHTML = (d.camionesOcultos || []).length
+            ? '<small style="color:var(--muted)">Quitados de la lista:</small> ' + d.camionesOcultos.map(x => `<button type="button" class="btn-suave" onclick="quitarCamionDoc('${escapeHtml(x)}', false)">↩ ${escapeHtml(x)}</button>`).join(' ')
+            : '';
         document.getElementById('docsTablaChoferes').innerHTML = d.choferes.length
             ? '<thead><tr><th>Chofer</th><th>Check-list del mes</th>' + tCho.map(t => `<th>${escapeHtml(t.nombre)}</th>`).join('') + '<th></th></tr></thead><tbody>' +
               d.choferes.map(c => `<tr><td><b>${escapeHtml(c.nombre)}</b></td><td>${c.mensual.hecho ? '<span class="badge badge-ok">✔ Hecho' + (c.mensual.dominio ? ' · ' + escapeHtml(c.mensual.dominio) : '') + '</span>' : '<span class="badge badge-warn">Pendiente</span>'}</td>${c.docs.map(x => celda('chofer', c.clave, c.nombre, x)).join('')}<td><button type="button" class="btn-suave" onclick="verHistorialDoc('chofer','${escapeHtml(c.clave)}','${escapeHtml(c.nombre)}')">Historial</button></td></tr>`).join('') + '</tbody>'
             : '<tbody><tr><td class="empty-row">No hay choferes activos.</td></tr></tbody>';
+    }
+
+    async function quitarCamionDoc(dominio, oculto) {
+        if (oculto && !confirm('¿Quitar ' + dominio + ' de la lista de documentación? Deja de aparecer en los controles y avisos. Podés volver a mostrarlo cuando quieras.')) return;
+        try {
+            const res = await adminFetch('/api/admin/docs/camion-oculto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dominio, oculto }) });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            cargarDocs();
+        } catch (err) { if (err.message !== 'SESION') alert('No se pudo actualizar el camión.'); }
     }
 
     function abrirDoc(aplica, sujeto, tipo) {
