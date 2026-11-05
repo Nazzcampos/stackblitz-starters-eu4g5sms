@@ -15,7 +15,7 @@ try {
 
 module.exports = {
     appId: 'app.flota.piloto',
-    appName: 'Flota',
+    appName: 'BeniQ',
     webDir: 'www',
     server: {
         url: destino.origin,
