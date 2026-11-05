@@ -374,6 +374,34 @@
         .logo-orb, .login-orb, .login-logo, .logo { background: none !important; padding: 0; overflow: hidden; box-shadow: 0 8px 22px rgba(37,99,235,.45); }
         .logo-img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
         .brand-title b, .marca b, .login-marca b { color: #22d3ee !important; }
+    
+        /* ===== Menú lateral desplegable (computadoras); en pantallas chicas queda la barra de abajo ===== */
+        .nav-toggle { display: none; }
+        @media (min-width: 900px) {
+            body { padding-bottom: 28px; --side-w: 236px; }
+            body.menu-min { --side-w: 92px; }
+            .container { max-width: none; margin: 8px 0 0 var(--side-w); padding: 0 24px 0 0; transition: margin-left .25s ease; }
+            .nav-island {
+                left: 16px; top: 88px; bottom: 16px; transform: none; width: calc(var(--side-w) - 32px);
+                flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 4px; padding: 8px;
+                border-radius: 22px; overflow: hidden auto; transition: width .25s ease;
+            }
+            .nav-toggle {
+                display: flex; align-items: center; gap: 12px; padding: 10px 14px; margin-bottom: 6px;
+                font-size: .8rem; font-weight: 800; letter-spacing: .6px; text-transform: uppercase; color: var(--muted);
+                background: transparent; border: none; border-bottom: 1px solid var(--border); border-radius: 12px 12px 0 0; box-shadow: none;
+                white-space: nowrap; cursor: pointer;
+            }
+            .nav-toggle:hover { color: var(--text); background: rgba(255,255,255,.05); transform: none; filter: none; }
+            .nav-toggle svg { width: 22px; height: 22px; flex: 0 0 22px; }
+            .nav-btn { flex: 0 0 auto; flex-direction: row; justify-content: flex-start; gap: 14px; padding: 12px 14px; font-size: .9rem; letter-spacing: .2px; border-radius: 14px; white-space: nowrap; text-align: left; }
+            .nav-btn svg { flex: 0 0 22px; }
+            .nav-btn.active svg { transform: none; }
+            .nav-btn.active::before { top: 10px; bottom: 10px; left: 0; width: 3px; height: auto; margin: 0; animation: none; }
+            .nav-btn.con-aviso::after { top: 50%; right: 12px; margin-top: -5px; }
+            body.menu-min .nav-toggle, body.menu-min .nav-btn { justify-content: center; padding-left: 0; padding-right: 0; font-size: 0; gap: 0; }
+            body.menu-min .nav-btn.con-aviso::after { right: 10px; top: 8px; margin-top: 0; }
+        }
     </style>
 </head>
 <body>
@@ -816,6 +844,10 @@
 
 <!-- DOCK DE NAVEGACIÓN (8 SOLAPAS) -->
 <nav class="nav-island">
+    <button type="button" class="nav-toggle" id="btnMenuLateral" onclick="alternarMenuLateral()" aria-label="Contraer o expandir el menú">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        Menú
+    </button>
     <button type="button" class="nav-btn active" onclick="cambiarVistaAdmin('gps', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><path d="M8 2v16"/><path d="M16 6v16"/></svg>
         Flota
@@ -1686,6 +1718,16 @@
             cargarUsuariosDeposito();
         } catch (e) {}
     }
+
+    // Menú lateral: se contrae a solo íconos y recuerda la elección en este navegador
+    function alternarMenuLateral() {
+        const min = document.body.classList.toggle('menu-min');
+        try { localStorage.setItem('beniq_menu_min', min ? '1' : '0'); } catch (e) {}
+    }
+    (function iniciarMenuLateral() {
+        try { if (localStorage.getItem('beniq_menu_min') === '1') document.body.classList.add('menu-min'); } catch (e) {}
+        document.querySelectorAll('.nav-btn').forEach(b => b.title = b.textContent.trim());
+    })();
 
     function cambiarVistaAdmin(vista, btn) {
         document.querySelectorAll('.vista-seccion').forEach(s => s.classList.remove('active'));
