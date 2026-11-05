@@ -2704,21 +2704,30 @@ app.get('/api/resumen-reparto', requireChofer, async (req, res) => {
             FROM venta v WHERE v.empleado_chofer_nombre = $1 AND v.fecha_entrega::date = $2${filtro}`, [req.chofer, fecha]);
         // Igual que la lista de paradas: el remito de cajas a nombre del chofer y los clientes excluidos no cuentan
         const ventas = cab.rows.filter(f => palabras(f.nombre) !== claveChofer && !excluidos.has(String(f.cliente_id)));
-        let kg = 0;
+        // Antes de facturar, la cabecera puede venir en $0: en ese caso se estima con el importe de los renglones
+        const porVenta = new Map();
         if (ventas.length) {
-            const ids = ventas.map(v => v.id);
-            const r = await pool.query(`SELECT COALESCE(SUM(
-                    COALESCE(NULLIF(vi.unidades, 0), vi.cantidad * COALESCE(NULLIF(vi.unidad_factor, 0), 1)) * COALESCE(it.peso, 0)
-                ), 0) AS gramos
+            const r = await pool.query(`SELECT vi.venta_id::text AS id,
+                    COALESCE(SUM(COALESCE(NULLIF(vi.unidades, 0), vi.cantidad * COALESCE(NULLIF(vi.unidad_factor, 0), 1)) * COALESCE(it.peso, 0)), 0) AS gramos,
+                    COALESCE(SUM(vi.importe_total_c_imp), 0) AS importe
                 FROM venta_item vi LEFT JOIN item it ON it.id = vi.item_id AND it.tenant_id = vi.tenant_id
-                WHERE vi.venta_id = ANY($1::bigint[])`, [ids]);
-            kg = Number(r.rows[0].gramos) / PESO_DIVISOR;
+                WHERE vi.venta_id = ANY($1::bigint[]) GROUP BY vi.venta_id`, [ventas.map(v => v.id)]);
+            r.rows.forEach(f => porVenta.set(f.id, f));
         }
+        let kg = 0, importe = 0, estimado = false;
+        ventas.forEach(v => {
+            const it = porVenta.get(v.id);
+            if (it) kg += Number(it.gramos) / PESO_DIVISOR;
+            const cab = Number(v.total) || 0;
+            if (cab > 0) importe += cab;
+            else if (it && Number(it.importe) > 0) { importe += Number(it.importe); estimado = true; }
+        });
         res.json({
             fecha,
             clientes: new Set(ventas.map(v => v.cliente_id)).size,
             comprobantes: ventas.length,
-            importe: Number(ventas.reduce((a, v) => a + (Number(v.total) || 0), 0).toFixed(2)),
+            importe: Number(importe.toFixed(2)),
+            estimado,
             kg: Number(kg.toFixed(1))
         });
     } catch (err) {

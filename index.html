@@ -1055,8 +1055,8 @@
                 const kg = Number(d.kg).toLocaleString('es-AR', { maximumFractionDigits: 1 });
                 caja.innerHTML =
                     '<div class="rep-item"><div class="rep-num">' + d.clientes + '</div><div class="rep-lbl">Clientes</div></div>' +
-                    '<div class="rep-item"><div class="rep-num">' + formatoPesos(d.importe) + '</div><div class="rep-lbl">En reparto</div></div>' +
-                    '<div class="rep-item"><div class="rep-num">' + kg + ' kg</div><div class="rep-lbl">Peso</div></div>' +
+                    '<div class="rep-item"><div class="rep-num">' + (d.importe > 0 ? formatoPesos(d.importe) : 'Sin facturar') + '</div><div class="rep-lbl">' + (d.estimado ? 'En reparto (estimado)' : 'En reparto') + '</div></div>' +
+                    '<div class="rep-item"><div class="rep-num">≈ ' + kg + ' kg</div><div class="rep-lbl">Peso aproximado</div></div>' +
                     '<div class="rep-item"><div class="rep-num">' + formatoPesos(cobrar) + '</div><div class="rep-lbl">A cobrar (deuda)</div></div>';
             }
             caja.style.display = 'grid';
