@@ -255,6 +255,40 @@
             font-size: .72rem; font-weight: 700; color: var(--text);
             background: rgba(10, 14, 36, .88); border: 1px solid var(--border-strong);
         }
+
+        /* ---------- Ruta sugerida y mapa grande ---------- */
+        .pin-visto { opacity: .4; filter: grayscale(.7); }
+        .pin-next { transform: scale(1.25); box-shadow: 0 0 0 4px rgba(56,189,248,.6), 0 3px 10px rgba(0,0,0,.5); }
+        .ruta-barra { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .ruta-resumen { flex: 1 1 160px; font-size: .8rem; font-weight: 700; color: var(--muted); }
+        .ruta-resumen b { color: var(--cyan); }
+        .btn-ruta { flex: 0 0 auto; width: auto; margin: 0; padding: 10px 16px; font-size: .86rem; }
+        .nav-arriba, .nav-abajo { display: none; }
+        .map-wrap.full { position: fixed; inset: 0; margin: 0; z-index: 1900; background: var(--bg-0); }
+        .map-wrap.full #map-chofer { height: 100%; border-radius: 0; border: 0; }
+        .map-wrap.full .leaflet-control-zoom, .map-wrap.full .map-status { display: none; }
+        .map-wrap.full .map-controls { top: calc(112px + env(safe-area-inset-top)); right: 10px; }
+        .map-wrap.full .nav-arriba {
+            display: flex; align-items: center; gap: 14px; position: absolute; z-index: 1100;
+            top: calc(10px + env(safe-area-inset-top)); left: 10px; right: 10px; padding: 12px 16px;
+            background: rgba(8, 24, 70, .96); border: 1px solid var(--border-strong); border-radius: 20px; box-shadow: 0 14px 34px rgba(0,0,0,.6);
+        }
+        .nav-flecha { flex: none; width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--violet), var(--violet-2)); }
+        .nav-flecha svg { transition: transform .25s; }
+        .nav-dist { font-size: 1.5rem; font-weight: 800; line-height: 1.1; color: #fff; }
+        .nav-instr { font-size: .92rem; font-weight: 600; color: #cbd5e1; overflow-wrap: anywhere; }
+        .map-wrap.full .nav-abajo {
+            display: block; position: absolute; z-index: 1100; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom));
+            padding: 12px; background: rgba(8, 24, 70, .96); border: 1px solid var(--border-strong); border-radius: 22px; box-shadow: 0 -10px 34px rgba(0,0,0,.55);
+        }
+        .nav-parada { display: flex; gap: 12px; align-items: center; }
+        .nav-nombre { font-weight: 800; font-size: 1rem; color: #fff; }
+        .nav-dir { font-size: .8rem; color: var(--muted); }
+        .nav-metricas { margin: 8px 0 10px; font-size: .8rem; font-weight: 700; color: var(--muted); }
+        .nav-metricas b { color: var(--cyan); }
+        .nav-botones { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .nav-botones button { width: auto; margin: 0; padding: 10px 2px; font-size: .74rem; border-radius: 12px; background: rgba(255,255,255,.08); border: 1px solid var(--border); box-shadow: none; }
+        .nav-botones button.on { background: linear-gradient(135deg, var(--cyan), var(--violet-2)); border-color: transparent; }
         .lista-clientes { margin-top: 14px; }
         .cliente-card {
             display: flex; gap: 12px; align-items: flex-start;
@@ -742,11 +776,35 @@
             <div class="map-wrap">
                 <div id="map-chofer"></div>
                 <div class="map-controls">
+                    <button type="button" class="map-fab" id="btnExpandir" onclick="alternarMapaGrande()" aria-label="Mapa en pantalla completa" title="Mapa en pantalla completa">
+                        <svg id="icoExpandir" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+                    </button>
                     <button type="button" class="map-fab" id="btnMiUbicacion" onclick="centrarEnMiUbicacion()" aria-label="Mi ubicación en vivo" title="Mi ubicación en vivo">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>
                     </button>
                 </div>
                 <div class="map-status" id="mapStatus">Ubicación apagada · tocá ◎ para verla en vivo</div>
+                <div class="nav-arriba" id="navArriba">
+                    <div class="nav-flecha" id="navFlecha"></div>
+                    <div><div class="nav-dist" id="navDist">—</div><div class="nav-instr" id="navInstr">Calculando la ruta…</div></div>
+                </div>
+                <div class="nav-abajo" id="navAbajo">
+                    <div class="nav-parada">
+                        <div class="orden-badge" id="navOrden">-</div>
+                        <div style="min-width:0;"><div class="nav-nombre" id="navNombre">Sin paradas pendientes</div><div class="nav-dir" id="navDir"></div></div>
+                    </div>
+                    <div class="nav-metricas" id="navMetricas"></div>
+                    <div class="nav-botones">
+                        <button type="button" id="btnSeguir" onclick="alternarSeguir()">Seguirme</button>
+                        <button type="button" onclick="rutaSaltear()">Saltear</button>
+                        <button type="button" onclick="rutaAbrirGoogle()">Google Maps</button>
+                        <button type="button" onclick="cerrarMapaGrande()">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+            <div class="ruta-barra">
+                <div class="ruta-resumen" id="rutaResumen">🧭 Ruta sugerida: esperando tu reparto…</div>
+                <button type="button" class="btn-ruta" onclick="abrirMapaGrande()">Abrir mapa grande</button>
             </div>
             <button type="button" class="btn-ghost" id="btnPermisosNativos" style="display:none; width:100%; margin-top:8px; padding:9px; font-size:.8rem;" onclick="abrirBienvenidaNativa(true)">⚙ Permisos y batería del celular</button>
             <div id="alertasStatus" style="margin-top:8px; padding:8px 12px; font-size:.78rem; font-weight:700; color: var(--muted); background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 12px;"></div>
@@ -1146,6 +1204,7 @@
         document.getElementById('avisoWrap').innerHTML = '';
         clientesPorId = {};
         clientesAvisados.clear();
+        rutaReset();
         ordenReset();
         docsReset();
         choferActual = "";
@@ -1230,6 +1289,313 @@
     let marcadoresClientes = [];
     let marcadorChoferVivo = null;
 
+    // =====================================================================
+    //  RUTA SUGERIDA: recorrido por calles pasando por las paradas en el orden del reparto,
+    //  con mapa en pantalla completa e indicaciones paso a paso (la ruta la calcula el servidor)
+    // =====================================================================
+    const RADIO_VISITA_M = 45;       // a esta distancia de un cliente se da la parada por visitada
+    const FUERA_DE_RUTA_M = 80;      // si el GPS se aleja tanto del recorrido, se recalcula
+    let paradasRuta = [];            // clientes con ubicación, en orden de reparto
+    let pinInfo = {};                // id -> { orden, deuda }
+    let marcadoresPorId = {};
+    let visitadosRuta = new Set();
+    let ruta = null;                 // { geom, cum, pasos, tramos, fin, pend, conGPS, distancia, duracion }
+    let lineasRuta = [];
+    let rutaCalculando = false, rutaUltimoCalculo = 0, rutaTimer = null, rutaFuera = 0, rutaPi = 0;
+    let rutaVigente = false;
+    let mapaPlaceholder = null;
+
+    function claveVisitados() { return choferActual + ':' + document.getElementById('inputFechaRuta').value; }
+    function cargarVisitados() {
+        visitadosRuta = new Set();
+        try {
+            const o = JSON.parse(localStorage.getItem('flota_visitados') || '{}');
+            if (o.k === claveVisitados() && Array.isArray(o.ids)) o.ids.forEach(i => visitadosRuta.add(String(i)));
+        } catch (e) {}
+    }
+    function guardarVisitados() { try { localStorage.setItem('flota_visitados', JSON.stringify({ k: claveVisitados(), ids: [...visitadosRuta] })); } catch (e) {} }
+
+    function pendientes() { return paradasRuta.filter(c => !visitadosRuta.has(String(c.id).replace(/\D/g, ''))); }
+    function idSeguroDe(c) { return String(c.id).replace(/\D/g, ''); }
+
+    function iconoPin(id) {
+        const i = pinInfo[id] || { orden: '', deuda: false };
+        const pend = pendientes();
+        const esSiguiente = pend.length && idSeguroDe(pend[0]) === id;
+        const clase = (i.deuda ? 'pin-debt' : 'pin-ok') + (visitadosRuta.has(id) ? ' pin-visto' : '') + (esSiguiente ? ' pin-next' : '');
+        return L.divIcon({ className: 'custom-pin', html: `<div class="pin ${clase}">${escapeHtml(i.orden)}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] });
+    }
+    function pintarPines() { Object.keys(marcadoresPorId).forEach(id => marcadoresPorId[id].setIcon(iconoPin(id))); }
+
+    function decodificarPolyline(str) {
+        const out = []; let i = 0, lat = 0, lon = 0;
+        while (i < str.length) {
+            for (const eje of [0, 1]) {
+                let b, r = 0, sh = 0;
+                do { b = str.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32);
+                const d = (r & 1) ? ~(r >> 1) : (r >> 1);
+                if (eje === 0) lat += d; else lon += d;
+            }
+            out.push([lat / 1e6, lon / 1e6]);
+        }
+        return out;
+    }
+
+    function fmtDist(m) {
+        if (m < 1000) return (m < 200 ? Math.max(10, Math.round(m / 10) * 10) : Math.round(m / 50) * 50) + ' m';
+        return (m / 1000).toFixed(m < 10000 ? 1 : 0).replace('.', ',') + ' km';
+    }
+    function fmtTiempo(seg) {
+        const min = Math.max(1, Math.round(seg / 60));
+        if (min < 60) return min + ' min';
+        return Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0') + ' min';
+    }
+
+    function textoPaso(p) {
+        const n = p.n ? p.n : '';
+        const en = n ? ' en ' + n : '';
+        const por = n ? ' por ' + n : '';
+        const dir = { 'left': 'a la izquierda', 'right': 'a la derecha', 'slight left': 'levemente a la izquierda', 'slight right': 'levemente a la derecha', 'sharp left': 'cerrado a la izquierda', 'sharp right': 'cerrado a la derecha' };
+        if (p.t === 'arrive') return 'Llegaste a tu parada';
+        if (p.t === 'roundabout' || p.t === 'rotary' || p.t === 'roundabout turn') return 'En la rotonda, tomá la ' + (p.ex || 1) + 'ª salida' + (n ? ' hacia ' + n : '');
+        if (p.m === 'uturn') return 'Hacé un cambio de sentido';
+        if (p.t === 'fork') return 'En la bifurcación, mantenete ' + (dir[p.m] || 'derecho') + por;
+        if (p.t === 'merge') return 'Incorporate' + por;
+        if (p.t === 'on ramp' || p.t === 'off ramp') return 'Tomá la salida ' + (dir[p.m] || '') + por;
+        if (dir[p.m]) return 'Girá ' + dir[p.m] + en;
+        return 'Seguí derecho' + por;
+    }
+    const ANGULO_PASO = { 'straight': 0, 'slight right': 45, 'right': 90, 'sharp right': 135, 'uturn': 180, 'sharp left': -135, 'left': -90, 'slight left': -45 };
+    function flechaSvg(grados, llegada) {
+        if (llegada) return '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>';
+        return `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(${grados}deg)"><path d="M12 20V5"/><path d="M6 11l6-6 6 6"/></svg>`;
+    }
+
+    function rutaDibujar() {
+        lineasRuta.forEach(l => mapChofer.removeLayer(l));
+        lineasRuta = [];
+        if (!ruta) return;
+        lineasRuta.push(L.polyline(ruta.geom, { color: '#0b1030', weight: 10, opacity: .7, interactive: false, lineJoin: 'round' }).addTo(mapChofer));
+        lineasRuta.push(L.polyline(ruta.geom, { color: '#38bdf8', weight: 5, opacity: .95, interactive: false, lineJoin: 'round' }).addTo(mapChofer));
+    }
+
+    function rutaPrepararDatos(r, pend, conGPS) {
+        const geom = decodificarPolyline(r.geometria);
+        const cum = [0];
+        for (let i = 1; i < geom.length; i++) cum.push(cum[i - 1] + distanciaMetros(geom[i - 1][0], geom[i - 1][1], geom[i][0], geom[i][1]));
+        // cada paso se ubica en un punto del trazado, para saber cuál es el próximo aunque el GPS se saltee un punto
+        const pasos = []; const fin = [];
+        let desde = 0;
+        r.tramos.forEach((t, ti) => {
+            t.pasos.forEach(p => {
+                if (p.t === 'depart') return;
+                let mejor = desde, md = Infinity;
+                const tope = Math.min(geom.length, desde + 4000);
+                for (let k = desde; k < tope; k++) {
+                    const d = (geom[k][0] - p.ll[0]) ** 2 + (geom[k][1] - p.ll[1]) ** 2;
+                    if (d < md) { md = d; mejor = k; }
+                }
+                desde = mejor;
+                pasos.push(Object.assign({ gi: mejor, ti }, p));
+                if (p.t === 'arrive') fin[ti] = mejor;
+            });
+            if (fin[ti] === undefined) fin[ti] = geom.length - 1;
+        });
+        return { geom, cum, pasos, tramos: r.tramos, fin, pend: pend.map(idSeguroDe), conGPS, distancia: r.distancia, duracion: r.duracion };
+    }
+
+    function rutaProgramar(ms) {
+        clearTimeout(rutaTimer);
+        rutaTimer = setTimeout(() => rutaCalcular(true), ms);
+    }
+
+    async function rutaCalcular(forzar) {
+        if (!rutaVigente) return;
+        const pend = pendientes();
+        if (!pend.length) { ruta = null; rutaDibujar(); rutaPintarResumen(); navActualizar(); pintarPines(); return; }
+        const puntos = [];
+        const conGPS = !!ultimaPosicion;
+        if (conGPS) puntos.push([ultimaPosicion.lat, ultimaPosicion.lon]);
+        const lote = pend.slice(0, conGPS ? 49 : 50);
+        lote.forEach(c => puntos.push([Number(c.lat), Number(c.lon)]));
+        if (puntos.length < 2) { ruta = null; rutaDibujar(); rutaPintarResumen(); navActualizar(); pintarPines(); return; }
+        const espera = rutaUltimoCalculo + 3000 - Date.now();
+        if (!forzar || rutaCalculando || espera > 0) { rutaProgramar(Math.max(1500, espera)); return; }
+        rutaCalculando = true; rutaUltimoCalculo = Date.now();
+        try {
+            const res = await apiFetch('/api/ruta-sugerida', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ puntos }) });
+            const datos = await res.json().catch(() => ({}));
+            if (!rutaVigente) return;
+            if (!res.ok) throw new Error(datos.error || 'HTTP ' + res.status);
+            ruta = rutaPrepararDatos(datos, lote, conGPS);
+            rutaPi = 0; rutaFuera = 0;
+            rutaDibujar();
+        } catch (e) {
+            console.warn('Ruta sugerida:', e.message);
+            document.getElementById('rutaResumen').innerHTML = '🧭 No se pudo calcular la ruta ahora. Se reintenta sola.';
+            rutaProgramar(20000);
+        } finally { rutaCalculando = false; }
+        rutaPintarResumen(); navActualizar(); pintarPines();
+    }
+
+    function rutaPintarResumen() {
+        const el = document.getElementById('rutaResumen');
+        const pend = pendientes();
+        if (!rutaVigente) { el.innerHTML = '🧭 La ruta sugerida está disponible para el reparto de hoy.'; return; }
+        if (!paradasRuta.length) { el.innerHTML = '🧭 Ruta sugerida: no hay clientes con ubicación.'; return; }
+        if (!pend.length) { el.innerHTML = '🏁 <b>Recorrido completo.</b> Visitaste todas las paradas.'; return; }
+        if (!ruta) { el.innerHTML = `🧭 Ruta sugerida: calculando… · ${pend.length} paradas pendientes`; return; }
+        el.innerHTML = `🧭 Ruta sugerida: <b>${fmtDist(ruta.distancia)}</b> · <b>${fmtTiempo(ruta.duracion)}</b> · ${pend.length} ${pend.length === 1 ? 'parada pendiente' : 'paradas pendientes'}`;
+    }
+
+    // Posición del GPS sobre el trazado (busca cerca de la anterior para no confundirse si el recorrido pasa dos veces por el mismo lugar)
+    function rutaUbicarEnTrazado(lat, lon) {
+        const g = ruta.geom;
+        let mejor = -1, md = Infinity;
+        const ini = Math.max(0, rutaPi - 5), fin = Math.min(g.length, rutaPi + 400);
+        for (let k = ini; k < fin; k++) {
+            const d = (g[k][0] - lat) ** 2 + ((g[k][1] - lon) * Math.cos(lat * Math.PI / 180)) ** 2;
+            if (d < md) { md = d; mejor = k; }
+        }
+        let dm = distanciaMetros(lat, lon, g[mejor][0], g[mejor][1]);
+        if (dm > FUERA_DE_RUTA_M) {          // por si se adelantó mucho: se busca en todo el trazado
+            for (let k = 0; k < g.length; k++) {
+                const d = (g[k][0] - lat) ** 2 + ((g[k][1] - lon) * Math.cos(lat * Math.PI / 180)) ** 2;
+                if (d < md) { md = d; mejor = k; }
+            }
+            dm = distanciaMetros(lat, lon, g[mejor][0], g[mejor][1]);
+        }
+        return { pi: mejor, dist: dm };
+    }
+
+    function navActualizar() {
+        const pend = pendientes();
+        const sig = pend[0];
+        const arriba = document.getElementById('navInstr'), distEl = document.getElementById('navDist'), flecha = document.getElementById('navFlecha');
+        // Panel inferior: próxima parada
+        document.getElementById('navOrden').innerText = sig ? (sig.orden || '-') : '🏁';
+        document.getElementById('navNombre').innerText = sig ? sig.nombre : (paradasRuta.length ? 'Recorrido completo' : 'Sin paradas con ubicación');
+        document.getElementById('navDir').innerText = sig ? [sig.direccion, sig.localidad].filter(Boolean).join(' · ') : '';
+        let met = '';
+        if (ruta && ultimaPosicion) {
+            const pi = rutaPi;
+            let k = ruta.fin.findIndex(f => f > pi); if (k < 0) k = ruta.fin.length - 1;
+            const resta = Math.max(0, ruta.cum[ruta.fin[k]] - ruta.cum[pi]);
+            const tr = ruta.tramos[k];
+            const tiempo = tr && tr.distancia > 0 ? tr.duracion * Math.min(1, resta / tr.distancia) : 0;
+            const totalResta = Math.max(0, ruta.cum[ruta.cum.length - 1] - ruta.cum[pi]);
+            met = `Faltan <b>${fmtDist(resta)}</b> · ${fmtTiempo(tiempo)} · Resto del recorrido: ${fmtDist(totalResta)}`;
+        } else if (ruta) {
+            met = `Recorrido: ${fmtDist(ruta.distancia)} · ${fmtTiempo(ruta.duracion)} (esperando tu ubicación)`;
+        }
+        document.getElementById('navMetricas').innerHTML = met;
+        // Indicación de giro
+        if (!ruta || !ruta.pasos.length) {
+            distEl.innerText = '—'; arriba.innerText = pend.length ? 'Calculando la ruta…' : 'Sin paradas pendientes'; flecha.innerHTML = flechaSvg(0, !pend.length); return;
+        }
+        let idx = ruta.pasos.findIndex(p => p.gi > rutaPi);
+        if (idx < 0) idx = ruta.pasos.length - 1;
+        const p = ruta.pasos[idx];
+        const hasta = ultimaPosicion ? Math.max(0, ruta.cum[p.gi] - ruta.cum[rutaPi]) : p.d;
+        distEl.innerText = p.t === 'arrive' && hasta < 25 ? 'Llegaste' : fmtDist(hasta);
+        arriba.innerText = textoPaso(p) + (p.t === 'arrive' && sig ? ' · #' + sig.orden : '');
+        flecha.innerHTML = flechaSvg(ANGULO_PASO[p.m] !== undefined ? ANGULO_PASO[p.m] : 0, p.t === 'arrive');
+    }
+
+    function marcarVisitada(id) {
+        visitadosRuta.add(String(id)); guardarVisitados();
+        rutaPintarResumen(); pintarPines(); navActualizar();
+        rutaProgramar(300);
+    }
+
+    function rutaOnPosicion(lat, lon, precision) {
+        if (!rutaVigente || !paradasRuta.length) return;
+        // Parada visitada: el camión estuvo a pocos metros del cliente
+        if (precision <= 60) {
+            const hecho = pendientes().filter(c => distanciaMetros(lat, lon, Number(c.lat), Number(c.lon)) <= RADIO_VISITA_M);
+            if (hecho.length) { hecho.forEach(c => visitadosRuta.add(idSeguroDe(c))); guardarVisitados(); ruta = null; rutaDibujar(); rutaPintarResumen(); pintarPines(); rutaProgramar(300); return; }
+        }
+        if (!ruta) { if (!rutaCalculando) rutaProgramar(500); return; }
+        if (!ruta.conGPS) { ruta = null; rutaProgramar(300); return; }   // la ruta se había calculado sin ubicación: ahora sale desde donde está el camión
+        const u = rutaUbicarEnTrazado(lat, lon);
+        rutaPi = u.pi;
+        if (u.dist > FUERA_DE_RUTA_M) { rutaFuera++; if (rutaFuera >= 2) { rutaFuera = 0; rutaProgramar(Math.max(300, rutaUltimoCalculo + 10000 - Date.now())); } }
+        else rutaFuera = 0;
+        navActualizar();
+    }
+
+    function rutaIniciar(clientes) {
+        const hoy = document.getElementById('inputFechaRuta').value === fechaLocalHoy();
+        rutaVigente = hoy;
+        paradasRuta = clientes.filter(c => c.lat && c.lon);
+        cargarVisitados();
+        ruta = null; rutaDibujar(); rutaPintarResumen(); pintarPines();
+        if (rutaVigente && paradasRuta.length) rutaProgramar(200);
+    }
+    function rutaReset() {
+        cerrarMapaGrande(true);
+        paradasRuta = []; pinInfo = {}; marcadoresPorId = {}; visitadosRuta = new Set(); ruta = null; rutaVigente = false;
+        clearTimeout(rutaTimer); rutaDibujar();
+        document.getElementById('rutaResumen').innerHTML = '🧭 Ruta sugerida: esperando tu reparto…';
+    }
+
+    function rutaSaltear() {
+        const sig = pendientes()[0];
+        if (!sig) return;
+        marcarVisitada(idSeguroDe(sig));
+        mostrarToast('Parada salteada: ' + sig.nombre, 'ok');
+    }
+    function rutaAbrirGoogle() {
+        const sig = pendientes()[0];
+        if (!sig) return;
+        window.open(`https://www.google.com/maps/dir/?api=1&destination=${sig.lat},${sig.lon}&travelmode=driving`, '_blank');
+    }
+
+    function actualizarBotonSeguir() { const b = document.getElementById('btnSeguir'); if (b) b.classList.toggle('on', seguirMiUbicacion); }
+    function alternarSeguir() {
+        seguirMiUbicacion = !seguirMiUbicacion;
+        actualizarBotonSeguir();
+        if (seguirMiUbicacion && ultimaPosicion) mapChofer.setView([ultimaPosicion.lat, ultimaPosicion.lon], Math.max(mapChofer.getZoom(), 17), { animate: true });
+    }
+    mapChofer.on('dragstart', () => { if (document.querySelector('.map-wrap.full')) { seguirMiUbicacion = false; actualizarBotonSeguir(); } });
+
+    function abrirMapaGrande() {
+        const w = document.querySelector('.map-wrap');
+        if (!w || w.classList.contains('full')) return;
+        mapaPlaceholder = document.createElement('div');
+        mapaPlaceholder.style.height = w.offsetHeight + 'px';
+        w.parentNode.insertBefore(mapaPlaceholder, w);
+        document.body.appendChild(w);
+        w.classList.add('full');
+        document.body.style.overflow = 'hidden';
+        document.getElementById('icoExpandir').innerHTML = '<path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/>';
+        try { history.pushState({ mapa: 1 }, ''); } catch (e) {}
+        seguirMiUbicacion = true; actualizarBotonSeguir();
+        setTimeout(() => {
+            mapChofer.invalidateSize();
+            centrarEnMiUbicacion();
+            if (!ruta && rutaVigente) rutaProgramar(100);
+            navActualizar();
+            if (!ultimaPosicion && paradasRuta.length) mapChofer.fitBounds(paradasRuta.map(c => [Number(c.lat), Number(c.lon)]), { padding: [60, 60] });
+        }, 60);
+    }
+    function restaurarMapaChico() {
+        const w = document.querySelector('.map-wrap.full');
+        if (!w) return;
+        w.classList.remove('full');
+        if (mapaPlaceholder && mapaPlaceholder.parentNode) { mapaPlaceholder.replaceWith(w); mapaPlaceholder = null; }
+        document.body.style.overflow = '';
+        document.getElementById('icoExpandir').innerHTML = '<path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>';
+        setTimeout(() => mapChofer.invalidateSize(), 60);
+    }
+    function cerrarMapaGrande(sinHistorial) {
+        if (!document.querySelector('.map-wrap.full')) return;
+        if (!sinHistorial && history.state && history.state.mapa) { history.back(); return; }   // popstate hace el resto
+        restaurarMapaChico();
+    }
+    function alternarMapaGrande() { document.querySelector('.map-wrap.full') ? cerrarMapaGrande() : abrirMapaGrande(); }
+    window.addEventListener('popstate', () => restaurarMapaChico());
+
     // Deuda del cliente: total de la cuenta, lo que ya corresponde cobrar y el pedido reciente (todavía no se cobra)
     function deudaDe(c) {
         const total = parseFloat(c.saldo_deuda) || 0;
@@ -1260,12 +1626,14 @@
 
             marcadoresClientes.forEach(m => mapChofer.removeLayer(m));
             marcadoresClientes = [];
+            marcadoresPorId = {}; pinInfo = {};
 
             const listaContainer = document.getElementById('contenedor-clientes');
             listaContainer.innerHTML = '';
 
             if (!Array.isArray(clientes) || clientes.length === 0) {
                 listaContainer.innerHTML = `<p class="empty-state">⚠️ No hay repartos ni ventas cargadas para la fecha ${escapeHtml(formatoFecha(fechaInput) === 'S/F' ? 'de hoy' : formatoFecha(fechaInput))}.</p>`;
+                rutaIniciar([]);
                 return;
             }
 
@@ -1288,15 +1656,9 @@
                     if (d.reciente > 0) popupHtml += `<br>🕓 Pedido reciente: ${formatoPesos(d.reciente)}`;
                     if (resumenExhibidores(c)) popupHtml += `<br>🧊 ${escapeHtml(resumenExhibidores(c))}`;
 
-                    const marker = L.marker([c.lat, c.lon], {
-                        icon: L.divIcon({
-                            className: 'custom-pin',
-                            html: `<div class="pin ${tieneDeuda ? 'pin-debt' : 'pin-ok'}">${escapeHtml(c.orden || '')}</div>`,
-                            iconSize: [28, 28],
-                            iconAnchor: [14, 14]
-                        })
-                    }).addTo(mapChofer).bindPopup(popupHtml);
-
+                    pinInfo[idSeguro] = { orden: c.orden || '', deuda: tieneDeuda };
+                    const marker = L.marker([c.lat, c.lon], { icon: iconoPin(idSeguro) }).addTo(mapChofer).bindPopup(popupHtml);
+                    marcadoresPorId[idSeguro] = marker;
                     marcadoresClientes.push(marker);
                 }
 
@@ -1330,6 +1692,7 @@
                 listaContainer.appendChild(card);
             });
 
+            rutaIniciar(clientes);
             if (!ultimaPosicion && clientes.length > 0 && clientes[0].lat && clientes[0].lon) {
                 mapChofer.setView([clientes[0].lat, clientes[0].lon], 13);
             }
@@ -1753,6 +2116,7 @@
         }
 
         revisarCercaniaClientes(lat, lon);
+        rutaOnPosicion(lat, lon, precision);
     }
 
     // Recuerda qué clientes ya se avisaron hoy (sobrevive a recargar la página)

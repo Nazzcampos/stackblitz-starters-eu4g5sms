@@ -906,7 +906,15 @@ app.get('/api/ventas-chofer/:nombre', requireChofer, async (req, res) => {
 
         // saldo_deuda = total de la cuenta corriente; deuda_cobrar = lo que ya corresponde cobrar;
         // deuda_reciente = pedidos de los últimos días que todavía no se cobran (se descuentan los créditos de lo más viejo primero)
-        const filas = resultado.rows.map((f, i) => {
+        // En Gescom el chofer figura como "cliente" del remito de cajas/envases que sale en el reparto: no es una parada
+        const palabras = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+        const claveChoferNombre = palabras(choferNombre);
+        const excluidos = new Set((process.env.CLIENTES_EXCLUIDOS_REPARTO || '').split(',').map(x => x.trim()).filter(Boolean));
+        const paradas = resultado.rows.filter(f =>
+            palabras(f.nombre) !== claveChoferNombre
+            && !excluidos.has(String(f.id)) && !(f.cliente_codigo && excluidos.has(String(f.cliente_codigo))));
+
+        const filas = paradas.map((f, i) => {
             const total = mapaDeudas.get(String(f.id)) || 0;
             const reciente = mapaRecientes.get(String(f.id)) || 0;
             const redondear = n => Number(n.toFixed(2));
@@ -2357,6 +2365,75 @@ app.delete('/api/retorno/:id', requireAdmin, requireDb, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'No se pudo borrar' }); }
 });
 
+
+// =====================================================================
+//  RUTA SUGERIDA (mapa del chofer)
+//  Calcula el recorrido por calles pasando por las paradas en el orden del reparto.
+//  Usa un servicio OSRM (por defecto el público de OpenStreetMap Alemania); se puede cambiar con la variable ROUTING_URL.
+// =====================================================================
+const ROUTING_URL = (process.env.ROUTING_URL || 'https://routing.openstreetmap.de/routed-car/route/v1/driving').replace(/\/+$/, '');
+const MAX_PUNTOS_RUTA = 50;
+const cacheRutaSugerida = new Map();
+const ultimaConsultaRuta = new Map();
+
+function pedirJson(urlTexto, ms) {
+    return new Promise((resolve, reject) => {
+        let u;
+        try { u = new URL(urlTexto); } catch (e) { return reject(new Error('URL inválida')); }
+        const lib = u.protocol === 'http:' ? require('http') : require('https');
+        const rq = lib.get(u, { headers: { 'User-Agent': 'BeniQ-flota/1.0', 'Accept': 'application/json' } }, resp => {
+            const partes = [];
+            resp.on('data', d => partes.push(d));
+            resp.on('end', () => {
+                try {
+                    const j = JSON.parse(Buffer.concat(partes).toString('utf8'));
+                    if (resp.statusCode >= 400) return reject(new Error(j.message || j.code || ('HTTP ' + resp.statusCode)));
+                    resolve(j);
+                } catch (e) { reject(new Error('Respuesta inválida del servicio de rutas')); }
+            });
+        });
+        rq.on('error', reject);
+        rq.setTimeout(ms, () => rq.destroy(new Error('El servicio de rutas tardó demasiado')));
+    });
+}
+
+app.post('/api/ruta-sugerida', requireChofer, async (req, res) => {
+    const crudos = Array.isArray((req.body || {}).puntos) ? req.body.puntos : [];
+    const puntos = crudos.map(p => [Number(p && p[0]), Number(p && p[1])]);
+    if (puntos.length < 2 || puntos.length > MAX_PUNTOS_RUTA
+        || puntos.some(([la, lo]) => !Number.isFinite(la) || !Number.isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180)) {
+        return res.status(400).json({ error: 'Puntos inválidos para calcular la ruta' });
+    }
+    const ahora = Date.now();
+    const quien = claveNombre(req.chofer);
+    if (ahora - (ultimaConsultaRuta.get(quien) || 0) < 2000) return res.status(429).json({ error: 'Esperá un momento antes de recalcular la ruta' });
+    ultimaConsultaRuta.set(quien, ahora);
+
+    const coords = puntos.map(([la, lo]) => `${lo.toFixed(6)},${la.toFixed(6)}`).join(';');
+    const hit = cacheRutaSugerida.get(coords);
+    if (hit && ahora - hit.ts < 60000) return res.json(hit.datos);
+    try {
+        const j = await pedirJson(`${ROUTING_URL}/${coords}?overview=full&geometries=polyline6&steps=true&annotations=false&continue_straight=false`, 15000);
+        if (j.code !== 'Ok' || !j.routes || !j.routes[0]) throw new Error(j.message || 'No se encontró un recorrido');
+        const r = j.routes[0];
+        const datos = {
+            distancia: Math.round(r.distance), duracion: Math.round(r.duration), geometria: r.geometry,
+            tramos: r.legs.map(l => ({
+                distancia: Math.round(l.distance), duracion: Math.round(l.duration),
+                pasos: l.steps.map(st => ({
+                    t: st.maneuver.type, m: st.maneuver.modifier || '', n: st.name || '', ex: st.maneuver.exit || 0,
+                    d: Math.round(st.distance), ll: [st.maneuver.location[1], st.maneuver.location[0]]
+                }))
+            }))
+        };
+        cacheRutaSugerida.set(coords, { ts: ahora, datos });
+        if (cacheRutaSugerida.size > 200) cacheRutaSugerida.delete(cacheRutaSugerida.keys().next().value);
+        res.json(datos);
+    } catch (err) {
+        console.error('⚠️ Ruta sugerida:', err.message);
+        res.status(502).json({ error: 'No se pudo calcular la ruta en este momento' });
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en el puerto ${PORT}`);
