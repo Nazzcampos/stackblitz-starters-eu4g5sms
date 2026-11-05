@@ -376,6 +376,16 @@
         .ord-modo { display: flex; gap: 6px; padding: 4px; background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 14px; margin-top: 4px; }
         .ord-modo button { margin: 0; padding: 9px 8px; font-size: .85rem; background: transparent; box-shadow: none; color: var(--muted); border-radius: 10px; }
         .ord-modo button.on { color: #fff; background: linear-gradient(135deg, var(--violet), var(--violet-2)); box-shadow: 0 6px 16px rgba(37,99,235,.4); }
+        .jornada { margin: 4px 0 16px; padding: 14px; border-radius: 16px; border: 1px solid var(--border); background: rgba(255,255,255,.04); }
+        .jornada.on { border-color: rgba(52,211,153,.45); background: rgba(52,211,153,.07); }
+        .jornada-titulo { font-size: 1rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
+        .jornada-punto { width: 10px; height: 10px; border-radius: 50%; background: #64748b; flex: none; }
+        .jornada.on .jornada-punto { background: var(--ok); box-shadow: 0 0 0 0 rgba(52,211,153,.7); animation: pingLive 1.8s infinite; }
+        .jornada-detalle { margin: 4px 0 10px; font-size: .82rem; color: var(--muted); }
+        .jornada-fila { display: flex; gap: 8px; }
+        .jornada-fila input { flex: 1 1 90px; min-width: 90px; margin: 0; text-transform: uppercase; }
+        .jornada-fila button, .jornada > button { width: auto; margin: 0; white-space: nowrap; }
+        .jornada > button { width: 100%; }
         .ord-banner { margin-top: 12px; padding: 10px 12px; border-radius: 12px; font-size: .82rem; font-weight: 700; line-height: 1.4; border: 1px solid var(--border); background: rgba(255,255,255,.04); color: var(--muted); }
         .ord-banner.ok { color: var(--ok); border-color: rgba(52,211,153,.35); background: rgba(52,211,153,.08); }
         .ord-banner.warn { color: var(--warn); border-color: rgba(251,191,36,.4); background: rgba(251,191,36,.08); }
@@ -664,7 +674,7 @@
                 <input type="password" id="pinLogin" inputmode="numeric" pattern="[0-9]*" maxlength="8" required
                        placeholder="••••" autocomplete="off" style="text-align: center; letter-spacing: 8px; font-size: 1.3rem;">
 
-                <button type="submit" id="btnLogin">Iniciar Turno</button>
+                <button type="submit" id="btnLogin">Ingresar</button>
                 <p class="login-sub" style="margin-top: 14px; font-size: .76rem;">¿No sabés tu PIN? Pedíselo al administrador.</p>
             </form>
             <form id="formSup" autocomplete="off" style="display:none;">
@@ -696,6 +706,16 @@
                 </div>
             </div>
 
+            <div class="jornada" id="jornadaCaja">
+                <div class="jornada-titulo"><span class="jornada-punto"></span><span id="jornadaTitulo">Jornada sin iniciar</span></div>
+                <div class="jornada-detalle" id="jornadaDetalle">Tocá "Iniciar jornada" cuando salgas con el camión. Se activa el GPS y los avisos de llegada.</div>
+                <div class="jornada-fila" id="jornadaInicio">
+                    <input type="text" id="jornadaDominio" placeholder="Patente" autocapitalize="characters" autocomplete="off" maxlength="12">
+                    <button type="button" id="btnJornadaIniciar" onclick="jornadaIniciar()">▶ Iniciar jornada</button>
+                </div>
+                <button type="button" class="btn-danger" id="btnJornadaFin" style="display:none;" onclick="jornadaFinalizar()">■ Finalizar jornada</button>
+            </div>
+
             <div class="ord-banner" id="docsBanner" style="display:none;"></div>
 
             <form id="checklistForm">
@@ -721,7 +741,6 @@
                 📡 <b>GPS activo:</b> transmitiendo en vivo<br>
                 <span id="coords" style="color: var(--muted); font-size: .8rem;">Esperando señal...</span><br>
                 <span id="envioEstado" style="color: var(--muted); font-size: .8rem;">Envío al servidor: esperando primera posición…</span>
-                <button type="button" class="btn-danger" onclick="finalizarTurno()">Finalizar turno / detener GPS</button>
             </div>
         </div>
     </div>
@@ -1034,6 +1053,7 @@
         actualizarEstadoAlertas();
         if (NATIVO) setTimeout(() => abrirBienvenidaNativa(false), 600);
         docsRevisarAvisos();
+        jornadaTraer();
     }
 
     // ---------- Login único: Chofer / Supervisor / Depósito ----------
@@ -1206,6 +1226,7 @@
         clientesPorId = {};
         clientesAvisados.clear();
         rutaReset();
+        jornadaReset();
         ordenReset();
         docsReset();
         choferActual = "";
@@ -2054,7 +2075,7 @@
     // Tocar la pastilla "EN VIVO" apaga la ubicación, salvo que haya un turno activo
     function alternarSeguimiento() {
         if (enviarAlServidor) {
-            mostrarToast("Hay un turno activo. Para detener el GPS, finalizá el turno en Check-list.", 'error');
+            mostrarToast("Hay una jornada en curso. Para detener el GPS, finalizá la jornada en Check-list.", 'error');
             return;
         }
         detenerSeguimientoGPS();
@@ -2278,18 +2299,13 @@
                 body: JSON.stringify({ chofer: choferActual, dominio, tipo_vehiculo, respuestas, observaciones })
             });
             if (respuesta.ok) {
-                mostrarToast("¡Check-list enviado! GPS y avisos de llegada activados.", 'ok');
-                document.getElementById('gps-status').style.display = 'block';
-                vehiculoActual = dominio;
-                enviarAlServidor = true;
-                ultimoEnvio = 0;
-                seguirMiUbicacion = true;
-                solicitarWakeLock();
-                pedirPermisoNotificaciones();
-                iniciarSeguimientoGPS();
-                reenviarUltimaPosicion(true);
-                // Se carga la ruta ahora para poder avisar al acercarse, aunque el chofer no abra la pestaña de ruta
-                cargarRutaChoferReal(choferActual);
+                if (jornada) {
+                    mostrarToast("¡Check-list enviado!", 'ok');
+                } else {
+                    // Si todavía no había iniciado la jornada, el check-list la inicia (como antes iniciaba el turno)
+                    mostrarToast("¡Check-list enviado! Jornada iniciada: GPS y avisos de llegada activados.", 'ok');
+                    await jornadaIniciar(dominio, true);
+                }
             } else {
                 mostrarToast("El servidor no aceptó el check-list. Revisá los datos.", 'error');
             }
@@ -2922,13 +2938,108 @@
         if (nb) nb.classList.toggle('con-aviso', docs.dato.avisos.some(a => a.estado === 'vencido' || a.estado === 'ultimo') || !docs.dato.mensual.hecho);
     }
 
+    // Corta el GPS del dispositivo (la jornada se cierra en el servidor con jornadaFinalizar)
     function finalizarTurno() {
         enviarAlServidor = false;
         detenerSeguimientoGPS();
         if (wakeLock !== null) { wakeLock.release().catch(() => {}); wakeLock = null; }
         document.getElementById('gps-status').style.display = 'none';
-        mostrarToast("🛑 Turno finalizado.", 'ok');
     }
+
+    // =====================================================================
+    //  JORNADA: el chofer inicia al salir y finaliza al volver (si se olvida, el sistema la cierra solo)
+    // =====================================================================
+    let jornada = null;              // { id, inicio, vehiculo } mientras hay una jornada en curso
+    let jornadaReloj = null;
+    function fmtHoraLocal(f) { return new Date(f).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false }); }
+    function fmtDuracionMin(min) { min = Math.max(0, Math.round(min)); return min < 60 ? min + ' min' : Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0') + ' min'; }
+
+    function jornadaPintar() {
+        const caja = document.getElementById('jornadaCaja');
+        caja.classList.toggle('on', !!jornada);
+        document.getElementById('jornadaInicio').style.display = jornada ? 'none' : 'flex';
+        document.getElementById('btnJornadaFin').style.display = jornada ? 'block' : 'none';
+        clearInterval(jornadaReloj);
+        if (jornada) {
+            const actualizar = () => {
+                document.getElementById('jornadaTitulo').innerText = 'Jornada en curso';
+                document.getElementById('jornadaDetalle').innerText = `Desde las ${fmtHoraLocal(jornada.inicio)} · ${jornada.vehiculo} · ${fmtDuracionMin((Date.now() - new Date(jornada.inicio).getTime()) / 60000)}`;
+            };
+            actualizar();
+            jornadaReloj = setInterval(actualizar, 30000);
+        } else {
+            document.getElementById('jornadaTitulo').innerText = 'Jornada sin iniciar';
+            document.getElementById('jornadaDetalle').innerText = 'Tocá "Iniciar jornada" cuando salgas con el camión. Se activa el GPS y los avisos de llegada.';
+        }
+    }
+
+    // Enciende el GPS y los avisos con la patente de la jornada
+    function activarGpsJornada(dominio) {
+        document.getElementById('gps-status').style.display = 'block';
+        vehiculoActual = dominio;
+        enviarAlServidor = true;
+        ultimoEnvio = 0;
+        seguirMiUbicacion = true;
+        solicitarWakeLock();
+        pedirPermisoNotificaciones();
+        iniciarSeguimientoGPS();
+        reenviarUltimaPosicion(true);
+        // Se carga la ruta ahora para poder avisar al acercarse, aunque el chofer no abra la pestaña de ruta
+        cargarRutaChoferReal(choferActual);
+    }
+
+    async function jornadaIniciar(dominioDado, silencioso) {
+        const dominio = String(dominioDado || document.getElementById('jornadaDominio').value || '').trim().toUpperCase();
+        if (dominio.replace(/[^A-Z0-9]/g, '').length < 5) { mostrarToast('Ingresá la patente del camión para iniciar la jornada.', 'error'); document.getElementById('jornadaDominio').focus(); return; }
+        const boton = document.getElementById('btnJornadaIniciar');
+        boton.disabled = true;
+        try {
+            const res = await apiFetch('/api/jornada/iniciar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dominio }) });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(d.error || 'No se pudo iniciar la jornada.');
+            jornada = d.jornada;
+            try { localStorage.setItem('flota_ultima_patente', dominio); } catch (e) {}
+            const campo = document.getElementById('dominio');
+            if (campo && !campo.value) campo.value = dominio;
+            jornadaPintar();
+            activarGpsJornada(jornada.vehiculo);
+            if (!silencioso) mostrarToast('▶ Jornada iniciada. GPS y avisos de llegada activados.', 'ok');
+        } catch (e) {
+            mostrarToast(e.message || 'No se pudo conectar con el servidor.', 'error');
+        } finally { boton.disabled = false; }
+    }
+
+    async function jornadaFinalizar() {
+        if (!confirm('¿Finalizar la jornada? Se detiene el GPS y los avisos de llegada.')) return;
+        const boton = document.getElementById('btnJornadaFin');
+        boton.disabled = true;
+        try {
+            const res = await apiFetch('/api/jornada/finalizar', { method: 'POST' });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(d.error || 'No se pudo finalizar la jornada.');
+            finalizarTurno();
+            jornada = null; jornadaPintar();
+            const j = d.jornada;
+            mostrarToast(j ? `🛑 Jornada finalizada: ${fmtDuracionMin(j.minutos)} · ${String(j.km).replace('.', ',')} km` : '🛑 Jornada finalizada.', 'ok');
+        } catch (e) {
+            mostrarToast(e.message || 'No se pudo conectar con el servidor.', 'error');
+        } finally { boton.disabled = false; }
+    }
+
+    // Al ingresar (o recargar) se recupera la jornada abierta y se retoma el GPS
+    async function jornadaTraer() {
+        try {
+            const campo = document.getElementById('jornadaDominio');
+            if (campo && !campo.value) { try { campo.value = localStorage.getItem('flota_ultima_patente') || ''; } catch (e) {} }
+            const res = await apiFetch('/api/jornada/actual');
+            if (!res.ok) return;
+            const d = await res.json();
+            jornada = d.jornada || null;
+            jornadaPintar();
+            if (jornada && !enviarAlServidor) activarGpsJornada(jornada.vehiculo);
+        } catch (e) { /* sin conexión: queda "sin iniciar" y se puede reintentar */ }
+    }
+    function jornadaReset() { jornada = null; clearInterval(jornadaReloj); jornadaPintar(); }
 </script>
 
 </body>

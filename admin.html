@@ -782,9 +782,38 @@
             </div>
         </div>
     </div>
+
+    <!-- JORNADAS -->
+    <div id="seccion-jornadas" class="vista-seccion">
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                </div>
+                <div>
+                    <h2 class="section-title">Jornadas de los choferes</h2>
+                    <p class="section-sub">Hora de salida y de regreso, horas trabajadas y kilómetros de cada jornada. Si un chofer no la finaliza, el sistema la cierra solo y queda marcada.</p>
+                </div>
+            </div>
+            <div class="busqueda" style="flex-wrap:wrap;">
+                <input type="date" class="campo" id="jorDesde" style="max-width:170px;" title="Desde">
+                <input type="date" class="campo" id="jorHasta" style="max-width:170px;" title="Hasta">
+                <select class="campo" id="jorChofer" style="max-width:240px;"><option value="">Todos los choferes</option></select>
+                <button type="button" onclick="cargarJornadas()">Buscar</button>
+                <button type="button" class="btn-suave" onclick="descargarJornadas(this)">📥 Excel</button>
+            </div>
+            <div class="export-estado" id="jorEstado"></div>
+            <div class="table-wrap">
+                <table id="tabla-jornadas">
+                    <thead><tr><th>Fecha</th><th>Chofer</th><th>Patente</th><th>Salida</th><th>Regreso</th><th class="num">Horas</th><th class="num">Km</th><th>Estado</th></tr></thead>
+                    <tbody><tr><td colspan="8" class="empty-row">Cargando…</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </main>
 
-<!-- DOCK DE NAVEGACIÓN (7 SOLAPAS) -->
+<!-- DOCK DE NAVEGACIÓN (8 SOLAPAS) -->
 <nav class="nav-island">
     <button type="button" class="nav-btn active" onclick="cambiarVistaAdmin('gps', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><path d="M8 2v16"/><path d="M16 6v16"/></svg>
@@ -813,6 +842,10 @@
     <button type="button" class="nav-btn" id="btnRetornosDock" onclick="cambiarVistaAdmin('retornos', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
         Retornos
+    </button>
+    <button type="button" class="nav-btn" id="btnJornadasDock" onclick="cambiarVistaAdmin('jornadas', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+        Jornadas
     </button>
 </nav>
 
@@ -1483,6 +1516,58 @@
         if (document.getElementById('retTexto').value.trim()) p.set('q', document.getElementById('retTexto').value.trim());
         return p;
     }
+    // ---------- Jornadas ----------
+    function jorParams() {
+        const p = new URLSearchParams({ desde: document.getElementById('jorDesde').value, hasta: document.getElementById('jorHasta').value });
+        const c = document.getElementById('jorChofer').value; if (c) p.set('chofer', c);
+        return p.toString();
+    }
+    function jorMensaje(t, clase) { const e = document.getElementById('jorEstado'); e.textContent = t || ''; e.className = 'export-estado' + (clase ? ' ' + clase : ''); }
+    async function iniciarJornadas() {
+        if (!document.getElementById('jorDesde').value) {
+            document.getElementById('jorHasta').value = hoyArAdm();
+            document.getElementById('jorDesde').value = new Date(Date.parse(hoyArAdm() + 'T00:00:00Z') - 6 * 86400000).toISOString().slice(0, 10);
+            try {
+                const r = await adminFetch('/api/retorno/choferes');
+                if (r.ok) document.getElementById('jorChofer').innerHTML = '<option value="">Todos los choferes</option>' + (await r.json()).map(n => `<option>${escapeHtml(n)}</option>`).join('');
+            } catch (e) {}
+        }
+        cargarJornadas();
+    }
+    function fmtHorasMin(min) { min = Math.max(0, Math.round(min)); return Math.floor(min / 60) + ':' + String(min % 60).padStart(2, '0') + ' h'; }
+    async function cargarJornadas() {
+        const cuerpo = document.querySelector('#tabla-jornadas tbody');
+        let d;
+        try {
+            const res = await adminFetch('/api/admin/jornadas?' + jorParams());
+            d = await res.json().catch(() => ({}));
+            if (!res.ok) { cuerpo.innerHTML = `<tr><td colspan="8" class="empty-row">${escapeHtml(d.error || 'No se pudo cargar')}</td></tr>`; return; }
+        } catch (e) { if (e.message !== 'SESION') cuerpo.innerHTML = '<tr><td colspan="8" class="empty-row">No se pudo conectar con el servidor.</td></tr>'; return; }
+        const enCurso = d.filas.filter(f => f.cierre === 'en_curso').length;
+        const sinCierre = d.filas.filter(f => f.cierre === 'auto').length;
+        jorMensaje(`${d.filas.length} jornada${d.filas.length === 1 ? '' : 's'}` + (enCurso ? ` · ${enCurso} en curso ahora` : '') + (sinCierre ? ` · ${sinCierre} sin finalizar por el chofer` : ''));
+        const estado = { en_curso: '<span class="badge badge-ok">En curso</span>', manual: '<span class="badge badge-info">Finalizada</span>', auto: '<span class="badge badge-warn" title="El chofer no la finalizó: se cerró sola con la hora de su última ubicación">Cierre automático</span>', cambio: '<span class="badge badge-info" title="Cambió de camión">Cambió de camión</span>' };
+        cuerpo.innerHTML = d.filas.length ? d.filas.map(f =>
+            `<tr><td>${escapeHtml(docFecha(f.fecha))}</td><td><b>${escapeHtml(f.chofer)}</b></td><td>${escapeHtml(f.vehiculo)}</td><td>${formatoHora(f.inicio)}</td><td>${f.fin ? formatoHora(f.fin) : '—'}</td>
+             <td class="num">${fmtHorasMin(f.minutos)}</td><td class="num">${formatoNumero(f.km, 1)}</td><td>${estado[f.cierre] || escapeHtml(f.cierre)}</td></tr>`).join('')
+            : '<tr><td colspan="8" class="empty-row">No hay jornadas en esas fechas.</td></tr>';
+    }
+    async function descargarJornadas(boton) {
+        boton.disabled = true; jorMensaje('Generando el Excel…');
+        try {
+            const res = await adminFetch('/api/admin/jornadas/exportar?' + jorParams());
+            if (!res.ok) { const d = await res.json().catch(() => ({})); jorMensaje(d.error || 'No se pudo generar el Excel.', 'error'); return; }
+            const blob = await res.blob();
+            const m = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
+            const nombre = m ? m[1] : 'jornadas.xlsx';
+            const url = URL.createObjectURL(blob), a = document.createElement('a');
+            a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            jorMensaje('✔ Descargado: ' + nombre, 'ok');
+        } catch (e) { if (e.message !== 'SESION') jorMensaje('No se pudo conectar con el servidor.', 'error'); }
+        finally { boton.disabled = false; }
+    }
+
     async function iniciarRetornos() {
         if (!document.getElementById('retDesde').value) {
             document.getElementById('retHasta').value = hoyArAdm();
@@ -1613,6 +1698,9 @@
         } else if (vista === 'retornos') {
             document.getElementById('seccion-retornos').classList.add('active');
             iniciarRetornos();
+        } else if (vista === 'jornadas') {
+            document.getElementById('seccion-jornadas').classList.add('active');
+            iniciarJornadas();
         }
         btn.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'smooth' });
