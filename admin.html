@@ -655,13 +655,17 @@
                 </div>
                 <div>
                     <h2 class="section-title">Choferes y PIN de acceso</h2>
-                    <p class="section-sub">Cada chofer entra con su nombre y su PIN y solo ve su reparto. Podés cambiarle el PIN o desactivarlo.</p>
+                    <p class="section-sub">Cada chofer entra con su nombre y su PIN y solo ve su reparto. Podés cambiarle el PIN, desactivarlo o sacar de la lista a quien no maneja.</p>
                 </div>
             </div>
             <div class="busqueda">
                 <input type="search" class="campo" id="buscarChofer" placeholder="Buscar chofer..." oninput="dibujarChoferes()">
                 <button type="button" class="btn-suave" onclick="cargarChoferes()">Actualizar</button>
             </div>
+            <label style="display:flex; align-items:center; gap:8px; margin:0 0 10px; font-size:.82rem; color:var(--muted); cursor:pointer;">
+                <input type="checkbox" id="verOcultos" onchange="dibujarChoferes()" style="width:auto; margin:0;">
+                <span id="txtOcultos">Mostrar los que saqué de la lista</span>
+            </label>
             <div class="table-wrap">
                 <table id="tabla-choferes">
                     <thead>
@@ -916,7 +920,10 @@
     function dibujarChoferes() {
         const filtro = document.getElementById('buscarChofer').value.trim().toUpperCase();
         const cuerpo = document.querySelector('#tabla-choferes tbody');
-        const filas = listaChoferes.filter(c => c.nombre.toUpperCase().includes(filtro));
+        const verOcultos = document.getElementById('verOcultos').checked;
+        const nOcultos = listaChoferes.filter(c => c.oculto).length;
+        document.getElementById('txtOcultos').textContent = 'Mostrar los que saqué de la lista (' + nOcultos + ')';
+        const filas = listaChoferes.filter(c => c.nombre.toUpperCase().includes(filtro) && (verOcultos || !c.oculto));
         if (filas.length === 0) {
             cuerpo.innerHTML = '<tr><td colspan="5" class="empty-row">No hay choferes para mostrar</td></tr>';
             return;
@@ -936,6 +943,16 @@
                 <td><div class="acciones"></div></td>
             `;
             const acc = tr.querySelector('.acciones');
+            if (c.oculto) {
+                tr.className = 'fila-inactiva';
+                tr.querySelector('td:nth-child(2)').innerHTML = '<span class="badge badge-falla">Fuera de la lista</span>';
+                const bVolver = document.createElement('button');
+                bVolver.type = 'button'; bVolver.className = 'btn-suave'; bVolver.textContent = '↩ Volver a la lista';
+                bVolver.onclick = () => cambiarOculto(c, false);
+                acc.appendChild(bVolver);
+                cuerpo.appendChild(tr);
+                return;
+            }
             if (!c.pinPersonalizado && c.pin) {
                 const bCopiar = document.createElement('button');
                 bCopiar.type = 'button'; bCopiar.className = 'btn-suave'; bCopiar.textContent = '📋 Copiar';
@@ -952,6 +969,11 @@
             bEstado.textContent = c.activo ? '⏸ Desactivar' : '▶ Activar';
             bEstado.onclick = () => cambiarActivo(c, !c.activo);
             acc.appendChild(bEstado);
+            const bQuitar = document.createElement('button');
+            bQuitar.type = 'button'; bQuitar.className = 'btn-suave'; bQuitar.textContent = '🗑 Quitar de la lista';
+            bQuitar.title = 'Para empleados que no son choferes';
+            bQuitar.onclick = () => cambiarOculto(c, true);
+            acc.appendChild(bQuitar);
             cuerpo.appendChild(tr);
         });
     }
@@ -962,6 +984,21 @@
             boton.innerText = '✔ Copiado';
             setTimeout(() => { boton.innerText = original; }, 1500);
         } catch (e) { /* el navegador no permite copiar: el PIN igual está a la vista */ }
+    }
+
+    async function cambiarOculto(chofer, oculto) {
+        if (oculto && !confirm('¿Sacar a ' + chofer.nombre + ' de la lista de choferes? Deja de aparecer en el ingreso y en los controles, y no podrá entrar. Podés volver a mostrarlo cuando quieras.')) return;
+        try {
+            const res = await adminFetch('/api/admin/chofer/oculto', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nombre: chofer.nombre, oculto })
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            cargarChoferes();
+        } catch (err) {
+            if (err.message !== 'SESION') alert('No se pudo actualizar la lista. Probá de nuevo.');
+        }
     }
 
     async function cambiarActivo(chofer, activo) {

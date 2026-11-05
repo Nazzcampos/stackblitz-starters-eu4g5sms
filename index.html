@@ -475,6 +475,7 @@
         .paso-nat p { margin: 0 0 8px; font-size: .8rem; color: var(--muted); line-height: 1.35; }
         .paso-nat button { padding: 8px 12px; font-size: .8rem; border-radius: 10px; }
         .aviso-exh { margin-top: 8px; padding: 8px 12px; font-size: .84rem; font-weight: 700; color: var(--cyan); background: rgba(34, 211, 238, .08); border: 1px solid rgba(34, 211, 238, .3); border-radius: 12px; }
+        .ico-exh { width: 1.15em; height: 1.15em; vertical-align: -.2em; }
         .cliente-exh { margin-top: 6px; font-size: .78rem; font-weight: 700; color: var(--cyan); }
         .chip-warn { color: var(--warn); background: rgba(251, 191, 36, .1); border-color: rgba(251, 191, 36, .4); }
         .aviso-actions { display: flex; gap: 8px; margin-top: 12px; }
@@ -1604,6 +1605,9 @@
         return { total, cobrar, reciente, dias: c.dias_reciente || 7 };
     }
 
+    // Ícono de exhibidor (estante de hierro/alambre) en lugar de heladera
+    const ICONO_EXH = '<svg class="ico-exh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3v17M19 3v17"/><path d="M5 8h14M5 13h14M5 18h14"/><path d="M3 21h4M17 21h4"/><path d="M9 3v5M14 3v5M9 8v5M14 8v5M9 13v5M14 13v5" stroke-width="1" opacity=".6"/></svg>';
+
     // Exhibidores que el cliente tiene hoy en comodato (REME entregados menos REMI devueltos). null = dato no disponible
     function resumenExhibidores(c) {
         if (!Array.isArray(c.exhibidores)) return null;
@@ -1654,7 +1658,7 @@
                         popupHtml += `<br><button class="btn-deuda" onclick="verCuentaCorriente('${idSeguro}')">${textoBoton}</button>`;
                     }
                     if (d.reciente > 0) popupHtml += `<br>🕓 Pedido reciente: ${formatoPesos(d.reciente)}`;
-                    if (resumenExhibidores(c)) popupHtml += `<br>🧊 ${escapeHtml(resumenExhibidores(c))}`;
+                    if (resumenExhibidores(c)) popupHtml += `<br>${ICONO_EXH} ${escapeHtml(resumenExhibidores(c))}`;
 
                     pinInfo[idSeguro] = { orden: c.orden || '', deuda: tieneDeuda };
                     const marker = L.marker([c.lat, c.lon], { icon: iconoPin(idSeguro) }).addTo(mapChofer).bindPopup(popupHtml);
@@ -1682,7 +1686,7 @@
                     <div class="cliente-body">
                         <div class="cliente-nombre">${codigoHtml}${nombreSeguro}</div>
                         <div class="cliente-dir">${escapeHtml(c.direccion)} (${escapeHtml(c.localidad)})</div>
-                        ${resumenExhibidores(c) ? `<div class="cliente-exh">🧊 ${escapeHtml(resumenExhibidores(c))}</div>` : ''}
+                        ${resumenExhibidores(c) ? `<div class="cliente-exh">${ICONO_EXH} ${escapeHtml(resumenExhibidores(c))}</div>` : ''}
                         <div class="cliente-foot">
                             <span class="chip">Reparto ${escapeHtml(c.reparto_codigo || 'General')}</span>
                             ${estadoCuenta}
@@ -2209,7 +2213,7 @@
                 </div>
             </div>
             <div class="aviso-msg">${escapeHtml(texto)}</div>
-            ${exhibidoresTxt ? `<div class="aviso-exh">🧊 Exhibidores: ${escapeHtml(exhibidoresTxt)}</div>` : ''}
+            ${exhibidoresTxt ? `<div class="aviso-exh">${ICONO_EXH} Exhibidores: ${escapeHtml(exhibidoresTxt)}</div>` : ''}
             <div class="aviso-actions">
                 ${d.total > 0 ? `<button type="button" class="btn-deuda" data-accion="cc" style="flex:1;">Ver Cta. Cte</button>` : ''}
                 <button type="button" class="btn-ghost" data-accion="cerrar" style="flex:1;">Entendido</button>

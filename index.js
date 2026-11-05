@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS flota_chofer (
     ultimo_ingreso timestamptz,
     creado timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE flota_chofer ADD COLUMN IF NOT EXISTS oculto boolean NOT NULL DEFAULT false;
 CREATE TABLE IF NOT EXISTS flota_checklist (
     id bigserial PRIMARY KEY,
     creado timestamptz NOT NULL DEFAULT now(),
@@ -641,10 +642,23 @@ async function obtenerChoferes() {
     return cacheChoferes.pendiente;
 }
 
+// Choferes que el administrador sacó de la lista (empleados que figuran en Gescom pero no manejan)
+async function clavesOcultas() {
+    if (!db) return new Set();
+    try {
+        const r = await db.query('SELECT clave FROM flota_chofer WHERE oculto = true');
+        return new Set(r.rows.map(f => f.clave));
+    } catch (e) { return new Set(); }
+}
+async function choferesVisibles() {
+    const [lista, ocultos] = await Promise.all([obtenerChoferes(), clavesOcultas()]);
+    return lista.filter(n => !ocultos.has(claveNombre(n)));
+}
+
 // Lista para el desplegable del login (solo nombres)
 app.get('/api/choferes', async (req, res) => {
     try {
-        const lista = await obtenerChoferes();
+        const lista = await choferesVisibles();
         res.json(lista.map(nombre => ({ nombre })));
     } catch (err) {
         console.error("❌ Error al obtener la lista de choferes:", err.message);
@@ -766,6 +780,7 @@ app.get('/api/admin/choferes', requireAdmin, requireDb, async (req, res) => {
             const personalizado = !!(f && f.pin_personalizado);
             return {
                 nombre,
+                oculto: !!(f && f.oculto),
                 activo: f ? f.activo : true,
                 pinPersonalizado: personalizado,
                 pin: personalizado ? null : pinDeChofer(nombre),
@@ -808,6 +823,24 @@ app.post('/api/admin/chofer/pin', requireAdmin, requireDb, async (req, res) => {
     } catch (err) {
         console.error("❌ Error al cambiar el PIN (admin):", err.message);
         res.status(500).json({ error: 'No se pudo cambiar el PIN' });
+    }
+});
+
+// Administrador: quitar de la lista a alguien que no es chofer {nombre, oculto:true} o volver a mostrarlo {nombre, oculto:false}.
+// Al quitarlo también se desactiva (no puede ingresar); al restaurarlo vuelve activo.
+app.post('/api/admin/chofer/oculto', requireAdmin, requireDb, async (req, res) => {
+    const { nombre, oculto } = req.body || {};
+    if (typeof oculto !== 'boolean') return res.status(400).json({ error: 'Falta indicar oculto: true o false' });
+    try {
+        const nombreReal = await nombreDeLista(nombre);
+        if (!nombreReal) return res.status(404).json({ error: 'Chofer no encontrado' });
+        const fila = await asegurarChofer(nombreReal);
+        await db.query(`UPDATE flota_chofer SET oculto = $2, activo = $3, sesion_desde = $4 WHERE clave = $1`, [fila.clave, oculto, !oculto, new Date()]);
+        olvidarEstadoChofer(nombreReal);
+        res.json({ exito: true, oculto });
+    } catch (err) {
+        console.error("❌ Error al ocultar/restaurar chofer:", err.message);
+        res.status(500).json({ error: 'No se pudo actualizar el chofer' });
     }
 });
 
@@ -2151,7 +2184,7 @@ app.post('/api/admin/deposito/activo', requireAdmin, requireDb, async (req, res)
 
 // ---- Datos de Gescom (solo lectura) ----
 app.get('/api/retorno/choferes', requireDepAdmin, async (req, res) => {
-    try { res.json(await obtenerChoferes()); }
+    try { res.json(await choferesVisibles()); }
     catch (err) { res.status(502).json({ error: 'No se pudo leer la lista de choferes de Gescom' }); }
 });
 
