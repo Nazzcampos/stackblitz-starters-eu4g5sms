@@ -614,7 +614,14 @@
         .roles button { width: auto; margin: 0; padding: 10px 4px; font-size: .82rem; background: transparent; color: var(--muted); box-shadow: none; border: 0; border-radius: 10px; transform: none; }
         .roles button.on { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #fff; box-shadow: 0 6px 16px rgba(37,99,235,.4); }
         #formSup > *, #formDep > * { animation: none; }
-    </style>
+        .rep-rapidos { display: flex; gap: 8px; margin: 8px 0 10px; }
+    .rep-rapidos button { flex: 1; padding: 8px 10px; font-size: .82rem; }
+    .rep-resumen { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 0 0 14px; }
+    .rep-resumen .rep-item { background: rgba(56,189,248,.08); border: 1px solid rgba(56,189,248,.25); border-radius: 12px; padding: 10px 12px; }
+    .rep-resumen .rep-num { font-size: 1.15rem; font-weight: 800; }
+    .rep-resumen .rep-lbl { font-size: .72rem; color: var(--text-muted, #94a0c8); text-transform: uppercase; letter-spacing: .04em; }
+    .rep-resumen .rep-vacio { grid-column: 1 / -1; font-size: .85rem; color: var(--text-muted, #94a0c8); }
+</style>
 </head>
 <body>
 
@@ -791,6 +798,11 @@
 
             <label for="inputFechaRuta" style="margin-top: 0;">Fecha de reparto</label>
             <input type="date" id="inputFechaRuta" onchange="cambiarFechaRuta()">
+            <div class="rep-rapidos">
+                <button type="button" class="btn-ghost" onclick="fechaRutaRapida(0)">Hoy</button>
+                <button type="button" class="btn-ghost" onclick="fechaRutaRapida(1)">Mañana</button>
+            </div>
+            <div class="rep-resumen" id="resumenReparto" style="display:none;"></div>
 
             <!-- Mapa interactivo del chofer -->
             <div class="map-wrap">
@@ -1022,6 +1034,34 @@
             } catch (err) { /* sin conexión: queda el login */ }
         }
     };
+
+    // Atajos Hoy / Mañana y resumen del reparto (clientes, importe, kilos y deuda a cobrar)
+    function fechaRutaRapida(dias) {
+        const d = new Date(); d.setDate(d.getDate() + dias);
+        document.getElementById('inputFechaRuta').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        cambiarFechaRuta();
+    }
+    async function pintarResumenReparto(clientes) {
+        const caja = document.getElementById('resumenReparto');
+        const fecha = document.getElementById('inputFechaRuta').value || fechaLocalHoy();
+        try {
+            const r = await apiFetch('/api/resumen-reparto?fecha=' + encodeURIComponent(fecha));
+            if (!r.ok) throw new Error('error');
+            const d = await r.json();
+            if (!d.comprobantes) {
+                caja.innerHTML = '<div class="rep-vacio">Todavía no hay reparto asignado para esta fecha. Cuando se carguen los pedidos en el sistema, vas a ver acá el resumen.</div>';
+            } else {
+                const cobrar = (clientes || []).reduce((a, c) => a + (deudaDe(c).cobrar || 0), 0);
+                const kg = Number(d.kg).toLocaleString('es-AR', { maximumFractionDigits: 1 });
+                caja.innerHTML =
+                    '<div class="rep-item"><div class="rep-num">' + d.clientes + '</div><div class="rep-lbl">Clientes</div></div>' +
+                    '<div class="rep-item"><div class="rep-num">' + formatoPesos(d.importe) + '</div><div class="rep-lbl">En reparto</div></div>' +
+                    '<div class="rep-item"><div class="rep-num">' + kg + ' kg</div><div class="rep-lbl">Peso</div></div>' +
+                    '<div class="rep-item"><div class="rep-num">' + formatoPesos(cobrar) + '</div><div class="rep-lbl">A cobrar (deuda)</div></div>';
+            }
+            caja.style.display = 'grid';
+        } catch (e) { caja.style.display = 'none'; }
+    }
 
     function cambiarFechaRuta() {
         if (choferActual) {
@@ -1645,6 +1685,7 @@
         try {
             const res = await apiFetch(url);
             const clientes = await res.json();
+            pintarResumenReparto(Array.isArray(clientes) ? clientes : []);
 
             marcadoresClientes.forEach(m => mapChofer.removeLayer(m));
             marcadoresClientes = [];

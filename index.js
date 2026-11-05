@@ -2689,6 +2689,44 @@ app.post('/api/ruta-sugerida', requireChofer, async (req, res) => {
 });
 
 
+// --- RESUMEN DEL REPARTO: cuántos clientes, cuánta plata y cuántos kilos lleva el chofer en un día ---
+// El peso de Gescom (item.peso) es un entero: se asume en gramos. Si no coincide con Gescom, se ajusta con la variable PESO_DIVISOR (1000 = gramos, 1 = kilos).
+const PESO_DIVISOR = Number(process.env.PESO_DIVISOR) > 0 ? Number(process.env.PESO_DIVISOR) : 1000;
+app.get('/api/resumen-reparto', requireChofer, async (req, res) => {
+    const fecha = String(req.query.fecha || '') || hoyArgentina();
+    if (!RE_FECHA.test(fecha) || !fechaValida(fecha)) return res.status(400).json({ error: 'Fecha inválida' });
+    try {
+        const filtro = await filtroAnuladas();
+        const palabras = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+        const claveChofer = palabras(req.chofer);
+        const excluidos = new Set((process.env.CLIENTES_EXCLUIDOS_REPARTO || '').split(',').map(x => x.trim()).filter(Boolean));
+        const cab = await pool.query(`SELECT v.id::text AS id, v.cliente_id::text AS cliente_id, v.razon_social AS nombre, v.importe_total AS total
+            FROM venta v WHERE v.empleado_chofer_nombre = $1 AND v.fecha_entrega::date = $2${filtro}`, [req.chofer, fecha]);
+        // Igual que la lista de paradas: el remito de cajas a nombre del chofer y los clientes excluidos no cuentan
+        const ventas = cab.rows.filter(f => palabras(f.nombre) !== claveChofer && !excluidos.has(String(f.cliente_id)));
+        let kg = 0;
+        if (ventas.length) {
+            const ids = ventas.map(v => v.id);
+            const r = await pool.query(`SELECT COALESCE(SUM(
+                    COALESCE(NULLIF(vi.unidades, 0), vi.cantidad * COALESCE(NULLIF(vi.unidad_factor, 0), 1)) * COALESCE(it.peso, 0)
+                ), 0) AS gramos
+                FROM venta_item vi LEFT JOIN item it ON it.id = vi.item_id AND it.tenant_id = vi.tenant_id
+                WHERE vi.venta_id = ANY($1::bigint[])`, [ids]);
+            kg = Number(r.rows[0].gramos) / PESO_DIVISOR;
+        }
+        res.json({
+            fecha,
+            clientes: new Set(ventas.map(v => v.cliente_id)).size,
+            comprobantes: ventas.length,
+            importe: Number(ventas.reduce((a, v) => a + (Number(v.total) || 0), 0).toFixed(2)),
+            kg: Number(kg.toFixed(1))
+        });
+    } catch (err) {
+        console.error('❌ Error al calcular el resumen del reparto:', err.message);
+        res.status(500).json({ error: 'No se pudo calcular el resumen del reparto' });
+    }
+});
+
 // --- COMPROBANTES DEL REPARTO (copia informativa en PDF, solo lectura de Gescom) ---
 // Gescom no guarda el PDF fiscal (CAE): se arma una copia con los datos de la boleta y así se aclara en el documento.
 const COLS_COMPROBANTE = `v.id::text AS id, v.tipo_comprobante_codigo AS tipo, v.punto_venta_codigo AS pv, v.numero_comprobante AS numero,
