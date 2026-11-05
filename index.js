@@ -624,6 +624,14 @@ app.get('/api/esquema', async (req, res) => {
         return res.status(404).json({ error: "No encontrado" });
     }
     try {
+        // /api/esquema?token=...&tabla=venta → columnas de esa tabla (solo nombre y tipo, sin datos)
+        if (req.query.tabla) {
+            const t = String(req.query.tabla).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 60);
+            const cols = await pool.query(
+                `SELECT column_name AS columna, data_type AS tipo FROM information_schema.columns
+                 WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position`, [t]);
+            return res.json({ tabla: t, columnas: cols.rows });
+        }
         const queryTablas = `
             SELECT table_name 
             FROM information_schema.tables 
