@@ -1716,16 +1716,17 @@
             const d = await res.json().catch(() => ({}));
             if (!res.ok) { cuerpo.innerHTML = `<tr><td colspan="3" class="empty-row">${escapeHtml(d.error || 'No se pudo cargar')}</td></tr>`; return; }
             document.getElementById('venDominios').innerHTML = d.dominios.map(x => `<option value="${escapeHtml(x)}">`).join('');
-            cuerpo.innerHTML = d.camiones.length ? d.camiones.map(c =>
-                `<tr><td><b>${escapeHtml(c.nombre)}</b></td><td><input class="campo" list="venDominios" style="max-width:160px;text-transform:uppercase;" maxlength="10" value="${escapeHtml(c.dominio)}" id="venDom-${escapeHtml(c.codigo)}" placeholder="Ej: AG412KP"></td>
-                 <td><button type="button" class="btn-suave" onclick="guardarPatenteCamion('${escapeHtml(c.codigo)}', this)">Guardar</button></td></tr>`).join('')
+            window._venCamiones = d.camiones;
+            cuerpo.innerHTML = d.camiones.length ? d.camiones.map((c, i) =>
+                `<tr><td><b>${escapeHtml(c.nombre)}</b></td><td><input class="campo" list="venDominios" style="max-width:160px;text-transform:uppercase;" maxlength="10" value="${escapeHtml(c.dominio)}" id="venDom-${i}" placeholder="Ej: AG412KP"></td>
+                 <td><button type="button" class="btn-suave" onclick="guardarPatenteCamion(${i}, this)">Guardar</button></td></tr>`).join('')
                 : '<tr><td colspan="3" class="empty-row">No hay camiones en Gescom en los últimos 90 días.</td></tr>';
         } catch (e) { if (e.message !== 'SESION') cuerpo.innerHTML = '<tr><td colspan="3" class="empty-row">No se pudo conectar con el servidor.</td></tr>'; }
     }
-    async function guardarPatenteCamion(codigo, boton) {
+    async function guardarPatenteCamion(i, boton) {
         boton.disabled = true;
         try {
-            const res = await adminFetch('/api/admin/venta-camion/mapeo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo, dominio: document.getElementById('venDom-' + codigo).value }) });
+            const res = await adminFetch('/api/admin/venta-camion/mapeo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clave: window._venCamiones[i].clave, dominio: document.getElementById('venDom-' + i).value }) });
             const d = await res.json().catch(() => ({}));
             if (!res.ok) { venMensaje(d.error || 'No se pudo guardar.', 'error'); return; }
             venMensaje('✔ Patente guardada', 'ok'); cargarVentaCamion();

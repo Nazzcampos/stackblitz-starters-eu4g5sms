@@ -2670,7 +2670,7 @@ async function consultarVentaCamion(q) {
     cab.rows.forEach(v => {
         if (claveTextoVenta(v.nombre) === claveTextoVenta(v.chofer) || excluidos.has(String(v.cliente_id))) return;
         const k = v.reparto;
-        const g = grupos.get(k) || { fecha: v.fecha, reparto: v.reparto, codigo: v.codigo, camion: v.camion, chofer: v.chofer, clientes: new Set(), comprobantes: 0, importe: 0, kg: 0, estimado: false };
+        const g = grupos.get(k) || { fecha: v.fecha, reparto: v.reparto, codigo: v.codigo, clave: claveNombre(v.camion), camion: v.camion, chofer: v.chofer, clientes: new Set(), comprobantes: 0, importe: 0, kg: 0, estimado: false };
         g.clientes.add(v.cliente_id);
         if (!esNotaCredito(v.tipo)) {
             const it = porVenta.get(v.id);
@@ -2682,19 +2682,20 @@ async function consultarVentaCamion(q) {
         }
         grupos.set(k, g);
     });
+    // El camión se identifica por su nombre en Gescom (el código numérico puede repetirse o cambiar de nombre)
     let mapa = new Map();
     try { (await db.query(`SELECT vehiculo_codigo, dominio FROM flota_camion_gescom`)).rows.forEach(f => mapa.set(f.vehiculo_codigo, f.dominio)); } catch (e) {}
     const filas = [...grupos.values()].map(g => ({
-        fecha: g.fecha, reparto: g.reparto, codigo: g.codigo, camion: g.camion, dominio: mapa.get(g.codigo) || '', chofer: g.chofer,
+        fecha: g.fecha, reparto: g.reparto, codigo: g.codigo, clave: g.clave, camion: g.camion, dominio: mapa.get(g.clave) || mapa.get(g.codigo) || '', chofer: g.chofer,
         clientes: g.clientes.size, comprobantes: g.comprobantes, importe: Number(g.importe.toFixed(2)), kg: Number(g.kg.toFixed(1)), estimado: g.estimado
     })).sort((a, b) => b.fecha.localeCompare(a.fecha) || String(a.camion).localeCompare(String(b.camion), 'es', { numeric: true }));
     const por = new Map();
     filas.forEach(f => {
-        const t = por.get(f.codigo) || { codigo: f.codigo, camion: f.camion, dominio: f.dominio, fechas: new Set(), clientes: 0, importe: 0, kg: 0 };
+        const t = por.get(f.clave) || { codigo: f.codigo, clave: f.clave, camion: f.camion, dominio: f.dominio, fechas: new Set(), clientes: 0, importe: 0, kg: 0 };
         t.fechas.add(f.fecha); t.clientes += f.clientes; t.importe += f.importe; t.kg += f.kg;
-        por.set(f.codigo, t);
+        por.set(f.clave, t);
     });
-    const resumen = [...por.values()].map(t => ({ codigo: t.codigo, camion: t.camion, dominio: t.dominio, dias: t.fechas.size, clientes: t.clientes,
+    const resumen = [...por.values()].map(t => ({ codigo: t.codigo, clave: t.clave, camion: t.camion, dominio: t.dominio, dias: t.fechas.size, clientes: t.clientes,
         importe: Number(t.importe.toFixed(2)), kg: Number(t.kg.toFixed(1)), promedioDia: Number((t.importe / t.fechas.size).toFixed(2)) }))
         .sort((a, b) => String(a.camion).localeCompare(String(b.camion), 'es', { numeric: true }));
     return { desde: rango.desde, hasta: rango.hasta, filas, resumen };
@@ -2731,18 +2732,26 @@ app.get('/api/admin/venta-camion/exportar', requireAdmin, requireDb, async (req,
         res.status(500).json({ error: 'No se pudo generar el Excel' });
     }
 });
-// Camiones de Gescom (últimos 90 días) con la patente asignada + patentes conocidas de la app
+// Camiones de Gescom (últimos 90 días, uno por nombre) con la patente asignada + patentes conocidas de la app
 app.get('/api/admin/venta-camion/mapeo', requireAdmin, requireDb, async (req, res) => {
     try {
         const g = await pool.query(`/*VENTACAMION3*/ SELECT DISTINCT r.vehiculo_codigo::text AS codigo, r.vehiculo_nombre AS nombre
-            FROM reparto r WHERE r.fecha_entrega >= CURRENT_DATE - 90 AND r.vehiculo_codigo IS NOT NULL`);
+            FROM reparto r WHERE r.fecha_entrega >= CURRENT_DATE - 90 AND r.vehiculo_nombre IS NOT NULL`);
         const m = new Map();
         (await db.query(`SELECT vehiculo_codigo, dominio FROM flota_camion_gescom`)).rows.forEach(f => m.set(f.vehiculo_codigo, f.dominio));
         const d = await db.query(`SELECT DISTINCT dom FROM (
                 SELECT ${SQL_DOMINIO('dominio')} AS dom FROM flota_checklist
                 UNION SELECT ${SQL_DOMINIO('vehiculo')} FROM flota_jornada
                 UNION SELECT ${SQL_DOMINIO('dominio')} FROM flota_combustible) x WHERE dom <> '' ORDER BY dom`);
-        const camiones = g.rows.map(f => ({ codigo: f.codigo, nombre: f.nombre, dominio: m.get(f.codigo) || '' }))
+        const porNombre = new Map();
+        g.rows.forEach(f => {
+            const clave = claveNombre(f.nombre);
+            const c = porNombre.get(clave) || { clave, nombre: String(f.nombre).trim().replace(/\s+/g, ' '), codigos: [] };
+            c.codigos.push(f.codigo);
+            porNombre.set(clave, c);
+        });
+        const camiones = [...porNombre.values()].map(c => ({ clave: c.clave, nombre: c.nombre, codigos: c.codigos,
+            dominio: m.get(c.clave) || c.codigos.map(x => m.get(x)).find(Boolean) || '' }))
             .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es', { numeric: true }));
         res.json({ camiones, dominios: d.rows.map(f => f.dom) });
     } catch (err) {
@@ -2751,13 +2760,13 @@ app.get('/api/admin/venta-camion/mapeo', requireAdmin, requireDb, async (req, re
     }
 });
 app.post('/api/admin/venta-camion/mapeo', requireAdmin, requireDb, async (req, res) => {
-    const codigo = String((req.body || {}).codigo || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 20);
+    const clave = claveNombre(String((req.body || {}).clave || '').replace(/[^A-Za-z0-9 _-]/g, '')).slice(0, 40);
     const dominio = normalizarDominio((req.body || {}).dominio);
-    if (!codigo) return res.status(400).json({ error: 'Falta el camión' });
+    if (!clave) return res.status(400).json({ error: 'Falta el camión' });
     try {
-        if (!dominio) await db.query(`DELETE FROM flota_camion_gescom WHERE vehiculo_codigo = $1`, [codigo]);
+        if (!dominio) await db.query(`DELETE FROM flota_camion_gescom WHERE vehiculo_codigo = $1`, [clave]);
         else await db.query(`INSERT INTO flota_camion_gescom (vehiculo_codigo, dominio) VALUES ($1, $2)
-            ON CONFLICT (vehiculo_codigo) DO UPDATE SET dominio = EXCLUDED.dominio`, [codigo, dominio]);
+            ON CONFLICT (vehiculo_codigo) DO UPDATE SET dominio = EXCLUDED.dominio`, [clave, dominio]);
         res.json({ exito: true, dominio });
     } catch (err) {
         console.error('❌ Guardar patente del camión:', err.message);
