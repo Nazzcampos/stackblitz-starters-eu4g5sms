@@ -2759,6 +2759,16 @@ app.get('/api/resumen-reparto', requireChofer, async (req, res) => {
 app.get('/api/diagnostico-reparto', async (req, res) => {
     const tokenAdmin = process.env.ADMIN_TOKEN;
     if (!tokenAdmin || req.query.token !== tokenAdmin) return res.status(404).json({ error: 'No encontrado' });
+    // /api/diagnostico-reparto?token=...&vehiculos=1 -> últimos repartos con su vehículo (para armar la venta por camión)
+    if (req.query.vehiculos) {
+        try {
+            const r = await pool.query(`/*DIAGVEH*/ SELECT r.reparto_codigo::text AS reparto, to_char(r.fecha_entrega, 'YYYY-MM-DD') AS fecha,
+                    r.vehiculo_codigo::text AS vehiculo_codigo, r.vehiculo_nombre,
+                    (SELECT COUNT(*) FROM venta v WHERE v.reparto_codigo::text = r.reparto_codigo::text) AS ventas
+                FROM reparto r WHERE r.fecha_entrega >= CURRENT_DATE - 7 ORDER BY r.fecha_entrega DESC, r.reparto_codigo DESC LIMIT 40`);
+            return res.json(r.rows);
+        } catch (err) { return res.status(500).json({ error: err.message }); }
+    }
     const reparto = String(req.query.reparto || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 30);
     if (!reparto) return res.status(400).json({ error: 'Falta reparto' });
     try {
