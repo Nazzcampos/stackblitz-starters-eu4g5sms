@@ -840,9 +840,52 @@
             </div>
         </div>
     </div>
+    <!-- VENTA POR CAMIÓN -->
+    <div id="seccion-venta" class="vista-seccion">
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+                <div>
+                    <h2 class="section-title">Venta por camión</h2>
+                    <p class="section-sub">Clientes, importe y kilos de cada reparto de Gescom, por día y por camión. Las notas de crédito no suman al importe. Los kilos son aproximados.</p>
+                </div>
+            </div>
+            <div class="busqueda" style="flex-wrap:wrap;">
+                <input type="date" class="campo" id="venDesde" style="max-width:170px;" title="Desde">
+                <input type="date" class="campo" id="venHasta" style="max-width:170px;" title="Hasta">
+                <button type="button" onclick="cargarVentaCamion()">Buscar</button>
+                <button type="button" class="btn-suave" onclick="descargarVentaCamion(this)">📥 Excel</button>
+                <button type="button" class="btn-suave" onclick="alternarMapeoCamiones()">🚚 Asignar patentes</button>
+            </div>
+            <div class="export-estado" id="venEstado"></div>
+            <div id="venMapeo" style="display:none; margin:10px 0 16px;">
+                <p class="section-sub" style="margin-bottom:8px;">Gescom nombra a los camiones como "Camion Bido 20". Asignale a cada uno su patente (se guarda una sola vez).</p>
+                <div class="table-wrap">
+                    <table><thead><tr><th>Camión en Gescom</th><th>Patente</th><th></th></tr></thead><tbody id="venMapeoCuerpo"><tr><td colspan="3" class="empty-row">Cargando…</td></tr></tbody></table>
+                </div>
+                <datalist id="venDominios"></datalist>
+            </div>
+            <h3 class="section-sub" style="margin:14px 0 6px; font-weight:800; color:var(--text);">Resumen por camión</h3>
+            <div class="table-wrap">
+                <table id="tabla-venta-resumen">
+                    <thead><tr><th>Camión</th><th>Patente</th><th class="num">Días</th><th class="num">Clientes</th><th class="num">Importe</th><th class="num">Promedio por día</th><th class="num">Kg aprox.</th></tr></thead>
+                    <tbody><tr><td colspan="7" class="empty-row">Cargando…</td></tr></tbody>
+                </table>
+            </div>
+            <h3 class="section-sub" style="margin:18px 0 6px; font-weight:800; color:var(--text);">Detalle por día</h3>
+            <div class="table-wrap">
+                <table id="tabla-venta-dia">
+                    <thead><tr><th>Fecha</th><th>Camión</th><th>Patente</th><th>Chofer</th><th class="num">Clientes</th><th class="num">Importe</th><th class="num">Kg aprox.</th></tr></thead>
+                    <tbody><tr><td colspan="7" class="empty-row">Cargando…</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </main>
 
-<!-- DOCK DE NAVEGACIÓN (8 SOLAPAS) -->
+<!-- DOCK DE NAVEGACIÓN (9 SOLAPAS) -->
 <nav class="nav-island">
     <button type="button" class="nav-toggle" id="btnMenuLateral" onclick="alternarMenuLateral()" aria-label="Contraer o expandir el menú">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
@@ -879,6 +922,10 @@
     <button type="button" class="nav-btn" id="btnJornadasDock" onclick="cambiarVistaAdmin('jornadas', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
         Jornadas
+    </button>
+    <button type="button" class="nav-btn" id="btnVentaDock" onclick="cambiarVistaAdmin('venta', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Venta
     </button>
 </nav>
 
@@ -1613,6 +1660,79 @@
         finally { boton.disabled = false; }
     }
 
+    // ---------- Venta por camión ----------
+    function venParams() { return new URLSearchParams({ desde: document.getElementById('venDesde').value, hasta: document.getElementById('venHasta').value }).toString(); }
+    function venMensaje(t, clase) { const e = document.getElementById('venEstado'); e.textContent = t || ''; e.className = 'export-estado' + (clase ? ' ' + clase : ''); }
+    function iniciarVentaCamion() {
+        if (!document.getElementById('venDesde').value) {
+            const h = hoyArAdm();
+            document.getElementById('venHasta').value = h;
+            document.getElementById('venDesde').value = h.slice(0, 8) + '01';
+        }
+        cargarVentaCamion();
+    }
+    async function cargarVentaCamion() {
+        const rc = document.querySelector('#tabla-venta-resumen tbody'), dc = document.querySelector('#tabla-venta-dia tbody');
+        rc.innerHTML = dc.innerHTML = '<tr><td colspan="7" class="empty-row">Cargando…</td></tr>';
+        let d;
+        try {
+            const res = await adminFetch('/api/admin/venta-camion?' + venParams());
+            d = await res.json().catch(() => ({}));
+            if (!res.ok) { rc.innerHTML = dc.innerHTML = `<tr><td colspan="7" class="empty-row">${escapeHtml(d.error || 'No se pudo cargar')}</td></tr>`; venMensaje(''); return; }
+        } catch (e) { if (e.message !== 'SESION') rc.innerHTML = dc.innerHTML = '<tr><td colspan="7" class="empty-row">No se pudo conectar con el servidor.</td></tr>'; return; }
+        const pat = f => f.dominio ? escapeHtml(f.dominio) : '<span style="color:var(--muted)">sin asignar</span>';
+        const totImp = d.resumen.reduce((a, t) => a + t.importe, 0), totKg = d.resumen.reduce((a, t) => a + t.kg, 0), totCli = d.resumen.reduce((a, t) => a + t.clientes, 0);
+        venMensaje(`${d.filas.length} reparto${d.filas.length === 1 ? '' : 's'} · ${formatoPesos(totImp)}`);
+        rc.innerHTML = d.resumen.length ? d.resumen.map(t =>
+            `<tr><td><b>${escapeHtml(t.camion)}</b></td><td>${pat(t)}</td><td class="num">${t.dias}</td><td class="num">${t.clientes}</td><td class="num">${formatoPesos(t.importe)}</td><td class="num">${formatoPesos(t.promedioDia)}</td><td class="num">${formatoNumero(t.kg, 1)}</td></tr>`).join('')
+            + `<tr><td><b>TOTAL</b></td><td></td><td></td><td class="num"><b>${totCli}</b></td><td class="num"><b>${formatoPesos(totImp)}</b></td><td></td><td class="num"><b>${formatoNumero(totKg, 1)}</b></td></tr>`
+            : '<tr><td colspan="7" class="empty-row">No hay repartos en esas fechas.</td></tr>';
+        dc.innerHTML = d.filas.length ? d.filas.map(f =>
+            `<tr><td>${escapeHtml(docFecha(f.fecha))}</td><td><b>${escapeHtml(f.camion)}</b></td><td>${pat(f)}</td><td>${escapeHtml(f.chofer || '')}</td><td class="num">${f.clientes}</td><td class="num">${formatoPesos(f.importe)}${f.estimado ? ' <span title="Estimado: todavía sin facturar">*</span>' : ''}</td><td class="num">${formatoNumero(f.kg, 1)}</td></tr>`).join('')
+            : '<tr><td colspan="7" class="empty-row">No hay repartos en esas fechas.</td></tr>';
+    }
+    async function descargarVentaCamion(boton) {
+        boton.disabled = true; venMensaje('Generando el Excel…');
+        try {
+            const res = await adminFetch('/api/admin/venta-camion/exportar?' + venParams());
+            if (!res.ok) { const d = await res.json().catch(() => ({})); venMensaje(d.error || 'No se pudo generar el Excel.', 'error'); return; }
+            const blob = await res.blob();
+            const m = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
+            const nombre = m ? m[1] : 'venta_por_camion.xlsx';
+            const url = URL.createObjectURL(blob), a = document.createElement('a');
+            a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            venMensaje('✔ Descargado: ' + nombre, 'ok');
+        } catch (e) { if (e.message !== 'SESION') venMensaje('No se pudo conectar con el servidor.', 'error'); }
+        finally { boton.disabled = false; }
+    }
+    async function alternarMapeoCamiones() {
+        const caja = document.getElementById('venMapeo');
+        if (caja.style.display !== 'none') { caja.style.display = 'none'; return; }
+        caja.style.display = '';
+        const cuerpo = document.getElementById('venMapeoCuerpo');
+        try {
+            const res = await adminFetch('/api/admin/venta-camion/mapeo');
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) { cuerpo.innerHTML = `<tr><td colspan="3" class="empty-row">${escapeHtml(d.error || 'No se pudo cargar')}</td></tr>`; return; }
+            document.getElementById('venDominios').innerHTML = d.dominios.map(x => `<option value="${escapeHtml(x)}">`).join('');
+            cuerpo.innerHTML = d.camiones.length ? d.camiones.map(c =>
+                `<tr><td><b>${escapeHtml(c.nombre)}</b></td><td><input class="campo" list="venDominios" style="max-width:160px;text-transform:uppercase;" maxlength="10" value="${escapeHtml(c.dominio)}" id="venDom-${escapeHtml(c.codigo)}" placeholder="Ej: AG412KP"></td>
+                 <td><button type="button" class="btn-suave" onclick="guardarPatenteCamion('${escapeHtml(c.codigo)}', this)">Guardar</button></td></tr>`).join('')
+                : '<tr><td colspan="3" class="empty-row">No hay camiones en Gescom en los últimos 90 días.</td></tr>';
+        } catch (e) { if (e.message !== 'SESION') cuerpo.innerHTML = '<tr><td colspan="3" class="empty-row">No se pudo conectar con el servidor.</td></tr>'; }
+    }
+    async function guardarPatenteCamion(codigo, boton) {
+        boton.disabled = true;
+        try {
+            const res = await adminFetch('/api/admin/venta-camion/mapeo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codigo, dominio: document.getElementById('venDom-' + codigo).value }) });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) { venMensaje(d.error || 'No se pudo guardar.', 'error'); return; }
+            venMensaje('✔ Patente guardada', 'ok'); cargarVentaCamion();
+        } catch (e) { if (e.message !== 'SESION') venMensaje('No se pudo conectar con el servidor.', 'error'); }
+        finally { boton.disabled = false; }
+    }
+
     async function iniciarRetornos() {
         if (!document.getElementById('retDesde').value) {
             document.getElementById('retHasta').value = hoyArAdm();
@@ -1756,6 +1876,9 @@
         } else if (vista === 'jornadas') {
             document.getElementById('seccion-jornadas').classList.add('active');
             iniciarJornadas();
+        } else if (vista === 'venta') {
+            document.getElementById('seccion-venta').classList.add('active');
+            iniciarVentaCamion();
         }
         btn.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'smooth' });
