@@ -635,6 +635,17 @@ app.get('/api/esquema', async (req, res) => {
         // /api/esquema?token=...&columna=orden → tablas que tienen una columna cuyo nombre contiene ese texto
         if (req.query.columna) {
             const c = String(req.query.columna).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 40);
+            // &todo=1 → busca en todos los esquemas y también en tablas sin permiso de lectura (solo nombres)
+            if (req.query.todo) {
+                const r2 = await pool.query(
+                    `SELECT n.nspname AS esquema, cl.relname AS tabla, a.attname AS columna, format_type(a.atttypid, a.atttypmod) AS tipo,
+                            has_table_privilege(cl.oid, 'SELECT') AS puedo_leer
+                     FROM pg_attribute a JOIN pg_class cl ON cl.oid = a.attrelid JOIN pg_namespace n ON n.oid = cl.relnamespace
+                     WHERE a.attnum > 0 AND NOT a.attisdropped AND cl.relkind IN ('r', 'v', 'm', 'p', 'f')
+                       AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast') AND a.attname LIKE $1
+                     ORDER BY 1, 2, a.attnum LIMIT 200`, ['%' + c + '%']);
+                return res.json({ buscado: c, resultados: r2.rows });
+            }
             const r = await pool.query(
                 `SELECT table_name AS tabla, column_name AS columna, data_type AS tipo FROM information_schema.columns
                  WHERE table_schema = 'public' AND column_name LIKE $1 ORDER BY table_name, ordinal_position`, ['%' + c + '%']);
