@@ -2906,6 +2906,27 @@ app.get('/api/resumen-reparto', requireChofer, async (req, res) => {
 app.get('/api/diagnostico-reparto', async (req, res) => {
     const tokenAdmin = process.env.ADMIN_TOKEN;
     if (!tokenAdmin || req.query.token !== tokenAdmin) return res.status(404).json({ error: 'No encontrado' });
+    // /api/diagnostico-reparto?token=...&cliente=108&reparto=2447 -> dónde guarda Gescom el "Orden de reparto" del cliente
+    if (req.query.cliente) {
+        try {
+            const cod = String(req.query.cliente).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 20);
+            const rep = String(req.query.reparto || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 30);
+            const cut = t => t == null ? null : String(t).slice(0, 1500);
+            const c = await pool.query(`/*DIAGCLI*/ SELECT codigo, direccion_entrega_id::text AS direccion_entrega_id, demora_entrega_id::text AS demora_entrega_id,
+                    entidad_propiedades_json, entidad_fiscal_propiedades_json FROM cliente_hist WHERE actual = true AND codigo = $1 LIMIT 1`, [cod]);
+            const t = await pool.query(`/*DIAGCLI2*/ SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'
+                    AND (table_name ILIKE '%direcc%' OR table_name ILIKE '%entrega%' OR table_name ILIKE '%sede%' OR table_name ILIKE '%ruta%' OR table_name ILIKE '%cliente%') ORDER BY 1`);
+            const out = { cliente: c.rows.map(f => ({ codigo: f.codigo, direccion_entrega_id: f.direccion_entrega_id, demora_entrega_id: f.demora_entrega_id,
+                entidad_propiedades_json: cut(f.entidad_propiedades_json), entidad_fiscal_propiedades_json: cut(f.entidad_fiscal_propiedades_json) })), tablas: t.rows.map(f => f.table_name) };
+            if (rep) {
+                const o = await pool.query(`/*DIAGCLI3*/ SELECT COUNT(*)::int AS ventas, COUNT(DISTINCT orden_planeado)::int AS planeado_distintos, MIN(orden_planeado) AS planeado_min, MAX(orden_planeado) AS planeado_max,
+                        COUNT(DISTINCT orden_realizado)::int AS realizado_distintos, MIN(orden_realizado) AS realizado_min, MAX(orden_realizado) AS realizado_max
+                    FROM venta WHERE reparto_codigo::text = $1`, [rep]);
+                out.orden_en_venta = o.rows[0];
+            }
+            return res.json(out);
+        } catch (err) { return res.status(500).json({ error: err.message }); }
+    }
     // /api/diagnostico-reparto?token=...&vehiculos=1 -> últimos repartos con su vehículo (para armar la venta por camión)
     if (req.query.vehiculos) {
         try {
