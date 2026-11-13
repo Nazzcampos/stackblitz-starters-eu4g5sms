@@ -122,6 +122,8 @@ CREATE TABLE IF NOT EXISTS flota_orden_propuesta (
     nota text,
     items jsonb NOT NULL DEFAULT '[]'::jsonb
 );
+-- base = 'reparto': el orden parte del "Orden de reparto" importado de Gescom (antes partía del orden de visita del vendedor: 'ruta')
+ALTER TABLE flota_orden_propuesta ADD COLUMN IF NOT EXISTS base text NOT NULL DEFAULT 'ruta';
 CREATE UNIQUE INDEX IF NOT EXISTS flota_orden_borrador_uq ON flota_orden_propuesta (chofer, ruta, dia) WHERE estado = 'borrador';
 CREATE INDEX IF NOT EXISTS flota_orden_estado_idx ON flota_orden_propuesta (estado, id DESC);
 -- Documentación con vencimiento (camión y chofer)
@@ -1626,15 +1628,26 @@ async function clientesDeRuta(ruta, dia) {
         ORDER BY rh.orden ASC NULLS FIRST, c.razon_social ASC
         LIMIT ${MAX_CLIENTES_ORDEN}`, [ruta]);
     const codigos = await codigosDeClientes(r.rows.map(f => f.id));
-    return r.rows.map(f => ({
-        id: String(f.id),
-        codigo: codigos.get(String(f.id)) || null,
-        nombre: f.nombre || '',
-        direccion: f.direccion || '',
-        localidad: f.localidad || '',
-        orden: f.orden === null || f.orden === undefined ? null : Number(f.orden),
-        sin_ubicar: f.orden === null || f.orden === undefined || Number(f.orden) <= 0   // alta reciente: todavía sin lugar en el recorrido
-    }));
+    // El orden que importa es el "Orden de reparto" del camionero (importado de Gescom); si todavía no se importó, se usa el del vendedor
+    let ordenApp = new Map();
+    try { (await db.query(`SELECT cliente_codigo, orden FROM flota_orden_cliente`)).rows.forEach(f => ordenApp.set(String(f.cliente_codigo), Number(f.orden))); } catch (e) { /* sin base propia */ }
+    const usarApp = ordenApp.size > 0;
+    const lista = r.rows.map(f => {
+        const codigo = codigos.get(String(f.id)) || null;
+        const o = usarApp ? (codigo && ordenApp.has(String(codigo)) ? ordenApp.get(String(codigo)) : null)
+                          : (f.orden === null || f.orden === undefined ? null : Number(f.orden));
+        return {
+            id: String(f.id),
+            codigo,
+            nombre: f.nombre || '',
+            direccion: f.direccion || '',
+            localidad: f.localidad || '',
+            orden: o,
+            sin_ubicar: o === null || o <= 0   // alta reciente o sin orden de reparto cargado: todavía sin lugar en el recorrido
+        };
+    });
+    if (usarApp) lista.sort((a, b) => ((a.orden == null || a.orden <= 0 ? 0 : 1) - (b.orden == null || b.orden <= 0 ? 0 : 1)) || ((a.orden || 0) - (b.orden || 0)) || a.nombre.localeCompare(b.nombre, 'es'));
+    return lista;
 }
 
 // Dada la lista en el nuevo orden, asigna a cada cliente un número de orden:
@@ -1662,7 +1675,7 @@ function calcularOrden(clientes, idsOrdenados, bajas) {
     });
 }
 
-const COLS_PROPUESTA = `id::int AS id, chofer, ruta, dia, estado, cambios::int AS cambios, nota,
+const COLS_PROPUESTA = `id::int AS id, chofer, ruta, dia, estado, base, cambios::int AS cambios, nota,
     actualizado, enviado, resuelto`;
 
 async function ultimaPropuesta(chofer, ruta, dia) {
@@ -1704,7 +1717,7 @@ app.get('/api/orden/ruta/:ruta', requireChofer, requireDb, async (req, res) => {
         if (!permitidas.includes(v.ruta)) return res.status(403).json({ error: 'Esa zona no es de tu reparto' });
         const clientes = await clientesDeRuta(v.ruta, v.dia);
         const prop = await ultimaPropuesta(req.chofer, v.ruta, v.dia);
-        const vigente = prop && ['borrador', 'enviada', 'aprobada'].includes(prop.estado) ? prop : null;
+        const vigente = prop && prop.base === 'reparto' && ['borrador', 'enviada', 'aprobada'].includes(prop.estado) ? prop : null;
         let lista = clientes.map(c => ({ ...c, nuevo: c.orden, baja: false }));
         if (vigente) {
             const porId = new Map(clientes.map(c => [c.id, c]));
@@ -1751,10 +1764,10 @@ app.put('/api/orden/borrador', requireChofer, requireDb, async (req, res) => {
         const items = calcularOrden(clientes, b.ids, bajas);
         const cambios = items.filter(i => i.cambio).length;
         if (prop && prop.estado === 'borrador') {
-            await db.query(`UPDATE flota_orden_propuesta SET items = $1::jsonb, cambios = $2, actualizado = now() WHERE id = $3`,
+            await db.query(`UPDATE flota_orden_propuesta SET items = $1::jsonb, cambios = $2, base = 'reparto', actualizado = now() WHERE id = $3`,
                 [JSON.stringify(items), cambios, prop.id]);
         } else {
-            await db.query(`INSERT INTO flota_orden_propuesta (chofer, ruta, dia, estado, cambios, items) VALUES ($1, $2, $3, 'borrador', $4, $5::jsonb)`,
+            await db.query(`INSERT INTO flota_orden_propuesta (chofer, ruta, dia, estado, cambios, items, base) VALUES ($1, $2, $3, 'borrador', $4, $5::jsonb, 'reparto')`,
                 [req.chofer, v.ruta, v.dia, cambios, JSON.stringify(items)]);
         }
         res.json({ exito: true, cambios, items: items.map(i => ({ id: i.id, nuevo: i.nuevo, baja: i.baja })) });
@@ -1838,6 +1851,20 @@ app.get('/api/admin/orden/:id', requireAdmin, requireDb, async (req, res) => {
     }
 });
 
+// Aplica (o revierte) en la base de la app el "Orden de reparto" de una propuesta. Gescom no se toca: el Excel se carga a mano.
+async function aplicarOrdenPropuesta(items, revertir) {
+    const cods = [], ords = [], borrar = [];
+    (items || []).forEach(i => {
+        if (!i.codigo || !(i.cambio || i.baja)) return;
+        const o = Number(revertir ? i.antes : (i.baja ? null : i.nuevo));
+        if (Number.isFinite(o) && o > 0) { cods.push(String(i.codigo)); ords.push(Math.round(o)); } else borrar.push(String(i.codigo));
+    });
+    if (cods.length) await db.query(`INSERT INTO flota_orden_cliente (cliente_codigo, orden)
+        SELECT DISTINCT ON (c) c, o FROM unnest($1::text[], $2::int[]) AS t(c, o)
+        ON CONFLICT (cliente_codigo) DO UPDATE SET orden = EXCLUDED.orden, actualizado = now()`, [cods, ords]);
+    if (borrar.length) await db.query(`DELETE FROM flota_orden_cliente WHERE cliente_codigo = ANY($1::text[])`, [borrar]);
+    return cods.length + borrar.length;
+}
 app.post('/api/admin/orden/:id/estado', requireAdmin, requireDb, async (req, res) => {
     if (!/^\d+$/.test(req.params.id)) return res.status(400).json({ error: 'id inválido' });
     const estado = String((req.body || {}).estado || '');
@@ -1845,12 +1872,29 @@ app.post('/api/admin/orden/:id/estado', requireAdmin, requireDb, async (req, res
     const permitido = { aprobada: ['enviada'], rechazada: ['enviada', 'aprobada'], aplicada: ['aprobada'] };
     if (!permitido[estado]) return res.status(400).json({ error: 'Estado inválido' });
     try {
+        const previa = (await db.query(`SELECT estado, base, items FROM flota_orden_propuesta WHERE id = $1`, [req.params.id])).rows[0];
         const r = await db.query(
             `UPDATE flota_orden_propuesta SET estado = $1, nota = $2, resuelto = now(), actualizado = now()
              WHERE id = $3 AND estado = ANY($4::text[]) RETURNING id`,
             [estado, nota, req.params.id, permitido[estado]]);
         if (!r.rows.length) return res.status(409).json({ error: 'La propuesta cambió de estado. Actualizá la lista.' });
-        res.json({ exito: true });
+        let aplicados = null;
+        if (previa && previa.base === 'reparto') {
+            const items = previa.items || [];
+            if (estado === 'aprobada') {
+                // los clientes viejos de la propuesta pueden no traer el código: se completa antes de aplicar
+                const sin = items.filter(i => !i.codigo).map(i => i.id);
+                if (sin.length) {
+                    const cods = await codigosDeClientes(sin);
+                    items.forEach(i => { if (!i.codigo && cods.has(String(i.id))) i.codigo = cods.get(String(i.id)); });
+                    await db.query(`UPDATE flota_orden_propuesta SET items = $1::jsonb WHERE id = $2`, [JSON.stringify(items), req.params.id]);
+                }
+                aplicados = await aplicarOrdenPropuesta(items, false);
+            } else if (estado === 'rechazada' && previa.estado === 'aprobada') {
+                aplicados = await aplicarOrdenPropuesta(items, true);   // ya estaba aplicada en la app: se deshace
+            }
+        }
+        res.json({ exito: true, aplicados });
     } catch (err) {
         console.error('❌ Error al cambiar el estado del orden:', err.message);
         res.status(500).json({ error: 'No se pudo actualizar' });
@@ -1874,7 +1918,7 @@ app.get('/api/admin/exportar/orden', requireAdmin, requireDb, async (req, res) =
             const cods = await codigosDeClientes(sinCodigo);
             r.rows.forEach(p => (p.items || []).forEach(i => { if (!i.codigo && cods.has(String(i.id))) i.codigo = cods.get(String(i.id)); }));
         }
-        const enc = ['Zona', 'Día', 'Código cliente', 'ID cliente', 'Cliente', 'Dirección', 'Localidad', 'Orden anterior', 'Orden nuevo', 'Qué cambió', 'Chofer', 'Propuesta N°'];
+        const enc = ['Zona', 'Día', 'Código cliente', 'ID cliente', 'Cliente', 'Dirección', 'Localidad', 'Orden de reparto anterior', 'Orden de reparto nuevo', 'Qué cambió', 'Chofer', 'Propuesta N°'];
         const todo = [enc], cambios = [enc];
         r.rows.forEach(p => {
             (p.items || []).forEach(i => {
@@ -1886,7 +1930,7 @@ app.get('/api/admin/exportar/orden', requireAdmin, requireDb, async (req, res) =
                 if (i.cambio || i.baja) cambios.push(fila);
             });
         });
-        const anchos = [8, 11, 14, 12, 34, 30, 18, 14, 13, 12, 24, 12];
+        const anchos = [8, 11, 14, 12, 34, 30, 18, 22, 22, 12, 24, 12];
         const nombre = r.rows.length === 1 ? `orden_zona_${r.rows[0].ruta}${r.rows[0].dia ? '_' + r.rows[0].dia : ''}_prop${r.rows[0].id}.xlsx` : 'orden_reparto_aprobado.xlsx';
         enviarXlsx(res, nombre, crearXlsx([
             { nombre: 'Solo cambios', filas: cambios, anchos },
@@ -2864,10 +2908,13 @@ app.post('/api/admin/orden-reparto/importar', requireAdmin, requireDb, async (re
     });
     if (!codigos.length) return res.status(400).json({ error: 'No hay filas válidas (código y orden numérico)' });
     try {
-        if (req.body.primera) await db.query(`DELETE FROM flota_orden_cliente`);
+        // Cambios aprobados que todavía no se cargaron en Gescom: no se pisan con el export (que aún tiene el orden viejo)
+        const prot = (await db.query(`SELECT DISTINCT i->>'codigo' AS c FROM flota_orden_propuesta p, jsonb_array_elements(p.items) i
+            WHERE p.estado = 'aprobada' AND p.base = 'reparto' AND COALESCE(i->>'codigo', '') <> '' AND (COALESCE((i->>'cambio')::boolean, false) OR COALESCE((i->>'baja')::boolean, false))`)).rows.map(f => f.c);
+        if (req.body.primera) await db.query(`DELETE FROM flota_orden_cliente WHERE cliente_codigo <> ALL($1::text[])`, [prot]);
         await db.query(`INSERT INTO flota_orden_cliente (cliente_codigo, orden)
-            SELECT DISTINCT ON (c) c, o FROM unnest($1::text[], $2::int[]) AS t(c, o)
-            ON CONFLICT (cliente_codigo) DO UPDATE SET orden = EXCLUDED.orden, actualizado = now()`, [codigos, ordenes]);
+            SELECT DISTINCT ON (c) c, o FROM unnest($1::text[], $2::int[]) AS t(c, o) WHERE c <> ALL($3::text[])
+            ON CONFLICT (cliente_codigo) DO UPDATE SET orden = EXCLUDED.orden, actualizado = now()`, [codigos, ordenes, prot]);
         // Control: cuántos de esos códigos existen realmente en Gescom (detecta si se eligió mal la columna del código)
         let encontrados = null;
         try { encontrados = (await pool.query(`SELECT COUNT(DISTINCT codigo)::int AS n FROM cliente_hist WHERE actual = true AND codigo = ANY($1::text[])`, [codigos])).rows[0].n; } catch (e) {}
