@@ -632,6 +632,14 @@ app.get('/api/esquema', async (req, res) => {
     }
     try {
         // /api/esquema?token=...&tabla=venta → columnas de esa tabla (solo nombre y tipo, sin datos)
+        // /api/esquema?token=...&columna=orden → tablas que tienen una columna cuyo nombre contiene ese texto
+        if (req.query.columna) {
+            const c = String(req.query.columna).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 40);
+            const r = await pool.query(
+                `SELECT table_name AS tabla, column_name AS columna, data_type AS tipo FROM information_schema.columns
+                 WHERE table_schema = 'public' AND column_name LIKE $1 ORDER BY table_name, ordinal_position`, ['%' + c + '%']);
+            return res.json({ buscado: c, resultados: r.rows });
+        }
         if (req.query.tabla) {
             const t = String(req.query.tabla).toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 60);
             const cols = await pool.query(
