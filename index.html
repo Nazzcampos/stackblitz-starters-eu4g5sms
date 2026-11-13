@@ -688,6 +688,46 @@
     .cc-eco-reciente { color: var(--muted); background: rgba(255,255,255,.04); border: 1px solid var(--border); }
     .cc-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
     .cc-btn { width: 100%; margin: 0; min-height: 44px; padding: 10px 8px; font-size: .84rem; font-weight: 700; border-radius: 12px; }
+
+    /* ---------- Rediseño 2026 · Fase 4 y 5: mismas reglas en todos los módulos + tablet/escritorio ---------- */
+    input, select, textarea { min-height: 48px; background: rgba(8, 14, 27, .7); }
+    textarea { min-height: 90px; }
+    label { margin: 16px 0 6px; }
+    .block-title { margin: 24px 0 10px; color: var(--cyan); }
+
+    /* Check-list: pregunta arriba y botones grandes de ancho completo (se usan con una mano, a veces con guantes) */
+    .checklist-item { display: block; margin-top: 10px; padding: 12px 14px; border-radius: 16px; }
+    .checklist-item > span { display: block; font-weight: 600; font-size: .95rem; }
+    .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; padding: 4px; border-radius: 14px; background: rgba(8, 14, 27, .7); }
+    .seg label { margin: 0; padding: 10px 4px; text-align: center; font-size: .86rem; border-radius: 10px; transition: background .15s, color .15s; }
+    .seg input:checked + label.l-ok { background: var(--ok); color: #04261c; }
+    .seg input:checked + label.l-falla { background: #f0506e; color: #fff; }
+
+    .jornada { border-radius: 18px; padding: 16px; }
+    .jornada-fila button, .jornada > button { min-height: 48px; }
+    .doc-item { border-radius: 16px; padding: 14px; }
+
+    /* Navegación inferior: estado activo azul sólido */
+    .nav-island { border-radius: 24px; padding: 6px; }
+    .nav-btn { min-height: 56px; border-radius: 18px; }
+    .nav-btn.active { background: #1f5fc7; box-shadow: none; }
+    .nav-btn.active::before { display: none; }
+    .nav-btn.active svg { color: #fff; transform: none; }
+
+    /* Orden de reparto: tarjetas más compactas */
+    .ord-item { border-radius: 16px; }
+
+    /* Tablet y escritorio */
+    @media (min-width: 820px) {
+        .container { max-width: 880px; }
+        .topbar-inner { max-width: 880px; }
+        .nav-island { width: min(620px, calc(100% - 28px)); }
+        .rp-grid { grid-template-columns: repeat(4, 1fr); }
+        .lista-clientes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+        .lista-clientes .cliente-card { margin-bottom: 0; }
+        .lista-clientes .empty-state { grid-column: 1 / -1; }
+        #map-chofer { height: 420px; }
+    }
 </style>
 </head>
 <body>
