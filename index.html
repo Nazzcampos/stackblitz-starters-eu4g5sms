@@ -2579,7 +2579,7 @@
             el.className = 'ord-item' + (cambio && ord.editable ? ' cambio' : '') + (c.sin_ubicar && !c.baja && !cambio ? ' nuevo' : '') + (c.baja ? ' baja' : '');
             el.dataset.id = c.id;
             const tags = [];
-            if (c.sin_ubicar && !c.baja) tags.push(cambio ? '<span class="chip chip-ok">🆕 Alta ya ubicada</span>' : '<span class="chip chip-warn">🆕 Alta sin ubicar</span>');
+            if (c.sin_ubicar && !c.baja) tags.push(cambio ? '<span class="chip chip-ok">✔ Orden asignado</span>' : '<span class="chip chip-warn">Sin orden de reparto</span>');
             if (c.aparecio) tags.push('<span class="chip chip-warn">🆕 Apareció después</span>');
             if (c.baja) tags.push('<span class="chip" style="color:var(--danger);border-color:rgba(251,113,133,.4);background:rgba(251,113,133,.1);">🚫 Baja propuesta</span>');
             else if (cambio && !c.sin_ubicar) tags.push('<span class="chip">Antes: N° ' + c.posOrig + '</span>');
@@ -2613,7 +2613,7 @@
         if (p && p.estado === 'enviada') { txt = '📤 Ya enviaste esta propuesta (' + p.cambios + ' cambios). Esperando que el administrador la revise. Si te olvidaste de algo, tocá «Seguir editando».'; cls = 'warn'; }
         else if (p && p.estado === 'aprobada') { txt = '✅ El administrador aprobó tu propuesta. Falta que la cargue en Gescom; cuando esté cargada vas a ver el orden nuevo. Si querés cambiar algo más, tocá «Seguir editando».'; cls = 'ok'; }
         else if (p && p.estado === 'rechazada') { txt = '❌ El administrador no aprobó la última propuesta' + (p.nota ? ': «' + p.nota + '»' : '.') + ' Podés armar una nueva.'; cls = 'err'; }
-        else if (ord.lista.some(c => c.sin_ubicar && !c.baja)) { txt = '🆕 Hay clientes nuevos sin lugar en el recorrido (marcados en amarillo). Ubicalos donde corresponda.'; cls = 'warn'; }
+        else if (ord.lista.some(c => c.sin_ubicar && !c.baja)) { txt = 'Hay clientes sin orden de reparto cargado (marcados en amarillo). Pueden ser clientes nuevos o viejos que nunca tuvieron orden. Ubicalos donde corresponda.'; cls = 'warn'; }
         banner.style.display = txt ? 'block' : 'none';
         banner.className = 'ord-banner ' + cls;
         banner.textContent = txt;

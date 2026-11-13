@@ -1367,7 +1367,7 @@
         const bajas = items.filter(i => i.baja).length;
         document.getElementById('ordenResumen').innerHTML =
             `<span class="${(ESTADOS_ORDEN[p.estado] || ['badge'])[0]}">${escapeHtml((ESTADOS_ORDEN[p.estado] || ['', p.estado])[1])}</span>` +
-            (altas ? `<span class="badge badge-warn">🆕 ${altas} alta${altas > 1 ? 's' : ''} ubicada${altas > 1 ? 's' : ''}</span>` : '') +
+            (altas ? `<span class="badge badge-warn">${altas} cliente${altas > 1 ? 's' : ''} sin orden, ubicado${altas > 1 ? 's' : ''}</span>` : '') +
             (bajas ? `<span class="badge badge-falla">🚫 ${bajas} baja${bajas > 1 ? 's' : ''}</span>` : '') +
             (p.nota ? `<span class="badge">Nota: ${escapeHtml(p.nota)}</span>` : '');
         const filas = document.getElementById('ordenFilas');
@@ -1376,8 +1376,8 @@
         cambian.forEach(i => {
             const tr = document.createElement('tr');
             tr.className = 'ord-cambio-fila';
-            const antes = i.antes === null || i.antes === undefined ? '-' : (i.antes <= 0 ? i.antes + ' (alta)' : i.antes);
-            const que = i.baja ? '<span class="ord-baja-txt">BAJA</span>' : (i.antes === null || i.antes <= 0 ? '<span class="ord-sube">Alta ubicada</span>' : (i.nuevo < i.antes ? '<span class="ord-sube">▲ Sube</span>' : '▼ Baja de lugar'));
+            const antes = i.antes === null || i.antes === undefined ? '-' : (i.antes <= 0 ? i.antes + ' (sin orden)' : i.antes);
+            const que = i.baja ? '<span class="ord-baja-txt">BAJA</span>' : (i.antes === null || i.antes <= 0 ? '<span class="ord-sube">Sin orden → ubicado</span>' : (i.nuevo < i.antes ? '<span class="ord-sube">▲ Sube</span>' : '▼ Baja de lugar'));
             tr.innerHTML = `<td><b>${escapeHtml(i.nombre)}</b>${i.codigo ? '<br><span style="color:var(--muted);font-size:.75rem;">Cód. ' + escapeHtml(i.codigo) + '</span>' : ''}</td>
                 <td>${escapeHtml([i.direccion, i.localidad].filter(Boolean).join(' · '))}</td>
                 <td class="num">${escapeHtml(String(antes))}</td>
