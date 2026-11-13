@@ -711,6 +711,31 @@
     </div>
     <!-- PESTAÑA 5: ORDEN DE REPARTO -->
     <div id="seccion-orden" class="vista-seccion">
+        <div class="card" id="cardImportOrden">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </div>
+                <div>
+                    <h2 class="section-title">Orden de reparto del camionero</h2>
+                    <p class="section-sub">Gescom no comparte el campo "Orden de reparto" (pestaña Entrega del cliente). Exportá la lista de clientes desde Gescom (Abm - Cliente) con esa columna y subila acá: la app la guarda y ordena la hoja de ruta de los choferes con ese orden. Los clientes sin dato quedan al final.</p>
+                </div>
+            </div>
+            <div class="export-estado" id="ordImpEstado"></div>
+            <div class="busqueda" style="flex-wrap:wrap;">
+                <input type="file" class="campo" id="ordImpArchivo" accept=".xlsx,.xls,.csv" style="max-width:340px;" onchange="ordImpLeer(this)">
+            </div>
+            <div id="ordImpPaso2" style="display:none;margin-top:10px;">
+                <div class="busqueda" style="flex-wrap:wrap;">
+                    <label class="section-sub" style="margin:0;">Columna del código de cliente</label>
+                    <select class="campo" id="ordImpColCod" style="max-width:240px;" onchange="ordImpVista()"></select>
+                    <label class="section-sub" style="margin:0;">Columna del orden de reparto</label>
+                    <select class="campo" id="ordImpColOrd" style="max-width:240px;" onchange="ordImpVista()"></select>
+                    <button type="button" id="ordImpBtn" onclick="ordImpEnviar(this)">Importar</button>
+                </div>
+                <div class="section-sub" id="ordImpVista" style="margin-top:8px;"></div>
+            </div>
+        </div>
         <div class="card">
             <div class="section-head">
                 <div class="section-icon">
@@ -930,6 +955,7 @@
 </nav>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
     function escapeHtml(t) {
         return String(t == null ? '' : t).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -1660,6 +1686,71 @@
         finally { boton.disabled = false; }
     }
 
+    // ---------- Importar orden de reparto (export de Gescom) ----------
+    let ordImpDatos = null; // { cab: [...], filas: [[...]] }
+    function ordImpMsg(t, clase) { const e = document.getElementById('ordImpEstado'); e.textContent = t || ''; e.className = 'export-estado' + (clase ? ' ' + clase : ''); }
+    async function ordImpEstado() {
+        try {
+            const r = await adminFetch('/api/admin/orden-reparto/estado');
+            if (!r.ok) return;
+            const d = await r.json();
+            ordImpMsg(d.total ? `Orden cargado para ${d.total} clientes · última importación ${new Date(d.actualizado).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}` : 'Todavía no se importó ningún orden de reparto.');
+        } catch (e) {}
+    }
+    function ordImpNorm(t) { return String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
+    async function ordImpLeer(inp) {
+        const f = inp.files[0]; if (!f) return;
+        if (typeof XLSX === 'undefined') { ordImpMsg('No se pudo cargar el lector de planillas (revisá la conexión).', 'error'); return; }
+        try {
+            const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+            const filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
+            let h = filas.findIndex(r => r.filter(c => String(c).trim() !== '').length >= 3);
+            if (h < 0) { ordImpMsg('La planilla está vacía.', 'error'); return; }
+            const cab = filas[h].map((c, i) => String(c).trim() || ('Columna ' + (i + 1)));
+            ordImpDatos = { cab, filas: filas.slice(h + 1) };
+            const n = cab.map(ordImpNorm);
+            let iCod = n.findIndex(x => x === 'codigo' || x === 'cod' || x === 'cod.'); if (iCod < 0) iCod = n.findIndex(x => x.includes('codigo') && !x.includes('postal'));
+            let iOrd = n.findIndex(x => x.includes('orden') && x.includes('reparto')); if (iOrd < 0) iOrd = n.findIndex(x => x.includes('reparto')); if (iOrd < 0) iOrd = n.findIndex(x => x.includes('orden'));
+            const opts = cab.map((c, i) => `<option value="${i}">${escapeHtml(c)}</option>`).join('');
+            document.getElementById('ordImpColCod').innerHTML = opts; document.getElementById('ordImpColOrd').innerHTML = opts;
+            if (iCod >= 0) document.getElementById('ordImpColCod').value = iCod;
+            if (iOrd >= 0) document.getElementById('ordImpColOrd').value = iOrd;
+            document.getElementById('ordImpPaso2').style.display = '';
+            ordImpMsg(iOrd < 0 ? 'No encontré una columna de "Orden de reparto". Elegila a mano; si no está en la planilla, agregá esa columna en Gescom (ícono ≡ de la grilla) y exportá de nuevo.' : `Planilla leída: ${ordImpDatos.filas.length} filas. Revisá las columnas y tocá Importar.`, iOrd < 0 ? 'error' : '');
+            ordImpVista();
+        } catch (e) { ordImpMsg('No se pudo leer el archivo: ' + e.message, 'error'); }
+    }
+    function ordImpPares() {
+        const ic = Number(document.getElementById('ordImpColCod').value), io = Number(document.getElementById('ordImpColOrd').value);
+        const out = [];
+        (ordImpDatos ? ordImpDatos.filas : []).forEach(r => {
+            const c = String(r[ic] == null ? '' : r[ic]).trim(), o = Number(String(r[io] == null ? '' : r[io]).replace(',', '.'));
+            if (c && String(r[io]).trim() !== '' && Number.isFinite(o)) out.push({ codigo: c, orden: o });
+        });
+        return out;
+    }
+    function ordImpVista() {
+        const p = ordImpPares();
+        document.getElementById('ordImpVista').innerHTML = `${p.length} clientes con orden. Ejemplo: ` + (p.slice(0, 3).map(x => `código <b>${escapeHtml(x.codigo)}</b> → orden <b>${x.orden}</b>`).join(' · ') || '—');
+    }
+    async function ordImpEnviar(btn) {
+        const p = ordImpPares();
+        if (!p.length) { ordImpMsg('No hay filas con código y orden numérico.', 'error'); return; }
+        btn.disabled = true; let guardados = 0, encontrados = 0;
+        try {
+            for (let i = 0; i < p.length; i += 2000) {
+                ordImpMsg(`Importando… ${Math.min(i + 2000, p.length)} de ${p.length}`);
+                const res = await adminFetch('/api/admin/orden-reparto/importar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filas: p.slice(i, i + 2000), primera: i === 0 }) });
+                const d = await res.json().catch(() => ({}));
+                if (!res.ok) { ordImpMsg(d.error || 'No se pudo importar.', 'error'); return; }
+                guardados += d.guardados; encontrados += d.encontrados || 0;
+            }
+            const mal = guardados && encontrados < guardados * 0.5;
+            ordImpMsg(`✔ Importados ${guardados} clientes (${encontrados} coinciden con Gescom).` + (mal ? ' ⚠ Pocos coinciden: revisá que la columna elegida como código sea la correcta.' : ''), mal ? 'error' : 'ok');
+        } catch (e) { if (e.message !== 'SESION') ordImpMsg('No se pudo conectar con el servidor.', 'error'); }
+        finally { btn.disabled = false; }
+    }
+
     // ---------- Venta por camión ----------
     function venParams() { return new URLSearchParams({ desde: document.getElementById('venDesde').value, hasta: document.getElementById('venHasta').value }).toString(); }
     function venMensaje(t, clase) { const e = document.getElementById('venEstado'); e.textContent = t || ''; e.className = 'export-estado' + (clase ? ' ' + clase : ''); }
@@ -1867,6 +1958,7 @@
         } else if (vista === 'orden') {
             document.getElementById('seccion-orden').classList.add('active');
             cargarOrden();
+            ordImpEstado();
         } else if (vista === 'docs') {
             document.getElementById('seccion-docs').classList.add('active');
             document.getElementById('docModalFecha').style.display = '';

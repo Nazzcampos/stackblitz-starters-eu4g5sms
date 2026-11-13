@@ -194,6 +194,13 @@ CREATE TABLE IF NOT EXISTS flota_camion_gescom (
     creado timestamptz NOT NULL DEFAULT now()
 );
 ALTER TABLE flota_camion_gescom ENABLE ROW LEVEL SECURITY;
+-- "Orden de reparto" de cada cliente (el que carga Gescom en la pestaña Entrega). Gescom no lo expone en la base de lectura: se importa desde su export
+CREATE TABLE IF NOT EXISTS flota_orden_cliente (
+    cliente_codigo text PRIMARY KEY,
+    orden integer NOT NULL,
+    actualizado timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE flota_orden_cliente ENABLE ROW LEVEL SECURITY;
 -- Seguridad: nadie puede leer estas tablas desde la API pública de Supabase; solo este servidor
 ALTER TABLE flota_chofer ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flota_checklist ENABLE ROW LEVEL SECURITY;
@@ -1020,6 +1027,18 @@ app.get('/api/ventas-chofer/:nombre', requireChofer, async (req, res) => {
             palabras(f.nombre) !== claveChoferNombre
             && !excluidos.has(String(f.id)) && !(f.cliente_codigo && excluidos.has(String(f.cliente_codigo))));
 
+        // Orden de reparto del camionero (importado de Gescom); los clientes sin ese dato van al final, con el orden de ruta como antes
+        let ordenesReparto = new Map();
+        try {
+            if (db) (await db.query(`SELECT cliente_codigo, orden FROM flota_orden_cliente`)).rows.forEach(f => ordenesReparto.set(String(f.cliente_codigo), Number(f.orden)));
+        } catch (errOrd) { console.error('⚠️ No se pudo leer el orden de reparto:', errOrd.message); }
+        if (ordenesReparto.size) {
+            const cod = f => String(f.cliente_codigo || mapaCodigos.get(String(f.id)) || '');
+            paradas.forEach((f, i) => { f._i = i; f._ord = ordenesReparto.has(cod(f)) ? ordenesReparto.get(cod(f)) : null; });
+            paradas.sort((a, b) => String(a.reparto_codigo).localeCompare(String(b.reparto_codigo), 'es', { numeric: true })
+                || ((a._ord == null) - (b._ord == null)) || ((a._ord ?? 0) - (b._ord ?? 0)) || (a._i - b._i));
+            paradas.forEach(f => { delete f._i; });
+        }
         const filas = paradas.map((f, i) => {
             const total = mapaDeudas.get(String(f.id)) || 0;
             const reciente = mapaRecientes.get(String(f.id)) || 0;
@@ -1027,6 +1046,8 @@ app.get('/api/ventas-chofer/:nombre', requireChofer, async (req, res) => {
             return {
                 ...f,
                 orden: i + 1,
+                orden_reparto: f._ord == null ? null : f._ord,
+                _ord: undefined,
                 cliente_codigo: f.cliente_codigo || mapaCodigos.get(String(f.id)) || null,
                 saldo_deuda: redondear(total),
                 deuda_cobrar: total > 0 ? redondear(Math.max(0, total - reciente)) : 0,
@@ -2790,6 +2811,41 @@ app.post('/api/admin/venta-camion/mapeo', requireAdmin, requireDb, async (req, r
     } catch (err) {
         console.error('❌ Guardar patente del camión:', err.message);
         res.status(500).json({ error: 'No se pudo guardar' });
+    }
+});
+
+// =====================================================================
+//  IMPORTAR "ORDEN DE REPARTO" DESDE GESCOM (export de Abm-Cliente)
+// =====================================================================
+app.get('/api/admin/orden-reparto/estado', requireAdmin, requireDb, async (req, res) => {
+    try {
+        const r = await db.query(`SELECT COUNT(*)::int AS total, MAX(actualizado) AS actualizado FROM flota_orden_cliente`);
+        res.json(r.rows[0]);
+    } catch (err) { res.status(500).json({ error: 'No se pudo leer el estado' }); }
+});
+// Recibe de a tandas: { filas: [{ codigo, orden }], primera: true|false }  (primera=true vacía lo anterior)
+app.post('/api/admin/orden-reparto/importar', requireAdmin, requireDb, async (req, res) => {
+    const filas = Array.isArray((req.body || {}).filas) ? req.body.filas : null;
+    if (!filas || !filas.length || filas.length > 3000) return res.status(400).json({ error: 'Tanda inválida' });
+    const codigos = [], ordenes = [];
+    filas.forEach(f => {
+        const c = String((f && f.codigo) == null ? '' : f.codigo).trim().slice(0, 30);
+        const o = Math.round(Number(f && f.orden));
+        if (c && Number.isFinite(o) && o >= 0 && o < 1000000) { codigos.push(c); ordenes.push(o); }
+    });
+    if (!codigos.length) return res.status(400).json({ error: 'No hay filas válidas (código y orden numérico)' });
+    try {
+        if (req.body.primera) await db.query(`DELETE FROM flota_orden_cliente`);
+        await db.query(`INSERT INTO flota_orden_cliente (cliente_codigo, orden)
+            SELECT DISTINCT ON (c) c, o FROM unnest($1::text[], $2::int[]) AS t(c, o)
+            ON CONFLICT (cliente_codigo) DO UPDATE SET orden = EXCLUDED.orden, actualizado = now()`, [codigos, ordenes]);
+        // Control: cuántos de esos códigos existen realmente en Gescom (detecta si se eligió mal la columna del código)
+        let encontrados = null;
+        try { encontrados = (await pool.query(`SELECT COUNT(DISTINCT codigo)::int AS n FROM cliente_hist WHERE actual = true AND codigo = ANY($1::text[])`, [codigos])).rows[0].n; } catch (e) {}
+        res.json({ exito: true, guardados: codigos.length, encontrados });
+    } catch (err) {
+        console.error('❌ Importar orden de reparto:', err.message);
+        res.status(500).json({ error: 'No se pudo guardar el orden de reparto' });
     }
 });
 
