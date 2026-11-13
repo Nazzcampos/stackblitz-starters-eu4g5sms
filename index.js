@@ -1558,7 +1558,7 @@ async function resumenRutas(rutas) {
         SELECT rh.ruta_codigo::text AS ruta, COUNT(*)::int AS clientes,
                ${DIAS_SEMANA.map(d => `COUNT(*) FILTER (WHERE rh.${d} = 1)::int AS ${d}`).join(', ')}
         FROM cliente_ruta_hist rh
-        JOIN cliente_hist c ON c.id = rh.cliente_id AND c.actual = true
+        JOIN cliente_hist c ON c.id = rh.cliente_id AND c.actual = true AND COALESCE(c.activo, true) = true
         WHERE rh.actual = true AND rh.ruta_codigo::text = ANY($1::text[])
         GROUP BY rh.ruta_codigo::text`, [rutas]);
     return new Map(r.rows.map(f => [String(f.ruta), f]));
@@ -1623,7 +1623,7 @@ async function clientesDeRuta(ruta, dia) {
     const r = await pool.query(`
         SELECT rh.cliente_id::text AS id, c.razon_social AS nombre, c.direccion, c.localidad, rh.orden::int AS orden
         FROM cliente_ruta_hist rh
-        JOIN cliente_hist c ON c.id = rh.cliente_id AND c.actual = true
+        JOIN cliente_hist c ON c.id = rh.cliente_id AND c.actual = true AND COALESCE(c.activo, true) = true
         WHERE rh.actual = true AND rh.ruta_codigo::text = $1${filtroDia}
         ORDER BY rh.orden ASC NULLS FIRST, c.razon_social ASC
         LIMIT ${MAX_CLIENTES_ORDEN}`, [ruta]);
