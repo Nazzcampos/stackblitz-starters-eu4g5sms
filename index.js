@@ -2910,6 +2910,22 @@ app.get('/api/diagnostico-reparto', async (req, res) => {
     }
     const reparto = String(req.query.reparto || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 30);
     if (!reparto) return res.status(400).json({ error: 'Falta reparto' });
+    // /api/diagnostico-reparto?token=...&reparto=2447&orden=1 -> qué filas de cliente_ruta_hist tienen los clientes de ese reparto (sin nombres)
+    if (req.query.orden) {
+        try {
+            const r = await pool.query(`/*DIAGORDEN*/ SELECT rh.fuerza_venta, rh.ruta_codigo, rh.ruta_descripcion, rh.vendedor_codigo, rh.frecuencia_visita,
+                    COUNT(*)::int AS filas, COUNT(DISTINCT rh.cliente_id)::int AS clientes, MIN(rh.orden) AS orden_min, MAX(rh.orden) AS orden_max,
+                    COUNT(DISTINCT rh.orden)::int AS ordenes_distintos
+                FROM cliente_ruta_hist rh
+                WHERE rh.actual = true AND rh.cliente_id IN (SELECT v.cliente_id FROM venta v WHERE v.reparto_codigo::text = $1)
+                GROUP BY 1, 2, 3, 4, 5 ORDER BY filas DESC LIMIT 40`, [reparto]);
+            const mult = await pool.query(`/*DIAGORDEN2*/ SELECT n, COUNT(*)::int AS clientes FROM (
+                    SELECT rh.cliente_id, COUNT(*)::int AS n FROM cliente_ruta_hist rh
+                    WHERE rh.actual = true AND rh.cliente_id IN (SELECT v.cliente_id FROM venta v WHERE v.reparto_codigo::text = $1)
+                    GROUP BY rh.cliente_id) x GROUP BY n ORDER BY n`, [reparto]);
+            return res.json({ grupos: r.rows, filas_por_cliente: mult.rows });
+        } catch (err) { return res.status(500).json({ error: err.message }); }
+    }
     try {
         const filas = await pool.query(`/*DIAG*/ SELECT v.id::text AS id, v.cliente_id::text AS cliente, v.empleado_chofer_nombre AS chofer,
                 v.reparto_codigo AS reparto, to_char(v.fecha_entrega, 'YYYY-MM-DD') AS entrega, v.tipo_comprobante_codigo AS tipo,
