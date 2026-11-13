@@ -621,6 +621,73 @@
     .rep-resumen .rep-num { font-size: 1.15rem; font-weight: 800; }
     .rep-resumen .rep-lbl { font-size: .72rem; color: var(--text-muted, #94a0c8); text-transform: uppercase; letter-spacing: .04em; }
     .rep-resumen .rep-vacio { grid-column: 1 / -1; font-size: .85rem; color: var(--text-muted, #94a0c8); }
+
+    /* =====================================================================
+       Rediseño visual 2026: identidad más sobria (azul marino profundo, sin brillos excesivos),
+       panel de progreso en "Ruta de hoy" y tarjetas de cliente con 4 niveles de información
+       ===================================================================== */
+    :root {
+        --bg-0: #080e1b; --bg-1: #0b1426; --surface: rgba(17, 28, 48, 0.92); --surface-solid: #111c30;
+        --surface-2: #15243b; --border: rgba(148, 163, 184, .14); --border-strong: rgba(148, 163, 184, .26);
+        --violet: #287bff; --violet-2: #3b8bff; --cyan: #27c8f5; --ok: #18d6a0; --warn: #ffb83f;
+        --radius-xl: 20px; --radius-lg: 18px; --radius-md: 14px;
+        --shadow: 0 8px 24px rgba(0, 0, 0, .32); --glow: none;
+    }
+    body::after { display: none; }
+    body::before { background: radial-gradient(ellipse 90% 50% at 85% -10%, rgba(40, 123, 255, .14), transparent 60%), linear-gradient(180deg, var(--bg-1), var(--bg-0)); }
+    .logo-orb { animation: none; box-shadow: none !important; }
+    .card { padding: 16px; }
+    button { min-height: 46px; box-shadow: 0 4px 14px rgba(40, 123, 255, .22); transition: transform .15s, filter .15s; }
+    .btn-ghost, .nav-btn, .btn-chip { box-shadow: none; }
+    .section-icon { box-shadow: none; }
+    .nav-island { background: rgba(11, 20, 40, .82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+
+    .rep-rapidos { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin: 10px 0 12px; background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 14px; }
+    .rep-rapidos button { margin: 0; min-height: 40px; background: transparent; color: var(--muted); border: 0; box-shadow: none; border-radius: 10px; }
+    .rep-rapidos button:active { background: rgba(40, 123, 255, .25); color: #fff; }
+
+    .rp-panel { background: var(--surface-solid); border: 1px solid var(--border); border-radius: 18px; padding: 16px; margin-bottom: 14px; }
+    .rp-fila { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .rp-n { font-size: 1.6rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .rp-l { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-top: 3px; }
+    .rp-ok { color: var(--ok); } .rp-warn { color: var(--warn); }
+    .rp-prog { margin-top: 14px; }
+    .rp-meta { display: flex; justify-content: space-between; align-items: baseline; font-size: .76rem; color: var(--muted); margin-bottom: 6px; }
+    .rp-meta b { color: var(--text); font-variant-numeric: tabular-nums; }
+    .rp-barra { height: 8px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
+    .rp-barra i { display: block; height: 100%; width: 0; border-radius: 99px; background: var(--violet); transition: width .4s ease; }
+    .rp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .rp-v { font-size: 1.1rem; font-weight: 800; margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+    .cl-toolbar { margin: 18px 0 10px; }
+    .cl-titulo { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .cl-titulo b { font-size: 1.05rem; font-weight: 800; }
+    .cl-titulo span { font-size: .78rem; color: var(--muted); }
+    .cl-buscar { padding: 12px 14px; font-size: .95rem; border-radius: 14px; }
+    .cl-filtros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 10px; }
+    .cl-filtros::-webkit-scrollbar { display: none; }
+    .cl-f { width: auto; margin: 0; min-height: 40px; padding: 8px 6px; font-size: .8rem; font-weight: 700; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); box-shadow: none; border-radius: 999px; white-space: nowrap; }
+    .cl-f span { margin-left: 4px; font-variant-numeric: tabular-nums; }
+    .cl-f.on { color: #fff; background: var(--violet); border-color: transparent; }
+
+    .cliente-card { display: block; padding: 14px; margin-bottom: 12px; background: var(--surface-2); border-radius: 18px; }
+    .cliente-card.visitado { opacity: .6; }
+    .cc-cab { display: flex; gap: 12px; align-items: flex-start; }
+    .cc-cod { font-size: .72rem; font-weight: 700; color: var(--cyan); letter-spacing: .03em; }
+    .cliente-nombre { font-size: 1rem; }
+    .orden-badge { min-width: 40px; height: 40px; border-radius: 12px; background: var(--violet); font-variant-numeric: tabular-nums; }
+    .cc-estados { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .chip-danger { color: #ff8da1; background: rgba(251, 113, 133, .12); border-color: rgba(251, 113, 133, .4); }
+    .chip-neutro { color: var(--muted); background: rgba(255,255,255,.05); border-color: var(--border); }
+    .chip-visit { display: none; color: var(--ok); background: rgba(24, 214, 160, .1); border-color: rgba(24, 214, 160, .35); }
+    .cliente-card.visitado .chip-visit { display: inline-flex; }
+    .cc-eco { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; padding: 11px 14px; border-radius: 12px; font-size: .84rem; font-weight: 700; }
+    .cc-eco b { font-size: 1.02rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .cc-eco-contado { color: var(--warn); background: rgba(255, 184, 63, .1); border: 1px solid rgba(255, 184, 63, .4); }
+    .cc-eco-deuda { color: #ff8da1; background: rgba(251, 113, 133, .1); border: 1px solid rgba(251, 113, 133, .4); }
+    .cc-eco-reciente { color: var(--muted); background: rgba(255,255,255,.04); border: 1px solid var(--border); }
+    .cc-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .cc-btn { width: 100%; margin: 0; min-height: 44px; padding: 10px 8px; font-size: .84rem; font-weight: 700; border-radius: 12px; }
 </style>
 </head>
 <body>
@@ -791,8 +858,8 @@
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                 </div>
                 <div>
-                    <h3 class="section-title">Hoja de ruta</h3>
-                    <p class="section-sub">Tu reparto real desde Gescom</p>
+                    <h3 class="section-title">Ruta de hoy</h3>
+                    <p class="section-sub" id="rutaFechaLarga">Tu reparto real desde Gescom</p>
                 </div>
             </div>
 
@@ -842,6 +909,15 @@
             <div id="alertasStatus" style="margin-top:8px; padding:8px 12px; font-size:.78rem; font-weight:700; color: var(--muted); background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 12px;"></div>
 
             <!-- Lista de Clientes del Reparto -->
+            <div class="cl-toolbar" id="clToolbar" style="display:none;">
+                <div class="cl-titulo"><b>Clientes</b><span id="clSub"></span></div>
+                <input type="search" id="clBuscar" class="cl-buscar" placeholder="Buscar cliente o dirección" autocomplete="off" oninput="aplicarFiltroClientes()">
+                <div class="cl-filtros">
+                    <button type="button" class="cl-f on" data-f="todos" onclick="fijarFiltroClientes('todos')">Todos <span id="clNTodos">0</span></button>
+                    <button type="button" class="cl-f" data-f="pend" onclick="fijarFiltroClientes('pend')">Pendientes <span id="clNPend">0</span></button>
+                    <button type="button" class="cl-f" data-f="vis" onclick="fijarFiltroClientes('vis')">Visitados <span id="clNVis">0</span></button>
+                </div>
+            </div>
             <div class="lista-clientes" id="contenedor-clientes">
                 <p class="empty-state">Cargando tu ruta...</p>
             </div>
@@ -1053,18 +1129,31 @@
             } else {
                 const cobrar = (clientes || []).reduce((a, c) => a + (deudaDe(c).cobrar || 0), 0);
                 const kg = Number(d.kg).toLocaleString('es-AR', { maximumFractionDigits: 1 });
+                clientesRutaActual = Array.isArray(clientes) ? clientes : [];
                 caja.innerHTML =
-                    '<div class="rep-item"><div class="rep-num">' + d.clientes + '</div><div class="rep-lbl">Clientes</div></div>' +
-                    '<div class="rep-item"><div class="rep-num">' + (d.importe > 0 ? formatoPesos(d.importe) : 'Sin facturar') + '</div><div class="rep-lbl">' + (d.estimado ? 'En reparto (estimado)' : 'En reparto') + '</div></div>' +
-                    '<div class="rep-item"><div class="rep-num">≈ ' + kg + ' kg</div><div class="rep-lbl">Peso aproximado</div></div>' +
-                    '<div class="rep-item"><div class="rep-num">' + formatoPesos(cobrar) + '</div><div class="rep-lbl">A cobrar (deuda)</div></div>' +
-                    (d.contado > 0 ? '<div class="rep-item" style="grid-column:1 / -1;"><div class="rep-num">💵 ' + formatoPesos(d.contado) + '</div><div class="rep-lbl">Contado: se cobra al entregar</div></div>' : '');
+                    '<div class="rp-panel">' +
+                      '<div class="rp-fila">' +
+                        '<div><div class="rp-n" id="rpTotal">' + d.clientes + '</div><div class="rp-l">Clientes</div></div>' +
+                        '<div><div class="rp-n rp-ok" id="rpVis">0</div><div class="rp-l">Visitados</div></div>' +
+                        '<div><div class="rp-n rp-warn" id="rpPend">' + d.clientes + '</div><div class="rp-l">Pendientes</div></div>' +
+                      '</div>' +
+                      '<div class="rp-prog"><div class="rp-meta"><span>Progreso de reparto</span><b id="rpPct">0%</b></div><div class="rp-barra"><i id="rpBarra"></i></div></div>' +
+                      '<div class="rp-grid">' +
+                        '<div><div class="rp-l">En reparto' + (d.estimado ? ' (estimado)' : '') + '</div><div class="rp-v">' + (d.importe > 0 ? formatoPesos(d.importe) : 'Sin facturar') + '</div></div>' +
+                        '<div><div class="rp-l">A cobrar (deuda)</div><div class="rp-v rp-warn">' + formatoPesos(cobrar) + '</div></div>' +
+                        '<div><div class="rp-l">Contado (al entregar)</div><div class="rp-v rp-ok">' + formatoPesos(d.contado || 0) + '</div></div>' +
+                        '<div><div class="rp-l">Peso aproximado</div><div class="rp-v">≈ ' + kg + ' kg</div></div>' +
+                      '</div>' +
+                    '</div>';
+                actualizarProgresoReparto();
             }
-            caja.style.display = 'grid';
+            pintarFechaLarga();
+            caja.style.display = 'block';
         } catch (e) { caja.style.display = 'none'; }
     }
 
     function cambiarFechaRuta() {
+        pintarFechaLarga();
         if (choferActual) {
             cargarRutaChoferReal(choferActual);
         }
@@ -1385,7 +1474,51 @@
         const clase = (i.deuda ? 'pin-debt' : 'pin-ok') + (visitadosRuta.has(id) ? ' pin-visto' : '') + (esSiguiente ? ' pin-next' : '');
         return L.divIcon({ className: 'custom-pin', html: `<div class="pin ${clase}">${escapeHtml(i.orden)}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] });
     }
-    function pintarPines() { Object.keys(marcadoresPorId).forEach(id => marcadoresPorId[id].setIcon(iconoPin(id))); }
+    function pintarPines() { Object.keys(marcadoresPorId).forEach(id => marcadoresPorId[id].setIcon(iconoPin(id))); actualizarProgresoReparto(); }
+
+    // ---------- Progreso del reparto y filtros de la lista de clientes ----------
+    let clientesRutaActual = [];
+    let filtroClientes = 'todos';
+    function normalizarBusqueda(t) { return String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+    function pintarFechaLarga() {
+        const el = document.getElementById('rutaFechaLarga'), f = (document.getElementById('inputFechaRuta') || {}).value;
+        if (!el || !/^\d{4}-\d{2}-\d{2}$/.test(f || '')) return;
+        const t = new Date(f + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+        el.textContent = t.charAt(0).toUpperCase() + t.slice(1);
+    }
+    function actualizarProgresoReparto() {
+        const tot = document.getElementById('rpTotal'); if (!tot) return;
+        const ids = clientesRutaActual.map(c => String(c.id).replace(/\D/g, ''));
+        const total = Math.max(ids.length, Number(tot.textContent) || 0);
+        const vis = ids.filter(id => visitadosRuta.has(id)).length;
+        document.getElementById('rpVis').textContent = vis;
+        document.getElementById('rpPend').textContent = Math.max(0, total - vis);
+        const pct = total ? Math.round(vis * 100 / total) : 0;
+        document.getElementById('rpPct').textContent = pct + '%';
+        document.getElementById('rpBarra').style.width = pct + '%';
+        aplicarFiltroClientes();
+    }
+    function fijarFiltroClientes(f) { filtroClientes = f; aplicarFiltroClientes(); }
+    function aplicarFiltroClientes() {
+        const barra = document.getElementById('clToolbar'); if (!barra) return;
+        const cards = [...document.querySelectorAll('#contenedor-clientes .cliente-card')];
+        barra.style.display = cards.length ? '' : 'none';
+        const q = normalizarBusqueda((document.getElementById('clBuscar') || {}).value).trim();
+        let nVis = 0;
+        cards.forEach(card => {
+            const visto = visitadosRuta.has(card.dataset.id);
+            card.classList.toggle('visitado', visto);
+            if (visto) nVis++;
+            const okF = filtroClientes === 'todos' || (filtroClientes === 'pend' && !visto) || (filtroClientes === 'vis' && visto);
+            card.style.display = okF && (!q || (card.dataset.texto || '').includes(q)) ? '' : 'none';
+        });
+        document.getElementById('clNTodos').textContent = cards.length;
+        document.getElementById('clNVis').textContent = nVis;
+        document.getElementById('clNPend').textContent = cards.length - nVis;
+        document.querySelectorAll('.cl-f').forEach(b => b.classList.toggle('on', b.dataset.f === filtroClientes));
+        const rep = cards.length ? (cards[0].querySelector('.cc-estados .chip:nth-child(2)') || {}).textContent : '';
+        document.getElementById('clSub').textContent = cards.length + ' paradas' + (rep ? ' · ' + rep.replace('Reparto ', 'Ruta ') : '');
+    }
 
     function decodificarPolyline(str) {
         const out = []; let i = 0, lat = 0, lon = 0;
@@ -1728,40 +1861,48 @@
                 }
 
                 const contado = Number(c.contado) || 0;
-                const chipContado = contado > 0 ? `<span class="chip chip-warn">💵 Contado: cobrar al entregar ${formatoPesos(contado)}</span>` : '';
-                const chipCond = (!contado && c.condicion_pago) ? `<span class="chip">Pago: ${escapeHtml(c.condicion_pago)}</span>` : '';
-                let estadoCuenta;
-                if (tieneDeuda) {
-                    estadoCuenta = `<button class="btn-deuda" onclick="verCuentaCorriente('${idSeguro}')">${textoBoton}</button>`
-                        + (contado > 0 ? chipContado : (d.reciente > 0 ? `<span class="chip chip-warn">🕓 Pedido reciente ${formatoPesos(d.reciente)}</span>` : '')) + chipCond;
-                } else if (contado > 0 || d.reciente > 0) {
-                    estadoCuenta = `<span class="chip chip-ok">✔ Sin deuda a cobrar</span>` + (contado > 0 ? chipContado : `<span class="chip chip-warn">🕓 Pedido reciente ${formatoPesos(d.reciente)}</span>` + chipCond)
-                        + `<button type="button" class="btn-ghost" style="padding:6px 12px; font-size:.78rem;" onclick="verCuentaCorriente('${idSeguro}')">Ver Cta. Cte</button>`;
-                } else if (saldo < 0) {
-                    estadoCuenta = `<span class="chip chip-ok">✔ Saldo a favor ${formatoPesos(saldo)}</span>`;
-                } else {
-                    estadoCuenta = `<span class="chip chip-ok">✔ Al día</span>`;
-                }
+                const chipCond = (!contado && c.condicion_pago) ? `<span class="chip chip-neutro">Pago: ${escapeHtml(c.condicion_pago)}</span>` : '';
+                let chipCuenta;
+                if (tieneDeuda) chipCuenta = `<span class="chip chip-danger">Con deuda</span>`;
+                else if (saldo < 0) chipCuenta = `<span class="chip chip-ok">✔ Saldo a favor ${formatoPesos(Math.abs(saldo))}</span>`;
+                else if (d.reciente > 0 || contado > 0) chipCuenta = `<span class="chip chip-ok">✔ Sin deuda a cobrar</span>`;
+                else chipCuenta = `<span class="chip chip-ok">✔ Al día</span>`;
+                let eco = '';
+                if (tieneDeuda) eco += `<div class="cc-eco cc-eco-deuda"><span>💰 Deuda a cobrar</span><b>${formatoPesos(d.cobrar)}</b></div>`;
+                if (contado > 0) eco += `<div class="cc-eco cc-eco-contado"><span>💵 Contado al entregar</span><b>${formatoPesos(contado)}</b></div>`;
+                else if (d.reciente > 0) eco += `<div class="cc-eco cc-eco-reciente"><span>🕓 Pedido reciente</span><b>${formatoPesos(d.reciente)}</b></div>`;
 
                 const card = document.createElement('div');
                 card.className = 'cliente-card';
+                card.dataset.id = idSeguro;
+                card.dataset.texto = normalizarBusqueda([c.nombre, c.direccion, c.localidad, c.cliente_codigo].join(' '));
                 card.innerHTML = `
-                    <div class="orden-badge">${escapeHtml(c.orden || 'S/N')}</div>
-                    <div class="cliente-body">
-                        <div class="cliente-nombre">${codigoHtml}${nombreSeguro}</div>
-                        <div class="cliente-dir">${escapeHtml(c.direccion)} (${escapeHtml(c.localidad)})</div>
-                        ${resumenExhibidores(c) ? `<div class="cliente-exh">${ICONO_EXH} ${escapeHtml(resumenExhibidores(c))}</div>` : ''}
-                        <div class="cliente-foot">
-                            <span class="chip">Reparto ${escapeHtml(c.reparto_codigo || 'General')}</span>
-                            ${estadoCuenta}
-                            <button type="button" class="btn-ghost" style="padding:6px 12px; font-size:.78rem;" onclick="verComprobantes('${idSeguro}')">🧾 Comprobante</button>
+                    <div class="cc-cab">
+                        <div class="orden-badge">${escapeHtml(c.orden || 'S/N')}</div>
+                        <div class="cliente-body">
+                            ${c.cliente_codigo ? `<div class="cc-cod">Cód. ${escapeHtml(c.cliente_codigo)}</div>` : ''}
+                            <div class="cliente-nombre">${nombreSeguro}</div>
+                            <div class="cliente-dir">${escapeHtml(c.direccion)} · ${escapeHtml(c.localidad)}</div>
                         </div>
+                    </div>
+                    <div class="cc-estados">
+                        ${chipCuenta}
+                        <span class="chip">Reparto ${escapeHtml(c.reparto_codigo || 'General')}</span>
+                        ${chipCond}
+                        <span class="chip chip-visit">✔ Visitado</span>
+                    </div>
+                    ${eco}
+                    ${resumenExhibidores(c) ? `<div class="cliente-exh">${ICONO_EXH} ${escapeHtml(resumenExhibidores(c))}</div>` : ''}
+                    <div class="cc-acciones">
+                        <button type="button" class="btn-ghost cc-btn" onclick="verCuentaCorriente('${idSeguro}')">Cuenta corriente</button>
+                        <button type="button" class="btn-ghost cc-btn" onclick="verComprobantes('${idSeguro}')">🧾 Comprobante</button>
                     </div>
                 `;
                 listaContainer.appendChild(card);
             });
 
             rutaIniciar(clientes);
+            actualizarProgresoReparto();
             if (!ultimaPosicion && clientes.length > 0 && clientes[0].lat && clientes[0].lon) {
                 mapChofer.setView([clientes[0].lat, clientes[0].lon], 13);
             }
