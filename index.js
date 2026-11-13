@@ -945,6 +945,25 @@ async function codigosReparto(chofer, fecha) {
     return [...codigos];
 }
 const esNotaCredito = tipo => /^NC/i.test(String(tipo || ''));
+const esCondContado = c => /^CON/i.test(String(c || '').trim());
+// Cobro de cada cliente según la condición de pago: lo que es de contado lo cobra el chofer al entregar (facturas de contado menos notas de crédito)
+function calcularCobro(rows) {
+    const por = new Map();
+    rows.forEach(v => {
+        const k = String(v.cliente_id);
+        const e = por.get(k) || { fac: 0, nc: 0, conds: new Set(), contado: false };
+        const t = Math.abs(Number(v.total) || 0);
+        if (esNotaCredito(v.tipo)) e.nc += t;
+        else {
+            if (v.cond) e.conds.add(String(v.cond).trim());
+            if (esCondContado(v.cond)) { e.fac += t; e.contado = true; }
+        }
+        por.set(k, e);
+    });
+    const out = new Map();
+    por.forEach((e, k) => out.set(k, { contado: e.contado ? Number(Math.max(0, e.fac - e.nc).toFixed(2)) : 0, condicion: [...e.conds].join(' / ') }));
+    return out;
+}
 
 app.get('/api/ventas-chofer/:nombre', requireChofer, async (req, res) => {
     // Cada chofer solo puede ver su propio reparto
@@ -1039,6 +1058,14 @@ app.get('/api/ventas-chofer/:nombre', requireChofer, async (req, res) => {
                 || ((a._ord == null) - (b._ord == null)) || ((a._ord ?? 0) - (b._ord ?? 0)) || (a._i - b._i));
             paradas.forEach(f => { delete f._i; });
         }
+        // Condición de pago de lo que se entrega (contado = lo cobra el chofer ahora)
+        let cobros = new Map();
+        try {
+            const filtroAn = await filtroAnuladas();
+            const cr = await pool.query(`/*COBRO*/ SELECT v.cliente_id::text AS cliente_id, v.tipo_comprobante_codigo AS tipo, v.condpago_descripcion AS cond, v.importe_total AS total
+                FROM venta v WHERE v.empleado_chofer_nombre = $1 AND (v.fecha_entrega::date = $2::date OR v.reparto_codigo::text = ANY($3::text[]))${filtroAn}`, params);
+            cobros = calcularCobro(cr.rows);
+        } catch (errCob) { console.error('⚠️ No se pudo leer la condición de pago:', errCob.message); }
         const filas = paradas.map((f, i) => {
             const total = mapaDeudas.get(String(f.id)) || 0;
             const reciente = mapaRecientes.get(String(f.id)) || 0;
@@ -1047,6 +1074,8 @@ app.get('/api/ventas-chofer/:nombre', requireChofer, async (req, res) => {
                 ...f,
                 orden: i + 1,
                 orden_reparto: f._ord == null ? null : f._ord,
+                contado: (cobros.get(String(f.id)) || {}).contado || 0,
+                condicion_pago: (cobros.get(String(f.id)) || {}).condicion || '',
                 _ord: undefined,
                 cliente_codigo: f.cliente_codigo || mapaCodigos.get(String(f.id)) || null,
                 saldo_deuda: redondear(total),
@@ -2931,7 +2960,7 @@ app.get('/api/resumen-reparto', requireChofer, async (req, res) => {
         const claveChofer = palabras(req.chofer);
         const excluidos = new Set((process.env.CLIENTES_EXCLUIDOS_REPARTO || '').split(',').map(x => x.trim()).filter(Boolean));
         const codigos = await codigosReparto(req.chofer, fecha);
-        const cab = await pool.query(`SELECT v.id::text AS id, v.cliente_id::text AS cliente_id, v.razon_social AS nombre, v.importe_total AS total, v.tipo_comprobante_codigo AS tipo
+        const cab = await pool.query(`SELECT v.id::text AS id, v.cliente_id::text AS cliente_id, v.razon_social AS nombre, v.importe_total AS total, v.tipo_comprobante_codigo AS tipo, v.condpago_descripcion AS cond
             FROM venta v WHERE v.empleado_chofer_nombre = $1 AND (v.fecha_entrega::date = $2::date OR v.reparto_codigo::text = ANY($3::text[]))${filtro}`, [req.chofer, fecha, codigos]);
         // Igual que la lista de paradas: el remito de cajas a nombre del chofer y los clientes excluidos no cuentan
         const ventas = cab.rows.filter(f => palabras(f.nombre) !== claveChofer && !excluidos.has(String(f.cliente_id)));
@@ -2958,6 +2987,7 @@ app.get('/api/resumen-reparto', requireChofer, async (req, res) => {
             fecha,
             clientes: new Set(ventas.map(v => v.cliente_id)).size,
             comprobantes: ventas.filter(v => !esNotaCredito(v.tipo)).length,
+            contado: Number([...calcularCobro(ventas).values()].reduce((a, c) => a + c.contado, 0).toFixed(2)),
             importe: Number(importe.toFixed(2)),
             estimado,
             kg: Number(kg.toFixed(1))
