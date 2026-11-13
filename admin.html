@@ -1704,7 +1704,7 @@
         try {
             const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
             const filas = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
-            let h = filas.findIndex(r => r.filter(c => String(c).trim() !== '').length >= 3);
+            let h = filas.findIndex(r => r.filter(c => String(c).trim() !== '').length >= 2);
             if (h < 0) { ordImpMsg('La planilla está vacía.', 'error'); return; }
             const cab = filas[h].map((c, i) => String(c).trim() || ('Columna ' + (i + 1)));
             ordImpDatos = { cab, filas: filas.slice(h + 1) };
@@ -1725,13 +1725,13 @@
         const out = [];
         (ordImpDatos ? ordImpDatos.filas : []).forEach(r => {
             const c = String(r[ic] == null ? '' : r[ic]).trim(), o = Number(String(r[io] == null ? '' : r[io]).replace(',', '.'));
-            if (c && String(r[io]).trim() !== '' && Number.isFinite(o)) out.push({ codigo: c, orden: o });
+            if (c && String(r[io]).trim() !== '' && Number.isFinite(o) && o > 0) out.push({ codigo: c, orden: o });
         });
         return out;
     }
     function ordImpVista() {
         const p = ordImpPares();
-        document.getElementById('ordImpVista').innerHTML = `${p.length} clientes con orden. Ejemplo: ` + (p.slice(0, 3).map(x => `código <b>${escapeHtml(x.codigo)}</b> → orden <b>${x.orden}</b>`).join(' · ') || '—');
+        document.getElementById('ordImpVista').innerHTML = `${p.length} clientes con orden (los de orden 0 se ignoran). Ejemplo: ` + (p.slice(0, 3).map(x => `código <b>${escapeHtml(x.codigo)}</b> → orden <b>${x.orden}</b>`).join(' · ') || '—');
     }
     async function ordImpEnviar(btn) {
         const p = ordImpPares();

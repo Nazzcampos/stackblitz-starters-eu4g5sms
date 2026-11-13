@@ -2831,7 +2831,7 @@ app.post('/api/admin/orden-reparto/importar', requireAdmin, requireDb, async (re
     filas.forEach(f => {
         const c = String((f && f.codigo) == null ? '' : f.codigo).trim().slice(0, 30);
         const o = Math.round(Number(f && f.orden));
-        if (c && Number.isFinite(o) && o >= 0 && o < 1000000) { codigos.push(c); ordenes.push(o); }
+        if (c && Number.isFinite(o) && o > 0 && o < 1000000) { codigos.push(c); ordenes.push(o); }
     });
     if (!codigos.length) return res.status(400).json({ error: 'No hay filas válidas (código y orden numérico)' });
     try {
