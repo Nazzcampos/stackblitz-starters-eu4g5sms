@@ -717,3 +717,15 @@
         .lista-clientes .empty-state { grid-column: 1 / -1; }
         #map-chofer { height: 420px; }
     }
+
+        /* ---------- Cabecera con saludo (chofer logueado) ---------- */
+        .brand-saludo { display: none; min-width: 0; line-height: 1.2; overflow: hidden; }
+        .saludo-hola { font-size: .98rem; font-weight: 800; letter-spacing: .1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .saludo-sub { margin-top: 2px; font-size: .72rem; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .saludo-sub.on { color: #93c5fd; }
+        .topbar-inner:has(.user-chip.on) .brand-text { display: none !important; }
+        .topbar-inner:has(.user-chip.on) .brand-saludo { display: block; }
+        .topbar-inner:has(.user-chip.on) .brand { min-width: 0; flex: 1 1 0; }
+        .topbar-inner:has(.user-chip.on) .topbar-right { flex: none; }
+        .user-chip.on .avatar, .user-chip.on .user-meta { display: none; }
+        .user-chip.on { padding: 0; background: none; border: 0; gap: 6px; }

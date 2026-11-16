@@ -43,17 +43,27 @@
         } catch (err) { $('loginError').textContent = 'No se pudo conectar con el servidor.'; $('loginError').classList.remove('oculto'); }
         finally { b.disabled = false; }
     });
+    // Cabecera: saludo según la hora y fecha de hoy (Argentina)
+    function saludarDeposito(nombre) {
+        const sub = document.querySelector('.marca-sub'); if (!sub) return;
+        if (!nombre) { sub.textContent = 'Control de retorno del camión'; return; }
+        const hora = Number(new Date().toLocaleString('en-GB', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', hour12: false })) % 24;
+        const saludo = hora < 6 ? 'Buenas noches' : hora < 13 ? 'Buen día' : hora < 20 ? 'Buenas tardes' : 'Buenas noches';
+        const f = new Date().toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
+        sub.textContent = `${saludo}, ${String(nombre).split(' ')[0]} · ${f}`;
+    }
     function entrar(nombre) {
-        nombreUsuario = nombre; $('quienNombre').textContent = nombre; $('quien').classList.remove('oculto');
+        nombreUsuario = nombre; $('quienNombre').textContent = nombre; saludarDeposito(nombre); $('quien').classList.remove('oculto');
         $('vistaLogin').classList.add('oculto'); $('vistaApp').classList.remove('oculto');
         $('rtFecha').value = hoyAR(); $('rtFecha').max = hoyAR();
         $('hDesde').value = haceDias(30); $('hHasta').value = hoyAR();
-        cargarChoferes();
+        cargarChoferes(); cargarPendientes();
+        if (!temporizadorPend) temporizadorPend = setInterval(() => { if (token && !document.hidden) cargarPendientes(); }, 5 * 60 * 1000);
     }
     function salir(porVencida) {
         token = null; guardarLocal('flota_dep_token', null);
         $('vistaApp').classList.add('oculto'); $('vistaLogin').classList.remove('oculto'); $('quien').classList.add('oculto');
-        resetRetorno(); cargarUsuarios();
+        resetRetorno(); cargarUsuarios(); $('rtPendientes').innerHTML = ''; saludarDeposito('');
         if (porVencida === true) toast('Tu sesión se cerró. Ingresá de nuevo.', 'error');
     }
     async function recuperarSesion() {
@@ -211,11 +221,41 @@
                 items: rt.items.map(i => ({ codigo: i.codigo, descripcion: i.descripcion, cargada: i.cargada, retorno: i.retorno === '' ? 0 : i.retorno })) }) });
             toast(`✔ Guardado: ${d.articulos} producto${d.articulos === 1 ? '' : 's'}, ${fmtNum(d.unidades)} unidades, ${cajas || 0} cajas.`, 'ok');
             const nuevo = await json(`/api/retorno/carga?chofer=${encodeURIComponent(rt.chofer)}&fecha=${rt.fecha}`);
-            rt.existentes = nuevo.existentes; delete rt.borradores[reparto];
+            rt.existentes = nuevo.existentes; delete rt.borradores[reparto]; cargarPendientes();
             const ex = rt.existentes.find(x => x.reparto === reparto);
             if (ex) $('rtEstado').innerHTML = `<div class="aviso ok">✔ Guardado por <b>${esc(ex.cargado_por)}</b> el ${esc(fmtHora(ex.actualizado))}. Podés corregirlo y volver a guardar.</div>`;
         } catch (e) { if (e.message !== 'SESION') toast(e.message, 'error'); }
         finally { b.disabled = false; }
+    }
+
+    // ---------- Aviso: retornos sin cargar ----------
+    let pendientes = [], temporizadorPend = null;
+    const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+    const diaCorto = f => DIAS[new Date(f + 'T12:00:00Z').getUTCDay()] + ' ' + fmtFecha(f).slice(0, 5);
+    async function cargarPendientes() {
+        try {
+            const d = await json('/api/retorno/pendientes?dias=5');
+            pendientes = d.pendientes || [];
+            const antes = pendientes.filter(p => !p.esHoy), hoy = pendientes.filter(p => p.esHoy);
+            const fila = p => `<button type="button" class="pend" onclick="abrirPendiente(${pendientes.indexOf(p)})"><b>${esc(diaCorto(p.fecha))}</b> · ${esc(p.chofer)}${p.reparto ? ' · reparto ' + esc(p.reparto) : ''} <small>${p.clientes} cliente${p.clientes === 1 ? '' : 's'}</small><span>Cargar ›</span></button>`;
+            let h = '';
+            if (!d.gescom) h = '<div class="aviso warn">No se pudo revisar qué retornos faltan (Gescom no respondió).</div>';
+            else if (!pendientes.length) h = '<div class="aviso ok">✔ Todos los retornos de los últimos días están cargados.</div>';
+            else {
+                if (antes.length) h += `<div class="aviso err"><b>⚠️ Falta cargar ${antes.length} retorno${antes.length === 1 ? '' : 's'}</b> de días anteriores. Tocá uno para cargarlo.<div class="pend-lista">${antes.map(fila).join('')}</div></div>`;
+                if (hoy.length) h += `<div class="aviso warn"><b>Hoy, a la espera de que vuelvan (${hoy.length}):</b><div class="pend-lista">${hoy.map(fila).join('')}</div></div>`;
+            }
+            $('rtPendientes').innerHTML = h;
+        } catch (e) { /* si falla, no se muestra nada */ }
+    }
+    function abrirPendiente(i) {
+        const p = pendientes[i]; if (!p) return;
+        verTab('cargar');
+        $('rtFecha').value = p.fecha;
+        if (![...$('rtChofer').options].some(o => o.value === p.chofer)) $('rtChofer').insertAdjacentHTML('beforeend', `<option>${esc(p.chofer)}</option>`);
+        $('rtChofer').value = p.chofer;
+        buscarCarga(p.reparto);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     // ---------- Historial ----------

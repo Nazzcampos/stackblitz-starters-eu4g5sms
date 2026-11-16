@@ -145,12 +145,28 @@
         }
     }
 
+    // Cabecera: saludo según la hora, primer nombre del chofer, fecha y camión de la jornada en curso
+    function pintarSaludo() {
+        const hola = document.getElementById('saludoHola'), sub = document.getElementById('saludoSub');
+        if (!hola || !sub) return;
+        const hora = Number(new Date().toLocaleString('en-GB', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', hour12: false })) % 24;
+        const saludo = hora < 6 ? 'Buenas noches' : hora < 13 ? 'Buen día' : hora < 20 ? 'Buenas tardes' : 'Buenas noches';
+        const partes = String(choferActual || '').trim().split(/\s+/).filter(Boolean);
+        const nombre = (partes[1] || partes[0] || '').toLowerCase().replace(/^./, c => c.toUpperCase());
+        hola.textContent = nombre ? `${saludo}, ${nombre}` : saludo;
+        const fecha = new Date().toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
+        const camion = (typeof jornada !== 'undefined' && jornada && jornada.vehiculo) ? jornada.vehiculo : '';
+        sub.textContent = fecha.charAt(0).toUpperCase() + fecha.slice(1) + ' · ' + (camion ? '🚚 ' + camion : 'Sin jornada');
+        sub.classList.toggle('on', !!camion);
+    }
+
     // Pasa de la pantalla de login a la app, ya con el chofer autenticado
     function entrarComoChofer(nombre) {
         choferActual = nombre;
         document.getElementById('lblChofer').innerText = choferActual;
         document.getElementById('avatarChofer').innerText = iniciales(choferActual);
         document.getElementById('userChip').classList.add('on');
+        pintarSaludo();
 
         document.getElementById('vista-login').classList.remove('active');
         document.querySelectorAll('.vista-seccion').forEach(sec => { if (sec.id !== 'vista-login') sec.classList.remove('active'); });
@@ -2185,6 +2201,7 @@
     function fmtDuracionMin(min) { min = Math.max(0, Math.round(min)); return min < 60 ? min + ' min' : Math.floor(min / 60) + ' h ' + String(min % 60).padStart(2, '0') + ' min'; }
 
     function jornadaPintar() {
+        pintarSaludo();
         const caja = document.getElementById('jornadaCaja');
         caja.classList.toggle('on', !!jornada);
         document.getElementById('jornadaInicio').style.display = jornada ? 'none' : 'flex';

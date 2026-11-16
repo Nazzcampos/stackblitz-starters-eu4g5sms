@@ -176,6 +176,38 @@ app.get('/api/retorno/carga', requireDepAdmin, requireDb, async (req, res) => {
     res.json(salida);
 });
 
+// Aviso al encargado: repartos de los últimos días (Gescom) que todavía no tienen retorno cargado.
+// Se compara (fecha, chofer, reparto) de Gescom contra lo guardado en flota_retorno. Los repartos de hoy se marcan aparte
+// porque el camión puede seguir en ruta. Solo cuentan los choferes visibles (los ocultos y repartos sin chofer no generan aviso).
+app.get('/api/retorno/pendientes', requireDepAdmin, requireDb, async (req, res) => {
+    const dias = Math.min(14, Math.max(1, parseInt(req.query.dias, 10) || 5));
+    const hoy = hoyArgentina();
+    const desde = new Date(Date.parse(hoy + 'T00:00:00Z') - dias * 86400000).toISOString().slice(0, 10);
+    try {
+        const [filtro, visibles] = await Promise.all([filtroAnuladas(), choferesVisibles()]);
+        const permitidos = new Set(visibles.map(claveNombre));
+        const g = await pool.query(`/*RETORNO*/
+            SELECT to_char(v.fecha_entrega::date, 'YYYY-MM-DD') AS fecha, v.empleado_chofer_nombre AS chofer,
+                   COALESCE(v.reparto_codigo::text, '') AS reparto, COUNT(DISTINCT v.cliente_id)::int AS clientes
+            FROM venta v
+            WHERE v.fecha_entrega::date BETWEEN $1::date AND $2::date
+              AND COALESCE(v.empleado_chofer_nombre, '') <> ''
+              AND COALESCE(v.tipo_comprobante_codigo, '') NOT IN ('REME', 'REMI')
+              AND COALESCE(v.tipo_comprobante_codigo, '') NOT LIKE 'NC%'${filtro}
+            GROUP BY 1, 2, 3
+            ORDER BY 1 DESC, 2, 3`, [desde, hoy]);
+        const r = await db.query(`SELECT to_char(fecha, 'YYYY-MM-DD') AS fecha, chofer, reparto FROM flota_retorno WHERE fecha BETWEEN $1::date AND $2::date`, [desde, hoy]);
+        const cargados = new Set(r.rows.map(f => `${f.fecha}|${f.chofer}|${f.reparto}`));
+        const pendientes = g.rows
+            .filter(f => permitidos.has(claveNombre(f.chofer)) && !cargados.has(`${f.fecha}|${claveNombre(f.chofer)}|${f.reparto}`))
+            .map(f => ({ fecha: f.fecha, chofer: f.chofer, reparto: f.reparto, clientes: f.clientes, esHoy: f.fecha === hoy }));
+        res.json({ desde, hasta: hoy, gescom: true, pendientes });
+    } catch (err) {
+        console.error('⚠️ No se pudieron calcular los retornos pendientes:', err.message);
+        res.json({ desde, hasta: hoy, gescom: false, pendientes: [] });
+    }
+});
+
 // Buscador de artículos (para agregar algo que no estaba en la carga)
 app.get('/api/retorno/articulos', requireDepAdmin, async (req, res) => {
     const palabras = String(req.query.q || '').trim().split(/\s+/).filter(Boolean).slice(0, 4);

@@ -866,6 +866,46 @@
         finally { boton.disabled = false; }
     }
 
+    // ---------- Combustible: resumen mensual ----------
+    const nAR = (n, d = 0) => n === null || n === undefined ? '—' : Number(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
+    function combMesMensaje(t, clase) { const e = document.getElementById('combMesEstado'); e.textContent = t || ''; e.className = 'export-estado' + (clase ? ' ' + clase : ''); }
+    function iniciarCombustibleMes() {
+        const inp = document.getElementById('combMes');
+        if (!inp.value) inp.value = hoyArAdm().slice(0, 7);
+        cargarCombustibleMes();
+    }
+    async function cargarCombustibleMes() {
+        const mes = document.getElementById('combMes').value; if (!mes) return;
+        const cuerpo = document.querySelector('#tabla-comb-mes tbody'), kpis = document.getElementById('combMesKpis');
+        combMesMensaje('Calculando…');
+        try {
+            const res = await adminFetch('/api/admin/combustible/resumen?mes=' + encodeURIComponent(mes));
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) { cuerpo.innerHTML = `<tr><td colspan="7" class="empty-row">${escapeHtml(d.error || 'No se pudo cargar')}</td></tr>`; kpis.innerHTML = ''; combMesMensaje(''); return; }
+            const t = d.totales, a = d.anterior;
+            const dif = (act, ant) => ant > 0 ? ` <small style="color:var(--muted)">(${act >= ant ? '+' : ''}${Math.round((act - ant) / ant * 100)}% vs mes anterior)</small>` : '';
+            const kpi = (titulo, valor, extra) => `<div style="flex:1 1 150px;padding:12px 14px;border-radius:16px;border:1px solid var(--border);background:rgba(255,255,255,.04);"><div style="font-size:.7rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">${titulo}</div><div style="font-size:1.25rem;font-weight:800;margin-top:2px;">${valor}</div><div style="font-size:.78rem;">${extra || ''}</div></div>`;
+            kpis.innerHTML = kpi('Litros del mes', nAR(t.litros, 1), dif(t.litros, a.litros)) + kpi('Gasto del mes', '$ ' + nAR(t.costo, 2), dif(t.costo, a.costo)) +
+                kpi('Cargas', nAR(t.cargas), '') + kpi('Consumo promedio', t.lPor100 === null ? '—' : nAR(t.lPor100, 1) + ' L/100 km', '');
+            cuerpo.innerHTML = d.camiones.length ? d.camiones.map(c => `<tr><td><b>${escapeHtml(c.dominio)}</b></td><td class="num">${nAR(c.cargas)}</td><td class="num">${nAR(c.litros, 1)}</td><td class="num">${c.costo === null ? '—' : '$ ' + nAR(c.costo, 2)}</td><td class="num">${c.precioLitro === null ? '—' : '$ ' + nAR(c.precioLitro, 2)}</td><td class="num">${nAR(c.kmGps, 1)}</td><td class="num">${c.lPor100 === null ? '—' : nAR(c.lPor100, 1)}</td></tr>`).join('')
+                : '<tr><td colspan="7" class="empty-row">No hay cargas de combustible en ese mes.</td></tr>';
+            combMesMensaje('');
+        } catch (e) { if (e.message !== 'SESION') combMesMensaje('No se pudo conectar con el servidor.', 'error'); }
+    }
+    async function descargarCombustibleMes(boton) {
+        const mes = document.getElementById('combMes').value; if (!mes) return;
+        boton.disabled = true; combMesMensaje('Generando el Excel…');
+        try {
+            const res = await adminFetch('/api/admin/combustible/resumen/exportar?mes=' + encodeURIComponent(mes));
+            if (!res.ok) { const d = await res.json().catch(() => ({})); combMesMensaje(d.error || 'No se pudo generar el Excel.', 'error'); return; }
+            const blob = await res.blob(), url = URL.createObjectURL(blob), a = document.createElement('a');
+            a.href = url; a.download = `combustible_${mes}.xlsx`; document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
+            combMesMensaje('✔ Descargado: combustible_' + mes + '.xlsx', 'ok');
+        } catch (e) { if (e.message !== 'SESION') combMesMensaje('No se pudo conectar con el servidor.', 'error'); }
+        finally { boton.disabled = false; }
+    }
+
     async function iniciarRetornos() {
         if (!document.getElementById('retDesde').value) {
             document.getElementById('retHasta').value = hoyArAdm();
@@ -875,8 +915,24 @@
                 if (r.ok) document.getElementById('retChofer').innerHTML = '<option value="">Todos los choferes</option>' + (await r.json()).map(n => `<option>${escapeHtml(n)}</option>`).join('');
             } catch (e) {}
         }
-        cargarRetornos(); cargarUsuariosDeposito();
+        cargarRetornos(); cargarUsuariosDeposito(); cargarRetornosPendientes();
     }
+    async function cargarRetornosPendientes() {
+        const caja = document.getElementById('retPendientes'); if (!caja) return;
+        try {
+            const res = await adminFetch('/api/retorno/pendientes?dias=5');
+            if (!res.ok) { caja.innerHTML = ''; return; }
+            const d = await res.json();
+            const antes = (d.pendientes || []).filter(p => !p.esHoy), hoy = (d.pendientes || []).filter(p => p.esHoy);
+            const li = p => `<li><b>${escapeHtml(p.fecha.split('-').reverse().join('/'))}</b> · ${escapeHtml(p.chofer)}${p.reparto ? ' · reparto ' + escapeHtml(p.reparto) : ''} <span style="color:var(--muted)">(${p.clientes} cliente${p.clientes === 1 ? '' : 's'})</span></li>`;
+            let h = '';
+            if (!d.gescom) h = '<div style="margin:12px 0;padding:11px 13px;border-radius:14px;border:1px solid rgba(251,191,36,.45);background:rgba(251,191,36,.08);">No se pudo revisar qué retornos faltan (Gescom no respondió).</div>';
+            else if (antes.length) h = `<div style="margin:12px 0;padding:11px 13px;border-radius:14px;border:1px solid rgba(251,113,133,.5);background:rgba(251,113,133,.1);"><b>⚠️ Retornos sin cargar (${antes.length})</b> — el encargado todavía no los registró:<ul style="margin:8px 0 0;padding-left:18px;line-height:1.7;">${antes.map(li).join('')}</ul></div>`;
+            else h = `<div style="margin:12px 0;padding:11px 13px;border-radius:14px;border:1px solid rgba(52,211,153,.4);background:rgba(52,211,153,.08);">✔ Todos los retornos de los últimos días están cargados${hoy.length ? ` (hoy esperan ${hoy.length} camión${hoy.length === 1 ? '' : 'es'})` : ''}.</div>`;
+            caja.innerHTML = h;
+        } catch (e) { caja.innerHTML = ''; }
+    }
+
     async function cargarRetornos() {
         const cuerpo = document.querySelector('#tabla-retornos tbody');
         try {
@@ -993,6 +1049,7 @@
             document.getElementById('seccion-checklists').classList.add('active');
         } else if (vista === 'combustible') {
             document.getElementById('seccion-combustible').classList.add('active');
+            iniciarCombustibleMes();
         } else if (vista === 'choferes') {
             document.getElementById('seccion-choferes').classList.add('active');
             cargarChoferes();
@@ -1246,3 +1303,15 @@
     cargarDatos();
     setInterval(cargarDatos, 10000);
     setTimeout(() => { try { cargarDocs(); } catch (e) {} }, 1500);
+
+    // Cabecera: saludo según la hora + fecha de hoy
+    (function saludoAdmin() {
+        const poner = () => {
+            const el = document.getElementById('adminSub'); if (!el) return;
+            const hora = Number(new Date().toLocaleString('en-GB', { timeZone: 'America/Argentina/Buenos_Aires', hour: '2-digit', hour12: false })) % 24;
+            const saludo = hora < 6 ? 'Buenas noches' : hora < 13 ? 'Buen día' : hora < 20 ? 'Buenas tardes' : 'Buenas noches';
+            const f = new Date().toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', weekday: 'short', day: 'numeric', month: 'short' }).replace(/\./g, '');
+            el.textContent = `${saludo} · ${f}`;
+        };
+        poner(); setInterval(poner, 5 * 60 * 1000);
+    })();
