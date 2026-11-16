@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seguimiento de clientes · BIDO</title>
+<style>
+  :root{
+    --azul:#0b2e59; --azul2:#1456a0; --fondo:#f3f6fa; --borde:#dde3ec;
+    --texto:#1d2733; --gris:#6b7685; --afh:#e8f1fc; --ok:#1a7f4b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;background:var(--fondo);color:var(--texto);font-size:14px}
+  header{background:var(--azul);color:#fff;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  header h1{margin:0;font-size:18px;font-weight:600}
+  header small{opacity:.75}
+  main{padding:18px 22px;max-width:1400px;margin:0 auto}
+  .filtros{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;background:#fff;border:1px solid var(--borde);border-radius:10px;padding:14px;margin-bottom:16px}
+  .filtros label{display:flex;flex-direction:column;font-size:12px;color:var(--gris);gap:4px}
+  select,input{font:inherit;padding:6px 8px;border:1px solid var(--borde);border-radius:6px;background:#fff;color:var(--texto)}
+  .chk{flex-direction:row!important;align-items:center;gap:6px!important;font-size:13px!important;color:var(--texto)!important}
+  button{font:inherit;padding:7px 14px;border-radius:6px;border:1px solid var(--azul2);background:var(--azul2);color:#fff;cursor:pointer}
+  button.sec{background:#fff;color:var(--azul2)}
+  button:hover{filter:brightness(1.08)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px}
+  .kpi{background:#fff;border:1px solid var(--borde);border-radius:10px;padding:14px}
+  .kpi .v{font-size:26px;font-weight:700;color:var(--azul)}
+  .kpi .l{font-size:12px;color:var(--gris);margin-top:2px}
+  .card{background:#fff;border:1px solid var(--borde);border-radius:10px;padding:14px;margin-bottom:16px}
+  .card h2{font-size:15px;margin:0;color:var(--azul)}
+  .card .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap}
+  .card .sub{font-size:12px;color:var(--gris);margin-top:2px}
+  .tw{overflow:auto;max-height:520px}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{padding:6px 9px;border-bottom:1px solid var(--borde);text-align:right;white-space:nowrap}
+  th{background:#f7f9fc;position:sticky;top:0;color:var(--gris);font-weight:600;z-index:1}
+  td:first-child,th:first-child{text-align:left}
+  td.txt,th.txt{text-align:left}
+  tr.tot td{font-weight:700;background:#f7f9fc}
+  th.afh,td.afh{background:var(--afh)}
+  td.cero{color:#c3cad4}
+  .estado{font-size:12px;color:#d9e4f2}
+  .vacio{color:var(--gris);padding:10px 0}
+  .tag{font-size:11px;padding:2px 7px;border-radius:10px;background:#eef2f7;color:var(--gris)}
+  .tag.ok{background:#e3f4ea;color:var(--ok)}
+  #login{position:fixed;inset:0;background:rgba(11,46,89,.85);display:none;align-items:center;justify-content:center;z-index:10}
+  #login .box{background:#fff;border-radius:12px;padding:24px;width:300px;text-align:center}
+  #login input{width:100%;margin:12px 0;text-align:center;font-size:18px;letter-spacing:4px}
+  #login .err{color:#c0392b;font-size:13px;min-height:18px}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Seguimiento de clientes</h1>
+    <small>BIDO S.R.L. · datos de Gescom</small>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span class="estado" id="estado">—</span>
+    <button class="sec" onclick="cargar(true)">Actualizar</button>
+  </div>
+</header>
+
+<main>
+  <div class="filtros">
+    <label>Vendedor
+      <select id="fVendedor"></select>
+    </label>
+    <label>Ramo (para altas)
+      <select id="fRamo"></select>
+    </label>
+    <label>Altas desde
+      <input type="month" id="fDesde">
+    </label>
+    <label>Altas hasta
+      <input type="month" id="fHasta">
+    </label>
+    <label class="chk"><input type="checkbox" id="fDeposito"> Incluir "Deposito" (cód. 20)</label>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="v" id="kActivos">–</div><div class="l">Clientes activos</div></div>
+    <div class="kpi"><div class="v" id="kActivosRamo">–</div><div class="l" id="kActivosRamoL">Activos del ramo</div></div>
+    <div class="kpi"><div class="v" id="kAltas">–</div><div class="l" id="kAltasL">Altas en el período</div></div>
+    <div class="kpi"><div class="v" id="kSinCompra">–</div><div class="l">Activos sin ninguna compra</div></div>
+  </div>
+
+  <div class="card">
+    <div class="top">
+      <div><h2>Clientes activos por vendedor y Ramo</h2><div class="sub">Activo = sin cierre definitivo ni por temporada</div></div>
+      <button class="sec" onclick="exportar('activos','clientes_activos_por_vendedor')">Descargar Excel</button>
+    </div>
+    <div class="tw" id="tActivos"></div>
+  </div>
+
+  <div class="card">
+    <div class="top">
+      <div><h2 id="tAltasTitulo">Altas por vendedor y mes</h2><div class="sub">Alta = fecha de creación del cliente en Gescom (estimada). No incluye los clientes previos al inicio del registro.</div></div>
+      <button class="sec" onclick="exportar('altas','altas_por_vendedor_mes')">Descargar Excel</button>
+    </div>
+    <div class="tw" id="tAltas"></div>
+  </div>
+
+  <div class="card">
+    <div class="top">
+      <div><h2>Detalle de altas del período</h2><div class="sub" id="tDetalleSub"></div></div>
+      <button class="sec" onclick="exportar('detalle','detalle_altas')">Descargar Excel</button>
+    </div>
+    <div class="tw" id="tDetalle"></div>
+  </div>
+
+  <div class="card">
+    <div class="top">
+      <div><h2>Activos sin compras</h2><div class="sub">Clientes activos sin ninguna factura registrada (Gescom guarda ventas desde enero 2026)</div></div>
+      <button class="sec" onclick="exportar('sincompra','activos_sin_compras')">Descargar Excel</button>
+    </div>
+    <div class="tw" id="tSinCompra"></div>
+  </div>
+</main>
+
+<div id="login">
+  <div class="box">
+    <h3 style="margin:0;color:var(--azul)">Seguimiento de clientes</h3>
+    <input type="password" id="pinInput" placeholder="PIN" inputmode="numeric" autocomplete="off">
+    <div class="err" id="pinErr"></div>
+    <button style="width:100%" onclick="entrar()">Entrar</button>
+  </div>
+</div>
+
+<script>
+const AFH = 'AWAY FROM HOME';
+const DEP = '20';
+let DATA = [];
+const TABLAS = {};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+const mesLabel = m => MESES[+m.slice(5,7)-1] + ' ' + m.slice(2,4);
+const fechaLabel = f => f ? f.slice(8,10)+'/'+f.slice(5,7)+'/'+f.slice(0,4) : '';
+
+function getPin(){ try { return sessionStorage.getItem('clientesPin') || ''; } catch(e){ return window._pin || ''; } }
+function setPin(p){ try { sessionStorage.setItem('clientesPin', p); } catch(e){} window._pin = p; }
+
+function mostrarLogin(msg){
+  $('#login').style.display = 'flex';
+  $('#pinErr').textContent = msg || '';
+  $('#pinInput').value = '';
+  setTimeout(() => $('#pinInput').focus(), 50);
+}
+function entrar(){
+  const p = $('#pinInput').value.trim();
+  if (!p) return;
+  setPin(p);
+  $('#login').style.display = 'none';
+  cargar(false);
+}
+$('#pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
+
+async function cargar(refresh){
+  const pin = getPin();
+  if (!pin) { mostrarLogin(); return; }
+  $('#estado').textContent = 'Cargando…';
+  let r, j;
+  try {
+    r = await fetch('/api/clientes/datos' + (refresh ? '?refresh=1' : ''), { headers: { 'x-pin': pin } });
+    j = await r.json();
+  } catch(e) {
+    $('#estado').textContent = 'Error de conexión';
+    return;
+  }
+  if (r.status === 401) { setPin(''); mostrarLogin('PIN incorrecto'); $('#estado').textContent = '—'; return; }
+  if (!r.ok) { $('#estado').textContent = 'Error: ' + (j.error || r.status); return; }
+
+  DATA = j.filas.map(f => ({
+    ...f,
+    vendedor_codigo: f.vendedor_codigo == null ? '' : String(f.vendedor_codigo),
+    vendedor: f.vendedor_nombre || 'Sin vendedor',
+    mes_alta: f.alta ? f.alta.slice(0,7) : null
+  }));
+  const d = new Date(j.actualizado);
+  $('#estado').textContent = 'Actualizado ' + d.toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' });
+  armarFiltros();
+  render();
+}
+
+function armarFiltros(){
+  const vSel = $('#fVendedor').value || '__todos';
+  const rSel = $('#fRamo').value || '';
+  const vendedores = [...new Set(DATA.filter(r => r.activo || r.mes_alta).map(r => r.vendedor))].sort();
+  $('#fVendedor').innerHTML = '<option value="__todos">Todos</option>' +
+    vendedores.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  $('#fVendedor').value = vendedores.includes(vSel) ? vSel : '__todos';
+
+  const ramos = ordenarRamos([...new Set(DATA.map(r => r.ramo))]);
+  $('#fRamo').innerHTML = '<option value="__todos">Todos los ramos</option>' +
+    ramos.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  $('#fRamo').value = rSel && (rSel === '__todos' || ramos.includes(rSel)) ? rSel : (ramos.includes(AFH) ? AFH : '__todos');
+
+  if (!$('#fDesde').value) {
+    const hoy = new Date();
+    $('#fDesde').value = hoy.getFullYear() + '-01';
+    $('#fHasta').value = hoy.getFullYear() + '-' + String(hoy.getMonth()+1).padStart(2,'0');
+  }
+}
+
+function ordenarRamos(ramos){
+  return ramos.sort((a,b) => (a === AFH ? -1 : b === AFH ? 1 : a.localeCompare(b)));
+}
+
+function mesesEntre(desde, hasta){
+  const out = [];
+  if (!desde || !hasta || desde > hasta) return out;
+  let [y, m] = desde.split('-').map(Number);
+  const [yh, mh] = hasta.split('-').map(Number);
+  while (y < yh || (y === yh && m <= mh)) {
+    out.push(y + '-' + String(m).padStart(2,'0'));
+    m++; if (m > 12) { m = 1; y++; }
+    if (out.length > 120) break;
+  }
+  return out;
+}
+
+function tabla(key, headers, filas, opts = {}){
+  TABLAS[key] = { headers, filas };
+  if (!filas.length) return '<div class="vacio">Sin datos para estos filtros.</div>';
+  const clsCol = opts.clsCol || (() => '');
+  let h = '<table><thead><tr>' + headers.map((x,i) => `<th class="${clsCol(i)} ${opts.txtCols?.includes(i)?'txt':''}">${esc(x)}</th>`).join('') + '</tr></thead><tbody>';
+  filas.forEach((f, idx) => {
+    const tot = opts.totalUltima && idx === filas.length - 1;
+    h += `<tr class="${tot?'tot':''}">` + f.map((v,i) => {
+      const c = [clsCol(i), opts.txtCols?.includes(i)?'txt':'', (v === 0 && !tot) ? 'cero' : ''].join(' ');
+      return `<td class="${c}">${opts.html?.includes(i) ? v : esc(v)}</td>`;
+    }).join('') + '</tr>';
+  });
+  return h + '</tbody></table>';
+}
+
+function render(){
+  const vSel = $('#fVendedor').value;
+  const rSel = $('#fRamo').value;
+  const incDep = $('#fDeposito').checked;
+  const meses = mesesEntre($('#fDesde').value, $('#fHasta').value);
+  const nombreRamo = rSel === '__todos' ? 'todos los ramos' : rSel;
+
+  let base = DATA.filter(r => incDep || r.vendedor_codigo !== DEP);
+  if (vSel !== '__todos') base = base.filter(r => r.vendedor === vSel);
+  const activos = base.filter(r => r.activo);
+  const enRamo = r => rSel === '__todos' || r.ramo === rSel;
+
+  // ---- KPIs
+  const altas = base.filter(r => r.mes_alta && meses.includes(r.mes_alta) && enRamo(r));
+  const sinCompra = activos.filter(r => !r.primera_compra);
+  $('#kActivos').textContent = activos.length.toLocaleString('es-AR');
+  $('#kActivosRamo').textContent = activos.filter(enRamo).length.toLocaleString('es-AR');
+  $('#kActivosRamoL').textContent = 'Activos · ' + nombreRamo;
+  $('#kAltas').textContent = altas.length.toLocaleString('es-AR');
+  $('#kAltasL').textContent = 'Altas en el período · ' + nombreRamo;
+  $('#kSinCompra').textContent = sinCompra.length.toLocaleString('es-AR');
+
+  // ---- Tabla 1: activos por vendedor x ramo
+  const ramos = ordenarRamos([...new Set(activos.map(r => r.ramo))]);
+  const vends = [...new Set(activos.map(r => r.vendedor))].sort();
+  const f1 = vends.map(v => {
+    const fila = [v];
+    let t = 0;
+    ramos.forEach(ra => { const n = activos.filter(r => r.vendedor === v && r.ramo === ra).length; fila.push(n); t += n; });
+    fila.push(t);
+    return fila;
+  });
+  if (f1.length) {
+    const tot = ['TOTAL'];
+    for (let i = 1; i <= ramos.length + 1; i++) tot.push(f1.reduce((s, f) => s + f[i], 0));
+    f1.push(tot);
+  }
+  const iAfh = ramos.indexOf(AFH) + 1;
+  $('#tActivos').innerHTML = tabla('activos', ['Vendedor', ...ramos, 'Total'], f1,
+    { totalUltima: true, clsCol: i => (iAfh > 0 && i === iAfh) ? 'afh' : '' });
+
+  // ---- Tabla 2: altas por vendedor x mes
+  $('#tAltasTitulo').textContent = 'Altas por vendedor y mes · ' + nombreRamo;
+  const vendsA = [...new Set(altas.map(r => r.vendedor))].sort();
+  const f2 = vendsA.map(v => {
+    const fila = [v]; let t = 0;
+    meses.forEach(m => { const n = altas.filter(r => r.vendedor === v && r.mes_alta === m).length; fila.push(n); t += n; });
+    fila.push(t);
+    return fila;
+  });
+  if (f2.length) {
+    const tot = ['TOTAL'];
+    for (let i = 1; i <= meses.length + 1; i++) tot.push(f2.reduce((s, f) => s + f[i], 0));
+    f2.push(tot);
+  }
+  $('#tAltas').innerHTML = tabla('altas', ['Vendedor', ...meses.map(mesLabel), 'Total'], f2, { totalUltima: true });
+
+  // ---- Tabla 3: detalle de altas
+  $('#tDetalleSub').textContent = altas.length + ' clientes · ' + nombreRamo;
+  const f3 = altas
+    .sort((a,b) => b.alta.localeCompare(a.alta))
+    .map(r => [fechaLabel(r.alta), fechaLabel(r.primera_compra) || 'Sin compras', r.codigo, r.nombre, r.localidad || '', r.vendedor, r.ramo, r.subramo, r.segmento,
+               r.activo ? '<span class="tag ok">Activo</span>' : '<span class="tag">Inactivo</span>']);
+  TABLAS.detalle = null;
+  $('#tDetalle').innerHTML = tabla('detalle',
+    ['Alta','Primera compra','Código','Cliente','Localidad','Vendedor','Ramo','SubRamo','Segmento','Estado'], f3,
+    { txtCols: [2,3,4,5,6,7,8], html: [9] });
+  TABLAS.detalle.filas = f3.map(f => [...f.slice(0,9), f[9].includes('Activo') ? 'Activo' : 'Inactivo']);
+
+  // ---- Tabla 4: activos sin compras
+  const f4 = sinCompra
+    .sort((a,b) => a.vendedor.localeCompare(b.vendedor) || a.nombre.localeCompare(b.nombre))
+    .map(r => [r.codigo, r.nombre, r.localidad || '', r.vendedor, r.ramo, r.subramo, r.segmento]);
+  $('#tSinCompra').innerHTML = tabla('sincompra',
+    ['Código','Cliente','Localidad','Vendedor','Ramo','SubRamo','Segmento'], f4,
+    { txtCols: [0,1,2,3,4,5,6] });
+}
+
+function exportar(key, nombre){
+  const t = TABLAS[key];
+  if (!t || !t.filas.length) { alert('No hay datos para descargar.'); return; }
+  const celda = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const csv = '﻿' + [t.headers, ...t.filas].map(f => f.map(celda).join(';')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  const hoy = new Date().toISOString().slice(0,10);
+  a.href = URL.createObjectURL(blob);
+  a.download = `${nombre}_${hoy}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+['#fVendedor','#fRamo','#fDesde','#fHasta','#fDeposito'].forEach(s => $(s).addEventListener('change', render));
+cargar(false);
+</script>
+</body>
+</html>
