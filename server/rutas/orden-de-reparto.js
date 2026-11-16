@@ -1,5 +1,6 @@
 // Orden de reparto: propuestas del chofer, aprobación, exportación e importación del orden actual.
 const { app, pool } = require('../core.js');
+const { notificar } = require('../avisos.js');
 const { db, requireDb } = require('../base.js');
 const { claveNombre, requireChofer, requireAdmin } = require('../auth.js');
 const { obtenerDeudas } = require('../gescom.js');
@@ -271,6 +272,7 @@ app.post('/api/orden/enviar', requireChofer, requireDb, async (req, res) => {
         if (!prop || prop.estado !== 'borrador') return res.status(409).json({ error: 'No hay un borrador para enviar.' });
         if (!prop.cambios) return res.status(400).json({ error: 'No hiciste ningún cambio en el orden.' });
         await db.query(`UPDATE flota_orden_propuesta SET estado = 'enviada', enviado = now(), actualizado = now() WHERE id = $1`, [prop.id]);
+        notificar('admin', { clave: 'ord|' + prop.id + '|' + Date.now(), tipo: 'orden', nivel: 'aviso', titulo: 'Nueva propuesta de orden de reparto', mensaje: `${req.chofer} envió un cambio de orden (zona ${v.ruta}, ${v.dia}). Revisalo en la pestaña Orden.` });
         res.json({ exito: true });
     } catch (err) {
         console.error('❌ Error al enviar el orden:', err.message);

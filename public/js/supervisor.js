@@ -76,6 +76,7 @@
             campo.value = '';
             ocultarLoginAdmin();
             cargarDatos();
+            arrancarCampana();
         } catch (err) {
             error.innerText = 'No se pudo conectar con el servidor.';
         } finally {
@@ -917,19 +918,32 @@
         }
         cargarRetornos(); cargarUsuariosDeposito(); cargarRetornosPendientes();
     }
+    let retPendAbierto = false, retPendDatos = null;
+    function alternarRetPend() { retPendAbierto = !retPendAbierto; pintarRetPend(); }
+    function pintarRetPend() {
+        const caja = document.getElementById('retPendientes'); if (!caja || !retPendDatos) return;
+        const d = retPendDatos, todos = d.pendientes || [];
+        const antes = todos.filter(p => !p.esHoy), hoy = todos.filter(p => p.esHoy);
+        if (!d.gescom) { caja.innerHTML = '<div class="pend-barra warn"><span>No se pudo revisar qué retornos faltan (Gescom no respondió).</span></div>'; return; }
+        if (!todos.length) { caja.innerHTML = '<div class="pend-barra ok"><span>✔ Retornos al día</span></div>'; return; }
+        const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+        const dia = f => `${DIAS[new Date(f + 'T12:00:00Z').getUTCDay()]} ${f.split('-').reverse().slice(0, 2).join('/')}`;
+        const txt = antes.length
+            ? `⚠️ <b>${antes.length}</b> retorno${antes.length === 1 ? '' : 's'} sin cargar${hoy.length ? ` <span class="pend-hoy">· ${hoy.length} de hoy en ruta</span>` : ''}`
+            : `🚚 <b>${hoy.length}</b> camion${hoy.length === 1 ? '' : 'es'} de hoy en ruta, a la espera del retorno`;
+        const grupos = new Map();
+        todos.forEach(p => { if (!grupos.has(p.fecha)) grupos.set(p.fecha, []); grupos.get(p.fecha).push(p); });
+        const lista = [...grupos].map(([f, ps]) => `<div class="pend-dia${ps[0].esHoy ? ' hoy' : ''}">${ps[0].esHoy ? 'Hoy · en ruta' : escapeHtml(dia(f))} <small>${ps.length}</small></div>`
+            + ps.map(p => `<div class="pend-fila"><span><b>${escapeHtml(p.chofer)}</b>${p.reparto ? ' · reparto ' + escapeHtml(p.reparto) : ''}</span><small>${p.clientes} cliente${p.clientes === 1 ? '' : 's'}</small></div>`).join('')).join('');
+        caja.innerHTML = `<div class="pend-barra ${antes.length ? 'err' : 'warn'}"><span>${txt}</span><button type="button" class="btn-suave" onclick="alternarRetPend()">${retPendAbierto ? 'Ocultar ▴' : 'Ver ▾'}</button></div>`
+            + `<div class="pend-panel"${retPendAbierto ? '' : ' style="display:none"'}>${lista}</div>`;
+    }
     async function cargarRetornosPendientes() {
         const caja = document.getElementById('retPendientes'); if (!caja) return;
         try {
             const res = await adminFetch('/api/retorno/pendientes?dias=5');
             if (!res.ok) { caja.innerHTML = ''; return; }
-            const d = await res.json();
-            const antes = (d.pendientes || []).filter(p => !p.esHoy), hoy = (d.pendientes || []).filter(p => p.esHoy);
-            const li = p => `<li><b>${escapeHtml(p.fecha.split('-').reverse().join('/'))}</b> · ${escapeHtml(p.chofer)}${p.reparto ? ' · reparto ' + escapeHtml(p.reparto) : ''} <span style="color:var(--muted)">(${p.clientes} cliente${p.clientes === 1 ? '' : 's'})</span></li>`;
-            let h = '';
-            if (!d.gescom) h = '<div style="margin:12px 0;padding:11px 13px;border-radius:14px;border:1px solid rgba(251,191,36,.45);background:rgba(251,191,36,.08);">No se pudo revisar qué retornos faltan (Gescom no respondió).</div>';
-            else if (antes.length) h = `<div style="margin:12px 0;padding:11px 13px;border-radius:14px;border:1px solid rgba(251,113,133,.5);background:rgba(251,113,133,.1);"><b>⚠️ Retornos sin cargar (${antes.length})</b> — el encargado todavía no los registró:<ul style="margin:8px 0 0;padding-left:18px;line-height:1.7;">${antes.map(li).join('')}</ul></div>`;
-            else h = `<div style="margin:12px 0;padding:11px 13px;border-radius:14px;border:1px solid rgba(52,211,153,.4);background:rgba(52,211,153,.08);">✔ Todos los retornos de los últimos días están cargados${hoy.length ? ` (hoy esperan ${hoy.length} camión${hoy.length === 1 ? '' : 'es'})` : ''}.</div>`;
-            caja.innerHTML = h;
+            retPendDatos = await res.json(); pintarRetPend();
         } catch (e) { caja.innerHTML = ''; }
     }
 
@@ -1299,6 +1313,22 @@
             if (res.ok) cargarDatos();
         } catch (err) {}
     }
+
+    // Campanita de notificaciones (solo con sesión iniciada)
+    const VISTA_DE_AVISO = { retorno: 'retornos', docs: 'docs', checklist: 'checklists', orden: 'orden' };
+    function arrancarCampana() {
+        if (!leerTokenAdmin()) return;
+        iniciarCampana({
+            contenedor: 'campana',
+            llamar: (url, o) => adminFetch(url, o),
+            alElegir: n => {
+                const vista = VISTA_DE_AVISO[n.tipo]; if (!vista) return;
+                const btn = document.querySelector(`[onclick*="cambiarVistaAdmin('${vista}'"]`);
+                cambiarVistaAdmin(vista, btn);
+            }
+        });
+    }
+    arrancarCampana();
 
     cargarDatos();
     setInterval(cargarDatos, 10000);

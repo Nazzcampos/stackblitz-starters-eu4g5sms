@@ -9,6 +9,7 @@
     <!-- Librería de Mapas Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="/public/css/supervisor.css">
+    <link rel="stylesheet" href="/public/css/campana.css">
 </head>
 <body>
 
@@ -132,6 +133,7 @@
             </div>
         </div>
         <div class="topbar-right">
+            <div id="campana"></div>
             <span class="live-pill"><span class="live-dot"></span><span class="txt" id="lblActualizado">En vivo · cada 10 s</span></span>
             <span class="live-pill pill-db" id="pillDb" title="Estado de la base de datos (Supabase)"><span class="live-dot"></span><span class="txt" id="lblDb">Base de datos…</span></span>
             <button type="button" onclick="cargarDatos()">Actualizar</button>
@@ -597,6 +599,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="/public/js/campana.js"></script>
 <script src="/public/js/supervisor.js"></script>
 </body>
 </html>

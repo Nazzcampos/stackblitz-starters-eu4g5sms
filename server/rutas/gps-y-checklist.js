@@ -2,6 +2,7 @@
 const { app } = require('../core.js');
 const { db, requireDb, INICIO_DIA_AR } = require('../base.js');
 const { requireChofer, requireAdmin } = require('../auth.js');
+const { notificar } = require('../avisos.js');
 const { calcularDistancia } = require('../gescom.js');
 
 // --- GPS: cada punto se guarda en Supabase; el odómetro se reinicia cada día (hora de Argentina) ---
@@ -85,6 +86,9 @@ app.post('/api/checklist', requireChofer, requireDb, async (req, res) => {
             `INSERT INTO flota_checklist (chofer, dominio, tipo_vehiculo, respuestas, observaciones)
              VALUES ($1, $2, $3, $4::jsonb, $5) RETURNING id::int AS id`,
             [req.chofer, dominio, String(b.tipo_vehiculo || '').slice(0, 40), JSON.stringify(respuestas), String(b.observaciones || '').slice(0, 2000)]);
+        const fallas = Object.entries(respuestas).filter(([, v]) => String(v).toLowerCase() === 'falla').map(([k]) => k);
+        if (fallas.length) notificar('admin', { clave: 'chk|' + r.rows[0].id, tipo: 'checklist', nivel: 'alerta', titulo: `Check-list con fallas: ${dominio}`,
+            mensaje: `${req.chofer} reportó ${fallas.length} falla${fallas.length === 1 ? '' : 's'}:\n` + fallas.map(f => '• ' + f).join('\n') + (b.observaciones ? `\nObs.: ${String(b.observaciones).slice(0, 200)}` : '') });
         res.status(201).json({ exito: true, id: r.rows[0].id });
     } catch (err) {
         console.error("❌ Error al guardar check-list:", err.message);

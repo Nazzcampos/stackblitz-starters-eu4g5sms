@@ -1,0 +1,34 @@
+/* Campanita de notificaciones */
+.campana { position: relative; display: inline-flex; }
+.cp-btn { position: relative; width: 36px; height: 36px; padding: 0; margin: 0; display: grid; place-items: center; border-radius: 50%; color: var(--muted, #94a3c8); background: rgba(255,255,255,.06); border: 1px solid var(--border, rgba(148,163,184,.18)); cursor: pointer; box-shadow: none; }
+.cp-btn:hover { color: #fff; background: rgba(59,130,246,.3); filter: none; transform: none; }
+.cp-btn.hay { color: #fff; }
+.cp-btn.hay svg { animation: cpSuena 1.6s ease-in-out 1; transform-origin: 50% 10%; }
+@keyframes cpSuena { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(14deg); } 30% { transform: rotate(-12deg); } 45% { transform: rotate(8deg); } 60% { transform: rotate(-6deg); } }
+.cp-badge { display: none; position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; font-size: .66rem; font-weight: 800; line-height: 18px; text-align: center; color: #fff; background: #ef4444; box-shadow: 0 0 0 2px #0b1428; }
+.cp-badge.on { display: block; }
+.cp-panel { display: none; position: fixed; top: 70px; right: 12px; z-index: 2000; width: min(390px, calc(100vw - 24px)); max-height: min(78vh, 640px); flex-direction: column; border-radius: 20px; overflow: hidden; color: var(--text, #eef1ff); background: rgba(12, 20, 42, .98); border: 1px solid var(--border-strong, rgba(148,163,184,.34)); box-shadow: 0 24px 60px rgba(0,0,0,.6); }
+.cp-panel.on { display: flex; }
+.cp-cab { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 8px; font-size: 1rem; }
+.cp-cerrar { width: 28px; height: 28px; padding: 0; margin: 0; border-radius: 50%; color: var(--muted, #94a3c8); background: rgba(255,255,255,.06); border: 0; box-shadow: none; font-size: .8rem; cursor: pointer; }
+.cp-tabs { display: flex; gap: 6px; padding: 0 14px 10px; }
+.cp-tab { flex: 1; padding: 7px 0; margin: 0; border-radius: 999px; font-size: .8rem; font-weight: 700; color: var(--muted, #94a3c8); background: rgba(255,255,255,.05); border: 1px solid transparent; box-shadow: none; cursor: pointer; }
+.cp-tab.on { color: #fff; background: rgba(59,130,246,.22); border-color: rgba(96,165,250,.5); }
+.cp-lista { flex: 1; overflow-y: auto; padding: 0 10px 8px; }
+.cp-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px; margin-bottom: 6px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid var(--border, rgba(148,163,184,.18)); border-left: 4px solid #60a5fa; }
+.cp-item.nivel-alerta { border-left-color: #fb7185; }
+.cp-item.nivel-aviso { border-left-color: #fbbf24; }
+.cp-item.leida { background: rgba(255,255,255,.025); opacity: .72; }
+.cp-ico { font-size: 1.15rem; line-height: 1.3; }
+.cp-cuerpo { flex: 1; min-width: 0; cursor: pointer; }
+.cp-titulo { font-size: .86rem; font-weight: 800; line-height: 1.3; }
+.cp-punto { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #3b82f6; vertical-align: 1px; }
+.cp-msg { margin-top: 4px; font-size: .78rem; line-height: 1.45; color: var(--muted, #94a3c8); white-space: pre-line; max-height: 9.5em; overflow: hidden; }
+.cp-hora { margin-top: 5px; font-size: .7rem; color: var(--muted, #94a3c8); opacity: .85; }
+.cp-acc { display: flex; flex-direction: column; gap: 4px; }
+.cp-acc button { width: 28px; height: 28px; padding: 0; margin: 0; border-radius: 9px; font-size: .8rem; color: var(--muted, #94a3c8); background: rgba(255,255,255,.07); border: 1px solid var(--border, rgba(148,163,184,.18)); box-shadow: none; cursor: pointer; }
+.cp-acc button:hover { color: #fff; background: rgba(59,130,246,.35); filter: none; transform: none; }
+.cp-vacio { padding: 28px 14px; text-align: center; font-size: .86rem; color: var(--muted, #94a3c8); }
+.cp-pie { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--border, rgba(148,163,184,.18)); }
+.cp-pie button { flex: 1; padding: 9px 6px; margin: 0; border-radius: 12px; font-size: .74rem; font-weight: 700; color: var(--text, #eef1ff); background: rgba(255,255,255,.07); border: 1px solid var(--border, rgba(148,163,184,.18)); box-shadow: none; cursor: pointer; }
+@media (max-width: 520px) { .cp-panel { top: 66px; right: 8px; left: 8px; width: auto; } }

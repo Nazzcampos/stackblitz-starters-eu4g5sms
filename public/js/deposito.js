@@ -58,12 +58,13 @@
         $('rtFecha').value = hoyAR(); $('rtFecha').max = hoyAR();
         $('hDesde').value = haceDias(30); $('hHasta').value = hoyAR();
         cargarChoferes(); cargarPendientes();
+        iniciarCampana({ contenedor: 'campana', llamar: api, alElegir: n => { if (n.tipo === 'retorno') { verTab('cargar'); pendAbierto = true; pintarPendientes(); window.scrollTo({ top: 0, behavior: 'smooth' }); } } });
         if (!temporizadorPend) temporizadorPend = setInterval(() => { if (token && !document.hidden) cargarPendientes(); }, 5 * 60 * 1000);
     }
     function salir(porVencida) {
         token = null; guardarLocal('flota_dep_token', null);
         $('vistaApp').classList.add('oculto'); $('vistaLogin').classList.remove('oculto'); $('quien').classList.add('oculto');
-        resetRetorno(); cargarUsuarios(); $('rtPendientes').innerHTML = ''; saludarDeposito('');
+        resetRetorno(); cargarUsuarios(); $('rtPendientes').innerHTML = ''; detenerCampana(); saludarDeposito('');
         if (porVencida === true) toast('Tu sesión se cerró. Ingresá de nuevo.', 'error');
     }
     async function recuperarSesion() {
@@ -138,7 +139,7 @@
                 if (f) f.retorno = String(x.retorno);
                 else rt.items.push({ codigo: x.codigo, descripcion: x.descripcion, cargada: x.cargada, retorno: String(x.retorno), extra: true });
             });
-            $('rtCajas').value = ex ? ex.cajas || '' : ''; $('rtDominio').value = ex ? ex.dominio || '' : ''; $('rtObs').value = ex ? ex.observaciones || '' : '';
+            $('rtCajas').value = ex && ex.cajas !== null && ex.cajas !== undefined ? String(ex.cajas) : ''; marcarCajas(false); $('rtDominio').value = ex ? ex.dominio || '' : ''; $('rtObs').value = ex ? ex.observaciones || '' : '';
         }
         $('rtManual').style.display = manual || (rt.repartos.length === 0) ? 'flex' : 'none';
         $('rtRepartoManual').value = rep;
@@ -203,6 +204,17 @@
         if (inp) { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); inp.focus(); }
     }
 
+    // Las cajas son obligatorias: si faltan, la celda se pinta de rojo y no se guarda
+    function marcarCajas(falta, mensaje) {
+        const inp = $('rtCajas'); if (!inp) return;
+        inp.classList.toggle('falta', !!falta);
+        $('lblCajas').classList.toggle('falta', !!falta);
+        const err = $('errCajas'); err.classList.toggle('oculto', !falta);
+        if (mensaje) err.textContent = mensaje; else if (falta) err.textContent = 'Falta anotar las cajas. Si no volvió ninguna, poné 0.';
+        if (falta) { inp.classList.remove('sacude'); void inp.offsetWidth; inp.classList.add('sacude'); inp.focus(); inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }
+    document.addEventListener('input', e => { if (e.target && e.target.id === 'rtCajas') marcarCajas(false); });
+
     async function guardarRetorno() {
         if (!rt.chofer || !rt.fecha) return;
         const reparto = (rt.reparto || '').trim();
@@ -213,13 +225,14 @@
             if (!Number.isFinite(n) || n < 0) { toast(`La cantidad de "${it.descripcion}" no es válida.`, 'error'); return; }
         }
         const cajas = $('rtCajas').value.trim();
-        if (cajas !== '' && !/^\d+$/.test(cajas)) { toast('Las cajas tienen que ser un número entero.', 'error'); return; }
+        if (cajas === '') { marcarCajas(true); return; }
+        if (!/^\d+$/.test(cajas)) { marcarCajas(true, 'Las cajas tienen que ser un número entero (0 si no volvió ninguna).'); return; }
         const b = $('btnGuardar'); b.disabled = true;
         try {
             const d = await json('/api/retorno', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-                fecha: rt.fecha, chofer: rt.chofer, reparto, dominio: $('rtDominio').value, cajas: cajas === '' ? 0 : Number(cajas), observaciones: $('rtObs').value,
+                fecha: rt.fecha, chofer: rt.chofer, reparto, dominio: $('rtDominio').value, cajas: Number(cajas), observaciones: $('rtObs').value,
                 items: rt.items.map(i => ({ codigo: i.codigo, descripcion: i.descripcion, cargada: i.cargada, retorno: i.retorno === '' ? 0 : i.retorno })) }) });
-            toast(`✔ Guardado: ${d.articulos} producto${d.articulos === 1 ? '' : 's'}, ${fmtNum(d.unidades)} unidades, ${cajas || 0} cajas.`, 'ok');
+            toast(`✔ Guardado: ${d.articulos} producto${d.articulos === 1 ? '' : 's'}, ${fmtNum(d.unidades)} unidades, ${cajas} cajas.`, 'ok'); setTimeout(() => { if (window.refrescarCampana) refrescarCampana(); }, 2500);
             const nuevo = await json(`/api/retorno/carga?chofer=${encodeURIComponent(rt.chofer)}&fecha=${rt.fecha}`);
             rt.existentes = nuevo.existentes; delete rt.borradores[reparto]; cargarPendientes();
             const ex = rt.existentes.find(x => x.reparto === reparto);
@@ -228,25 +241,33 @@
         finally { b.disabled = false; }
     }
 
-    // ---------- Aviso: retornos sin cargar ----------
-    let pendientes = [], temporizadorPend = null;
+    // ---------- Aviso: retornos sin cargar (barra compacta + lista desplegable) ----------
+    let pendientes = [], pendGescom = true, pendAbierto = false, temporizadorPend = null;
     const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
     const diaCorto = f => DIAS[new Date(f + 'T12:00:00Z').getUTCDay()] + ' ' + fmtFecha(f).slice(0, 5);
     async function cargarPendientes() {
         try {
             const d = await json('/api/retorno/pendientes?dias=5');
-            pendientes = d.pendientes || [];
-            const antes = pendientes.filter(p => !p.esHoy), hoy = pendientes.filter(p => p.esHoy);
-            const fila = p => `<button type="button" class="pend" onclick="abrirPendiente(${pendientes.indexOf(p)})"><b>${esc(diaCorto(p.fecha))}</b> · ${esc(p.chofer)}${p.reparto ? ' · reparto ' + esc(p.reparto) : ''} <small>${p.clientes} cliente${p.clientes === 1 ? '' : 's'}</small><span>Cargar ›</span></button>`;
-            let h = '';
-            if (!d.gescom) h = '<div class="aviso warn">No se pudo revisar qué retornos faltan (Gescom no respondió).</div>';
-            else if (!pendientes.length) h = '<div class="aviso ok">✔ Todos los retornos de los últimos días están cargados.</div>';
-            else {
-                if (antes.length) h += `<div class="aviso err"><b>⚠️ Falta cargar ${antes.length} retorno${antes.length === 1 ? '' : 's'}</b> de días anteriores. Tocá uno para cargarlo.<div class="pend-lista">${antes.map(fila).join('')}</div></div>`;
-                if (hoy.length) h += `<div class="aviso warn"><b>Hoy, a la espera de que vuelvan (${hoy.length}):</b><div class="pend-lista">${hoy.map(fila).join('')}</div></div>`;
-            }
-            $('rtPendientes').innerHTML = h;
+            pendientes = d.pendientes || []; pendGescom = d.gescom !== false;
+            pintarPendientes();
         } catch (e) { /* si falla, no se muestra nada */ }
+    }
+    function alternarPend() { pendAbierto = !pendAbierto; pintarPendientes(); }
+    function pintarPendientes() {
+        const caja = $('rtPendientes'); if (!caja) return;
+        if (!pendGescom) { caja.innerHTML = '<div class="pend-barra warn"><span class="pend-txt">No se pudo revisar qué retornos faltan (Gescom no respondió).</span></div>'; return; }
+        const antes = pendientes.filter(p => !p.esHoy), hoy = pendientes.filter(p => p.esHoy);
+        if (!pendientes.length) { caja.innerHTML = '<div class="pend-barra ok"><span class="pend-txt">✔ Retornos al día</span></div>'; return; }
+        const cls = antes.length ? 'err' : 'warn';
+        const txt = antes.length
+            ? `⚠️ <b>${antes.length}</b> retorno${antes.length === 1 ? '' : 's'} sin cargar${hoy.length ? ` <span class="pend-hoy">· ${hoy.length} de hoy en ruta</span>` : ''}`
+            : `🚚 <b>${hoy.length}</b> camion${hoy.length === 1 ? '' : 'es'} de hoy en ruta, a la espera del retorno`;
+        const grupos = new Map();
+        pendientes.forEach((p, i) => { if (!grupos.has(p.fecha)) grupos.set(p.fecha, []); grupos.get(p.fecha).push(i); });
+        const fila = i => { const p = pendientes[i]; return `<button type="button" class="pend" onclick="abrirPendiente(${i})"><span><b>${esc(p.chofer)}</b>${p.reparto ? ' · reparto ' + esc(p.reparto) : ''} <small>${p.clientes} cliente${p.clientes === 1 ? '' : 's'}</small></span><span class="pend-ir">Cargar ›</span></button>`; };
+        const lista = [...grupos].map(([f, idx]) => `<div class="pend-dia${idx.some(i => pendientes[i].esHoy) ? ' hoy' : ''}">${idx.some(i => pendientes[i].esHoy) ? 'Hoy · en ruta' : esc(diaCorto(f))} <small>${idx.length}</small></div>${idx.map(fila).join('')}`).join('');
+        caja.innerHTML = `<div class="pend-barra ${cls}"><span class="pend-txt">${txt}</span><button type="button" class="suave chico" onclick="alternarPend()">${pendAbierto ? 'Ocultar ▴' : 'Ver ▾'}</button></div>`
+            + `<div class="pend-panel${pendAbierto ? '' : ' oculto'}">${lista}</div>`;
     }
     function abrirPendiente(i) {
         const p = pendientes[i]; if (!p) return;
@@ -254,6 +275,7 @@
         $('rtFecha').value = p.fecha;
         if (![...$('rtChofer').options].some(o => o.value === p.chofer)) $('rtChofer').insertAdjacentHTML('beforeend', `<option>${esc(p.chofer)}</option>`);
         $('rtChofer').value = p.chofer;
+        pendAbierto = false; pintarPendientes();
         buscarCarga(p.reparto);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }

@@ -4,6 +4,7 @@ const base = require('../base.js');
 const { db, requireDb } = require('../base.js');
 const { crearToken, leerToken, claveNombre, tokenDeRequest, hashPin, comprobarHash, pinFormatoValido, pinAleatorio, requireAdmin, intentosLogin, bloqueadoPorIntentos, registrarFallo } = require('../auth.js');
 const { choferesVisibles } = require('./choferes.js');
+const { eventos } = require('../avisos.js');
 const { ESTILO, crearXlsx, enviarXlsx } = require('../xlsx.js');
 const { hoyArgentina, fechaValida } = require('./documentacion.js');
 
@@ -179,8 +180,8 @@ app.get('/api/retorno/carga', requireDepAdmin, requireDb, async (req, res) => {
 // Aviso al encargado: repartos de los últimos días (Gescom) que todavía no tienen retorno cargado.
 // Se compara (fecha, chofer, reparto) de Gescom contra lo guardado en flota_retorno. Los repartos de hoy se marcan aparte
 // porque el camión puede seguir en ruta. Solo cuentan los choferes visibles (los ocultos y repartos sin chofer no generan aviso).
-app.get('/api/retorno/pendientes', requireDepAdmin, requireDb, async (req, res) => {
-    const dias = Math.min(14, Math.max(1, parseInt(req.query.dias, 10) || 5));
+async function calcularPendientesRetorno(dias) {
+    dias = Math.min(14, Math.max(1, parseInt(dias, 10) || 5));
     const hoy = hoyArgentina();
     const desde = new Date(Date.parse(hoy + 'T00:00:00Z') - dias * 86400000).toISOString().slice(0, 10);
     try {
@@ -201,11 +202,15 @@ app.get('/api/retorno/pendientes', requireDepAdmin, requireDb, async (req, res) 
         const pendientes = g.rows
             .filter(f => permitidos.has(claveNombre(f.chofer)) && !cargados.has(`${f.fecha}|${claveNombre(f.chofer)}|${f.reparto}`))
             .map(f => ({ fecha: f.fecha, chofer: f.chofer, reparto: f.reparto, clientes: f.clientes, esHoy: f.fecha === hoy }));
-        res.json({ desde, hasta: hoy, gescom: true, pendientes });
+        return { desde, hasta: hoy, gescom: true, pendientes };
     } catch (err) {
         console.error('⚠️ No se pudieron calcular los retornos pendientes:', err.message);
-        res.json({ desde, hasta: hoy, gescom: false, pendientes: [] });
+        return { desde, hasta: hoy, gescom: false, pendientes: [] };
     }
+}
+
+app.get('/api/retorno/pendientes', requireDepAdmin, requireDb, async (req, res) => {
+    res.json(await calcularPendientesRetorno(req.query.dias));
 });
 
 // Buscador de artículos (para agregar algo que no estaba en la carga)
@@ -238,8 +243,9 @@ app.put('/api/retorno', requireDepAdmin, requireDb, async (req, res) => {
     if (!chofer) return res.status(400).json({ error: 'Elegí el chofer.' });
     if (!RE_FECHA.test(fecha) || !fechaValida(fecha)) return res.status(400).json({ error: 'La fecha no es válida.' });
     if (fecha > hoyArgentina()) return res.status(400).json({ error: 'La fecha no puede ser futura.' });
-    const cajas = b.cajas === '' || b.cajas === undefined || b.cajas === null ? 0 : cantidadValida(b.cajas);
-    if (!Number.isInteger(cajas)) return res.status(400).json({ error: 'Las cajas tienen que ser un número entero.' });
+    if (b.cajas === '' || b.cajas === undefined || b.cajas === null) return res.status(400).json({ error: 'Falta anotar las cajas en buen estado (si no volvió ninguna, poné 0).', campo: 'cajas' });
+    const cajas = cantidadValida(b.cajas);
+    if (!Number.isInteger(cajas)) return res.status(400).json({ error: 'Las cajas tienen que ser un número entero.', campo: 'cajas' });
     if (!Array.isArray(b.items) || b.items.length > 400) return res.status(400).json({ error: 'La lista de artículos no es válida.' });
     const porCodigo = new Map();
     for (const it of b.items) {
@@ -266,6 +272,7 @@ app.put('/api/retorno', requireDepAdmin, requireDb, async (req, res) => {
              RETURNING id`,
             [fecha, chofer, reparto, String(b.dominio || '').trim().toUpperCase().slice(0, 12) || null, cajas,
              String(b.observaciones || '').trim().slice(0, 500) || null, JSON.stringify(items), total, req.operador]);
+        eventos.emit('retorno-guardado');
         res.json({ exito: true, id: Number(r.rows[0].id), articulos: items.length, unidades: total });
     } catch (err) {
         console.error('❌ Error al guardar el retorno:', err.message);
@@ -354,4 +361,4 @@ app.delete('/api/retorno/:id', requireAdmin, requireDb, async (req, res) => {
 
 
 
-module.exports = { HORAS_SESION_DEPOSITO, requireDepAdmin, filtroAnuladas, columnaCodigoItem, RE_FECHA, SQL_RETORNO, cantidadValida, consultarRetornos };
+module.exports = { calcularPendientesRetorno, HORAS_SESION_DEPOSITO, requireDepAdmin, filtroAnuladas, columnaCodigoItem, RE_FECHA, SQL_RETORNO, cantidadValida, consultarRetornos };

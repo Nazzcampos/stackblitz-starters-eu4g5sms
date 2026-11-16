@@ -34,4 +34,4 @@ Dónde tocar según lo que quieras cambiar:
 - Cómo se comporta una pantalla → `public/js/<pantalla>.js`.
 - Una tabla nueva → `server/base.js` (MIGRACION).
 
-Novedades: aviso de retornos sin cargar (depósito y supervisor), resumen mensual de combustible con Excel, cabecera con saludo.
+Novedades: campanita de notificaciones (server/avisos.js + rutas/notificaciones.js + public/js/campana.js), aviso de retornos compacto, cajas obligatorias, resumen mensual de combustible, cabecera con saludo.

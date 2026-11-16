@@ -210,6 +210,23 @@ CREATE TABLE IF NOT EXISTS flota_retorno (
     UNIQUE (fecha, chofer, reparto)
 );
 CREATE INDEX IF NOT EXISTS flota_retorno_fecha_idx ON flota_retorno (fecha DESC, chofer);
+CREATE TABLE IF NOT EXISTS flota_notificacion (
+    id bigserial PRIMARY KEY,
+    destino text NOT NULL,
+    clave text NOT NULL,
+    tipo text NOT NULL,
+    nivel text NOT NULL DEFAULT 'info',
+    titulo text NOT NULL,
+    mensaje text NOT NULL DEFAULT '',
+    creado timestamptz NOT NULL DEFAULT now(),
+    actualizado timestamptz NOT NULL DEFAULT now(),
+    leida timestamptz,
+    archivada timestamptz,
+    resuelta boolean NOT NULL DEFAULT false,
+    UNIQUE (destino, clave)
+);
+CREATE INDEX IF NOT EXISTS flota_notificacion_destino_idx ON flota_notificacion (destino, archivada, actualizado DESC);
+ALTER TABLE flota_notificacion ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flota_deposito ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flota_retorno ENABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS flota_jornada (
