@@ -59,7 +59,7 @@ cli AS (
          COALESCE(NULLIF(c.ramo_descripcion, ''), 'Sin ramo') AS ramo,
          COALESCE(c.subramo_descripcion, '') AS subramo,
          COALESCE(c.segmento_cliente_descripcion, '') AS segmento,
-         (c.activo AND c.tipo_inactivo IS NULL) AS activo
+         COALESCE(c.activo, false) AS activo
   FROM cliente_hist c
   WHERE c.actual AND c.tenant_id = $1
 ),
