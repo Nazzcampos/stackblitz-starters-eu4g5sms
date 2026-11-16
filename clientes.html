@@ -304,7 +304,7 @@ async function cargar(refresh){
 function armarFiltros(){
   const vSel = $('#fVendedor').value || '__todos';
   const rSel = $('#fRamo').value || '';
-  const vendedores = [...new Set(DATA.filter(r => r.activo || r.mes_alta).map(r => r.vendedor))].sort();
+  const vendedores = [...new Set(DATA.filter(r => (r.activo || r.mes_alta) && r.vendedor !== SIN_VEND).map(r => r.vendedor))].sort();
   $('#fVendedor').innerHTML = '<option value="__todos">Todos</option>' +
     vendedores.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
   $('#fVendedor').value = vendedores.includes(vSel) ? vSel : '__todos';
@@ -355,9 +355,11 @@ function tabla(key, headers, filas, opts = {}){
   return h + '</tbody></table>';
 }
 
+// Los clientes sin vendedor asignado no se muestran en ninguna tabla (nadie los visita)
+const SIN_VEND = 'Sin vendedor';
 function baseClientes(){
   const incDep = $('#fDeposito').checked;
-  return DATA.filter(r => incDep || r.vendedor_codigo !== DEP);
+  return DATA.filter(r => r.vendedor !== SIN_VEND && (incDep || r.vendedor_codigo !== DEP));
 }
 
 function render(){
@@ -524,7 +526,7 @@ function renderMarcas(){
   if (!MARCAS || !DATA.length) return;
   const incDep = $('#mDeposito').checked;
   const elegidas = marcasElegidas();
-  const filas = MARCAS.filas.filter(f => incDep || String(f.vendedor_codigo ?? '') !== DEP);
+  const filas = MARCAS.filas.filter(f => f.vendedor_nombre !== SIN_VEND && (incDep || String(f.vendedor_codigo ?? '') !== DEP));
   const mes = MARCAS.mes, hoy = MARCAS.hoy;
   const dias = diasHabilesRestantes(mes, hoy);
 
