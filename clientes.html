@@ -150,9 +150,6 @@
       <label>Mes
         <input type="month" id="mMes">
       </label>
-      <label>Marca para el detalle
-        <select id="mMarca"></select>
-      </label>
       <label class="chk"><input type="checkbox" id="mDeposito" class="fDep"> Incluir "Deposito" (cód. 20)</label>
       <div style="flex-basis:100%;font-size:12px;color:var(--gris)">Marcas a seguir (tocá para sumar o quitar):
         <div class="chips" id="mChips"></div>
@@ -182,7 +179,10 @@
     <div class="card">
       <div class="top">
         <div><h2 id="mDetTitulo">Detalle por vendedor</h2><div class="sub">Acumulado hasta ayer vs acumulado hoy · necesidad diaria = clientes que faltan para el objetivo ÷ días hábiles que quedan (lunes a sábado, hoy incluido)</div></div>
-        <button class="sec" onclick="exportar('mDetalle','cobertura_detalle_vendedor')">Descargar Excel</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="mMarcaDet" class="selMarca" data-clave="clientesMarcaDetalle"></select>
+          <button class="sec" onclick="exportar('mDetalle','cobertura_detalle_vendedor')">Descargar Excel</button>
+        </div>
       </div>
       <div class="tw" id="tmDetalle"></div>
     </div>
@@ -190,7 +190,10 @@
     <div class="card">
       <div class="top">
         <div><h2 id="mDiaTitulo">Clientes nuevos cubiertos por día</h2><div class="sub">Día en que el cliente llegó al drop de la marca (según fecha de carga del comprobante)</div></div>
-        <button class="sec" onclick="exportar('mDias','cobertura_nuevos_por_dia')">Descargar Excel</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="mMarcaDia" class="selMarca" data-clave="clientesMarcaDia"></select>
+          <button class="sec" onclick="exportar('mDias','cobertura_nuevos_por_dia')">Descargar Excel</button>
+        </div>
       </div>
       <div class="tw" id="tmDias"></div>
     </div>
@@ -454,7 +457,18 @@ async function cargarMarcas(refresh){
   }
 }
 $('#mMes').addEventListener('change', () => cargarMarcas(false));
-$('#mMarca').addEventListener('change', () => { guardarLocal('clientesMarcaDetalle', $('#mMarca').value); renderMarcas(); });
+document.querySelectorAll('.selMarca').forEach(sel => sel.addEventListener('change', () => {
+  guardarLocal(sel.dataset.clave, sel.value); renderMarcas();
+}));
+
+// Llena un desplegable de marcas manteniendo la elegida
+function llenarSelMarca(id, opciones){
+  const sel = $(id);
+  const prev = sel.value || leerLocal(sel.dataset.clave, '');
+  sel.innerHTML = opciones.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+  sel.value = opciones.includes(prev) ? prev : (opciones[0] || '');
+  return sel.value;
+}
 
 function marcasDisponibles(){
   if (!MARCAS) return [];
@@ -585,11 +599,10 @@ function renderMarcas(){
   });
 
   // ---------- Detalle de una marca por vendedor
-  const opciones = elegidas.length ? elegidas : marcasDisponibles();
-  const prev = $('#mMarca').value || leerLocal('clientesMarcaDetalle', '');
-  $('#mMarca').innerHTML = opciones.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
-  $('#mMarca').value = opciones.includes(prev) ? prev : (opciones[0] || '');
-  const marca = $('#mMarca').value;
+  // Los desplegables ofrecen todas las marcas vendidas en el mes (primero las que seguís)
+  const opciones = ordenarMarcas([...new Set([...elegidas, ...marcasDisponibles()])]);
+  const marca = llenarSelMarca('#mMarcaDet', opciones);
+  const marcaDia = llenarSelMarca('#mMarcaDia', opciones);
   $('#mDetTitulo').textContent = 'Detalle por vendedor · ' + (marca || '—');
   const objM = OBJETIVOS[marca] != null ? OBJETIVOS[marca] / 100 : null;
   const det = vendedores.map(v => {
@@ -614,11 +627,14 @@ function renderMarcas(){
       exportFilas: detTodo.map(f => f.map((v, i) => i === 6 ? +(v * 100).toFixed(1) : v)) });
 
   // ---------- Nuevos cubiertos por día (marca del detalle)
-  $('#mDiaTitulo').textContent = 'Clientes nuevos cubiertos por día · ' + (marca || '—');
-  const delMes = filas.filter(f => f.marca === marca && f.dia && f.hoy > 0);
-  const diasMes = [...new Set(delMes.map(f => f.dia))].sort();
+  $('#mDiaTitulo').textContent = 'Clientes nuevos cubiertos por día · ' + (marcaDia || '—');
+  // Lo cargado antes del mes (para entregar en el mes) se junta en una sola columna
+  const ANTES = 'antes';
+  const diaCol = d => d < mes + '-01' ? ANTES : d;
+  const delMes = filas.filter(f => f.marca === marcaDia && f.dia && f.hoy > 0);
+  const diasMes = [...new Set(delMes.map(f => diaCol(f.dia)))].sort((a,b) => a === ANTES ? -1 : b === ANTES ? 1 : a.localeCompare(b));
   const porDia = {};
-  delMes.forEach(f => { const k = f.vendedor_nombre + '|' + f.dia; porDia[k] = (porDia[k] || 0) + f.hoy; });
+  delMes.forEach(f => { const k = f.vendedor_nombre + '|' + diaCol(f.dia); porDia[k] = (porDia[k] || 0) + f.hoy; });
   const fD = vendedores.map(v => {
     const fila = [v]; let t = 0;
     diasMes.forEach(d => { const n = porDia[v + '|' + d] || 0; fila.push(n); t += n; });
@@ -630,7 +646,7 @@ function renderMarcas(){
     for (let i = 1; i <= diasMes.length + 1; i++) tot.push(fD.reduce((s, f) => s + f[i], 0));
     fD.push(tot);
   }
-  const etiquetaDia = d => d.slice(8,10) + '/' + d.slice(5,7) + (d === hoy ? ' (hoy)' : '');
+  const etiquetaDia = d => d === ANTES ? 'Cargado antes del 1/' + Number(mes.slice(5,7)) : d.slice(8,10) + '/' + d.slice(5,7) + (d === hoy ? ' (hoy)' : '');
   $('#tmDias').innerHTML = diasMes.length
     ? tabla('mDias', ['Vendedor', ...diasMes.map(etiquetaDia), 'Total'], fD, { totalUltima: true })
     : (TABLAS.mDias = { headers: [], filas: [] }, '<div class="vacio">Sin clientes cubiertos todavía para esta marca.</div>');
