@@ -163,7 +163,7 @@ async function cargar(refresh){
   $('#estado').textContent = 'Cargando…';
   let r, j;
   try {
-    r = await fetch('/api/clientes/datos' + (refresh ? '?refresh=1' : ''), { headers: { 'x-pin': pin } });
+    r = await fetch('/api/seguimiento-clientes/datos' + (refresh ? '?refresh=1' : ''), { headers: { 'x-pin': pin } });
     j = await r.json();
   } catch(e) {
     $('#estado').textContent = 'Error de conexión';

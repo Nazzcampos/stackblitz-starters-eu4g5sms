@@ -110,7 +110,7 @@ app.get('/clientes', (req, res) => {
     res.sendFile(path.join(__dirname, '..', '..', 'clientes.html'));
 });
 
-app.get('/api/clientes/datos', async (req, res) => {
+app.get('/api/seguimiento-clientes/datos', async (req, res) => {
     const PIN = leerPin();
     if (!PIN) {
         return res.status(500).json({ error: 'Falta configurar CLIENTES_PIN en Render.' });
