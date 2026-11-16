@@ -7,14 +7,20 @@
 <style>
   :root{
     --azul:#0b2e59; --azul2:#1456a0; --fondo:#f3f6fa; --borde:#dde3ec;
-    --texto:#1d2733; --gris:#6b7685; --afh:#e8f1fc; --ok:#1a7f4b;
+    --texto:#1d2733; --gris:#6b7685; --afh:#e8f1fc; --ok:#1a7f4b; --mal:#c0392b;
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:Segoe UI,Roboto,Arial,sans-serif;background:var(--fondo);color:var(--texto);font-size:14px}
-  header{background:var(--azul);color:#fff;padding:14px 22px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  header{background:var(--azul);color:#fff;padding:14px 22px 0;}
+  .hrow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
   header h1{margin:0;font-size:18px;font-weight:600}
   header small{opacity:.75}
-  main{padding:18px 22px;max-width:1400px;margin:0 auto}
+  .tabs{display:flex;gap:4px;margin-top:12px}
+  .tab{background:transparent;border:none;color:#c7d6ea;padding:9px 16px;border-radius:8px 8px 0 0;cursor:pointer;font:inherit;font-weight:600}
+  .tab.on{background:var(--fondo);color:var(--azul)}
+  main{padding:18px 22px;max-width:1500px;margin:0 auto}
+  .vista{display:none}
+  .vista.on{display:block}
   .filtros{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;background:#fff;border:1px solid var(--borde);border-radius:10px;padding:14px;margin-bottom:16px}
   .filtros label{display:flex;flex-direction:column;font-size:12px;color:var(--gris);gap:4px}
   select,input{font:inherit;padding:6px 8px;border:1px solid var(--borde);border-radius:6px;background:#fff;color:var(--texto)}
@@ -22,6 +28,7 @@
   button{font:inherit;padding:7px 14px;border-radius:6px;border:1px solid var(--azul2);background:var(--azul2);color:#fff;cursor:pointer}
   button.sec{background:#fff;color:var(--azul2)}
   button:hover{filter:brightness(1.08)}
+  button:disabled{opacity:.5;cursor:default}
   .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px}
   .kpi{background:#fff;border:1px solid var(--borde);border-radius:10px;padding:14px}
   .kpi .v{font-size:26px;font-weight:700;color:var(--azul)}
@@ -30,7 +37,7 @@
   .card h2{font-size:15px;margin:0;color:var(--azul)}
   .card .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap}
   .card .sub{font-size:12px;color:var(--gris);margin-top:2px}
-  .tw{overflow:auto;max-height:520px}
+  .tw{overflow:auto;max-height:560px}
   table{border-collapse:collapse;width:100%;font-size:13px}
   th,td{padding:6px 9px;border-bottom:1px solid var(--borde);text-align:right;white-space:nowrap}
   th{background:#f7f9fc;position:sticky;top:0;color:var(--gris);font-weight:600;z-index:1}
@@ -43,80 +50,151 @@
   .vacio{color:var(--gris);padding:10px 0}
   .tag{font-size:11px;padding:2px 7px;border-radius:10px;background:#eef2f7;color:var(--gris)}
   .tag.ok{background:#e3f4ea;color:var(--ok)}
+  .nuevo{font-size:11px;color:var(--ok);font-weight:700;margin-left:4px}
+  .pos{color:var(--ok);font-weight:600}
+  .neg{color:var(--mal);font-weight:600}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--borde);border-radius:14px;padding:3px 10px;font-size:12px;cursor:pointer;background:#fff;user-select:none}
+  .chip.on{background:#e8f1fc;border-color:var(--azul2);color:var(--azul)}
+  .chip input{display:none}
+  input.obj{width:72px;text-align:right;padding:3px 6px}
+  td.heat{font-weight:600}
+  .nota{font-size:12px;color:var(--gris);margin:-6px 0 14px}
   #login{position:fixed;inset:0;background:rgba(11,46,89,.85);display:none;align-items:center;justify-content:center;z-index:10}
   #login .box{background:#fff;border-radius:12px;padding:24px;width:300px;text-align:center}
   #login input{width:100%;margin:12px 0;text-align:center;font-size:18px;letter-spacing:4px}
-  #login .err{color:#c0392b;font-size:13px;min-height:18px}
+  #login .err{color:var(--mal);font-size:13px;min-height:18px}
 </style>
 </head>
 <body>
 
 <header>
-  <div>
-    <h1>Seguimiento de clientes</h1>
-    <small>BIDO S.R.L. · datos de Gescom</small>
+  <div class="hrow">
+    <div>
+      <h1>Seguimiento de clientes</h1>
+      <small>BIDO S.R.L. · datos de Gescom</small>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span class="estado" id="estado">—</span>
+      <button class="sec" onclick="actualizar()">Actualizar</button>
+    </div>
   </div>
-  <div style="display:flex;gap:10px;align-items:center">
-    <span class="estado" id="estado">—</span>
-    <button class="sec" onclick="cargar(true)">Actualizar</button>
+  <div class="tabs">
+    <button class="tab on" data-vista="vClientes">Clientes y altas</button>
+    <button class="tab" data-vista="vMarcas">Cobertura de marcas</button>
   </div>
 </header>
 
 <main>
-  <div class="filtros">
-    <label>Vendedor
-      <select id="fVendedor"></select>
-    </label>
-    <label>Ramo (para altas)
-      <select id="fRamo"></select>
-    </label>
-    <label>Altas desde
-      <input type="month" id="fDesde">
-    </label>
-    <label>Altas hasta
-      <input type="month" id="fHasta">
-    </label>
-    <label class="chk"><input type="checkbox" id="fDeposito"> Incluir "Deposito" (cód. 20)</label>
-  </div>
-
-  <div class="kpis">
-    <div class="kpi"><div class="v" id="kActivos">–</div><div class="l">Clientes activos</div></div>
-    <div class="kpi"><div class="v" id="kActivosRamo">–</div><div class="l" id="kActivosRamoL">Activos del ramo</div></div>
-    <div class="kpi"><div class="v" id="kAltas">–</div><div class="l" id="kAltasL">Altas en el período</div></div>
-    <div class="kpi"><div class="v" id="kSinCompra">–</div><div class="l">Activos sin ninguna compra</div></div>
-  </div>
-
-  <div class="card">
-    <div class="top">
-      <div><h2>Clientes activos por vendedor y Ramo</h2><div class="sub">Activo = marcado como activo en Gescom</div></div>
-      <button class="sec" onclick="exportar('activos','clientes_activos_por_vendedor')">Descargar Excel</button>
+  <!-- ======================= CLIENTES Y ALTAS ======================= -->
+  <section class="vista on" id="vClientes">
+    <div class="filtros">
+      <label>Vendedor
+        <select id="fVendedor"></select>
+      </label>
+      <label>Ramo (para altas)
+        <select id="fRamo"></select>
+      </label>
+      <label>Altas desde
+        <input type="month" id="fDesde">
+      </label>
+      <label>Altas hasta
+        <input type="month" id="fHasta">
+      </label>
+      <label class="chk"><input type="checkbox" id="fDeposito" class="fDep"> Incluir "Deposito" (cód. 20)</label>
     </div>
-    <div class="tw" id="tActivos"></div>
-  </div>
 
-  <div class="card">
-    <div class="top">
-      <div><h2 id="tAltasTitulo">Altas por vendedor y mes</h2><div class="sub">Alta = fecha de creación del cliente en Gescom (estimada). No incluye los clientes previos al inicio del registro.</div></div>
-      <button class="sec" onclick="exportar('altas','altas_por_vendedor_mes')">Descargar Excel</button>
+    <div class="kpis">
+      <div class="kpi"><div class="v" id="kActivos">–</div><div class="l">Clientes activos</div></div>
+      <div class="kpi"><div class="v" id="kActivosRamo">–</div><div class="l" id="kActivosRamoL">Activos del ramo</div></div>
+      <div class="kpi"><div class="v" id="kAltas">–</div><div class="l" id="kAltasL">Altas en el período</div></div>
+      <div class="kpi"><div class="v" id="kSinCompra">–</div><div class="l">Activos sin ninguna compra</div></div>
     </div>
-    <div class="tw" id="tAltas"></div>
-  </div>
 
-  <div class="card">
-    <div class="top">
-      <div><h2>Detalle de altas del período</h2><div class="sub" id="tDetalleSub"></div></div>
-      <button class="sec" onclick="exportar('detalle','detalle_altas')">Descargar Excel</button>
+    <div class="card">
+      <div class="top">
+        <div><h2>Clientes activos por vendedor y Ramo</h2><div class="sub">Activo = marcado como activo en Gescom</div></div>
+        <button class="sec" onclick="exportar('activos','clientes_activos_por_vendedor')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tActivos"></div>
     </div>
-    <div class="tw" id="tDetalle"></div>
-  </div>
 
-  <div class="card">
-    <div class="top">
-      <div><h2>Activos sin compras</h2><div class="sub">Clientes activos sin ninguna factura registrada (Gescom guarda ventas desde enero 2026)</div></div>
-      <button class="sec" onclick="exportar('sincompra','activos_sin_compras')">Descargar Excel</button>
+    <div class="card">
+      <div class="top">
+        <div><h2 id="tAltasTitulo">Altas por vendedor y mes</h2><div class="sub">Alta = fecha de creación del cliente en Gescom (estimada). No incluye los clientes previos al inicio del registro.</div></div>
+        <button class="sec" onclick="exportar('altas','altas_por_vendedor_mes')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tAltas"></div>
     </div>
-    <div class="tw" id="tSinCompra"></div>
-  </div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2>Detalle de altas del período</h2><div class="sub" id="tDetalleSub"></div></div>
+        <button class="sec" onclick="exportar('detalle','detalle_altas')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tDetalle"></div>
+    </div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2>Activos sin compras</h2><div class="sub">Clientes activos sin ninguna factura registrada (Gescom guarda ventas desde enero 2026)</div></div>
+        <button class="sec" onclick="exportar('sincompra','activos_sin_compras')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tSinCompra"></div>
+    </div>
+  </section>
+
+  <!-- ======================= COBERTURA DE MARCAS ======================= -->
+  <section class="vista" id="vMarcas">
+    <div class="filtros">
+      <label>Mes
+        <input type="month" id="mMes">
+      </label>
+      <label>Marca para el detalle
+        <select id="mMarca"></select>
+      </label>
+      <label class="chk"><input type="checkbox" id="mDeposito" class="fDep"> Incluir "Deposito" (cód. 20)</label>
+      <div style="flex-basis:100%;font-size:12px;color:var(--gris)">Marcas a seguir (tocá para sumar o quitar):
+        <div class="chips" id="mChips"></div>
+      </div>
+    </div>
+    <div class="nota" id="mNota"></div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2>Resumen por marca</h2><div class="sub" id="mResumenSub"></div></div>
+        <div style="display:flex;gap:8px">
+          <button id="btnObj" onclick="guardarObjetivos()">Guardar objetivos</button>
+          <button class="sec" onclick="exportar('mResumen','cobertura_resumen_marcas')">Descargar Excel</button>
+        </div>
+      </div>
+      <div class="tw" id="tmResumen"></div>
+    </div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2>Cobertura acumulada por vendedor</h2><div class="sub">% de clientes activos del vendedor con drop de la marca en el mes · en verde, los nuevos de hoy</div></div>
+        <button class="sec" onclick="exportar('mMatriz','cobertura_vendedor_marca')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tmMatriz"></div>
+    </div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2 id="mDetTitulo">Detalle por vendedor</h2><div class="sub">Acumulado hasta ayer vs acumulado hoy · necesidad diaria = clientes que faltan para el objetivo ÷ días hábiles que quedan (lunes a sábado, hoy incluido)</div></div>
+        <button class="sec" onclick="exportar('mDetalle','cobertura_detalle_vendedor')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tmDetalle"></div>
+    </div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2 id="mDiaTitulo">Clientes nuevos cubiertos por día</h2><div class="sub">Día en que el cliente llegó al drop de la marca (según fecha de carga del comprobante)</div></div>
+        <button class="sec" onclick="exportar('mDias','cobertura_nuevos_por_dia')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tmDias"></div>
+    </div>
+  </section>
 </main>
 
 <div id="login">
@@ -131,17 +209,29 @@
 <script>
 const AFH = 'AWAY FROM HOME';
 const DEP = '20';
+const MARCAS_DEFECTO = ['lays','doritos','cheetos','3d','3ds','pehuamar','pep','twistos','dinamita','sweetchili'];
 let DATA = [];
+let MARCAS = null;      // respuesta de /marcas
+let OBJETIVOS = {};     // marca -> % objetivo del mes elegido
+let vistaActual = 'vClientes';
 const TABLAS = {};
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const mesLabel = m => MESES[+m.slice(5,7)-1] + ' ' + m.slice(2,4);
 const fechaLabel = f => f ? f.slice(8,10)+'/'+f.slice(5,7)+'/'+f.slice(0,4) : '';
+const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const pct = (a, b) => b > 0 ? a / b : 0;
+const fmtPct = x => (x * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+const fmtN = n => Number(n || 0).toLocaleString('es-AR');
+const hoyAR = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
 
-function getPin(){ try { return sessionStorage.getItem('clientesPin') || ''; } catch(e){ return window._pin || ''; } }
+function guardarLocal(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+function leerLocal(k, def){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch(e){ return def; } }
+
+// ------------------------------------------------ PIN
+function getPin(){ try { return sessionStorage.getItem('clientesPin') || window._pin || ''; } catch(e){ return window._pin || ''; } }
 function setPin(p){ try { sessionStorage.setItem('clientesPin', p); } catch(e){} window._pin = p; }
-
 function mostrarLogin(msg){
   $('#login').style.display = 'flex';
   $('#pinErr').textContent = msg || '';
@@ -157,20 +247,43 @@ function entrar(){
 }
 $('#pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') entrar(); });
 
-async function cargar(refresh){
+async function api(url, opts = {}){
   const pin = getPin();
-  if (!pin) { mostrarLogin(); return; }
+  if (!pin) { mostrarLogin(); throw new Error('sin PIN'); }
+  const r = await fetch(url, { ...opts, headers: { 'x-pin': pin, 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+  let j = {};
+  try { j = await r.json(); } catch(e) {}
+  if (r.status === 401) { setPin(''); mostrarLogin('PIN incorrecto'); throw new Error('PIN incorrecto'); }
+  if (!r.ok) throw new Error(j.error || ('Error ' + r.status));
+  return j;
+}
+
+// ------------------------------------------------ PESTAÑAS
+document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.vista').forEach(v => v.classList.toggle('on', v.id === b.dataset.vista));
+  vistaActual = b.dataset.vista;
+  if (vistaActual === 'vMarcas' && !MARCAS) cargarMarcas(false);
+}));
+
+function actualizar(){
+  cargar(true);
+  if (vistaActual === 'vMarcas') cargarMarcas(true);
+}
+
+// El "Incluir Deposito" es el mismo en las dos pestañas
+document.querySelectorAll('.fDep').forEach(c => c.addEventListener('change', () => {
+  document.querySelectorAll('.fDep').forEach(x => x.checked = c.checked);
+  render(); renderMarcas();
+}));
+
+// ------------------------------------------------ CLIENTES
+async function cargar(refresh){
+  if (!getPin()) { mostrarLogin(); return; }
   $('#estado').textContent = 'Cargando…';
-  let r, j;
-  try {
-    r = await fetch('/api/seguimiento-clientes/datos' + (refresh ? '?refresh=1' : ''), { headers: { 'x-pin': pin } });
-    j = await r.json();
-  } catch(e) {
-    $('#estado').textContent = 'Error de conexión';
-    return;
-  }
-  if (r.status === 401) { setPin(''); mostrarLogin('PIN incorrecto'); $('#estado').textContent = '—'; return; }
-  if (!r.ok) { $('#estado').textContent = 'Error: ' + (j.error || r.status); return; }
+  let j;
+  try { j = await api('/api/seguimiento-clientes/datos' + (refresh ? '?refresh=1' : '')); }
+  catch(e) { $('#estado').textContent = e.message === 'sin PIN' ? '—' : 'Error: ' + e.message; return; }
 
   DATA = j.filas.map(f => ({
     ...f,
@@ -182,6 +295,7 @@ async function cargar(refresh){
   $('#estado').textContent = 'Actualizado ' + d.toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' });
   armarFiltros();
   render();
+  if (vistaActual === 'vMarcas') { if (!MARCAS) cargarMarcas(false); else renderMarcas(); }
 }
 
 function armarFiltros(){
@@ -198,9 +312,9 @@ function armarFiltros(){
   $('#fRamo').value = rSel && (rSel === '__todos' || ramos.includes(rSel)) ? rSel : (ramos.includes(AFH) ? AFH : '__todos');
 
   if (!$('#fDesde').value) {
-    const hoy = new Date();
-    $('#fDesde').value = hoy.getFullYear() + '-01';
-    $('#fHasta').value = hoy.getFullYear() + '-' + String(hoy.getMonth()+1).padStart(2,'0');
+    const hoy = hoyAR();
+    $('#fDesde').value = hoy.slice(0,4) + '-01';
+    $('#fHasta').value = hoy.slice(0,7);
   }
 }
 
@@ -221,49 +335,54 @@ function mesesEntre(desde, hasta){
   return out;
 }
 
+// Tabla genérica. filas: arrays de valores. opts.html: columnas con HTML; opts.estilo(i, v, fila, idx) -> style
 function tabla(key, headers, filas, opts = {}){
-  TABLAS[key] = { headers, filas };
+  TABLAS[key] = { headers, filas: opts.exportFilas || filas };
   if (!filas.length) return '<div class="vacio">Sin datos para estos filtros.</div>';
   const clsCol = opts.clsCol || (() => '');
   let h = '<table><thead><tr>' + headers.map((x,i) => `<th class="${clsCol(i)} ${opts.txtCols?.includes(i)?'txt':''}">${esc(x)}</th>`).join('') + '</tr></thead><tbody>';
   filas.forEach((f, idx) => {
     const tot = opts.totalUltima && idx === filas.length - 1;
     h += `<tr class="${tot?'tot':''}">` + f.map((v,i) => {
-      const c = [clsCol(i), opts.txtCols?.includes(i)?'txt':'', (v === 0 && !tot) ? 'cero' : ''].join(' ');
-      return `<td class="${c}">${opts.html?.includes(i) ? v : esc(v)}</td>`;
+      const c = [clsCol(i), opts.txtCols?.includes(i)?'txt':'', (v === 0 && !tot) ? 'cero' : '', opts.clsCelda ? opts.clsCelda(i, v, f, idx) : ''].join(' ');
+      const st = opts.estilo ? opts.estilo(i, v, f, idx, tot) : '';
+      return `<td class="${c}" ${st ? `style="${st}"` : ''}>${opts.html?.includes(i) ? v : esc(v)}</td>`;
     }).join('') + '</tr>';
   });
   return h + '</tbody></table>';
 }
 
+function baseClientes(){
+  const incDep = $('#fDeposito').checked;
+  return DATA.filter(r => incDep || r.vendedor_codigo !== DEP);
+}
+
 function render(){
+  if (!DATA.length) return;
   const vSel = $('#fVendedor').value;
   const rSel = $('#fRamo').value;
-  const incDep = $('#fDeposito').checked;
   const meses = mesesEntre($('#fDesde').value, $('#fHasta').value);
   const nombreRamo = rSel === '__todos' ? 'todos los ramos' : rSel;
 
-  let base = DATA.filter(r => incDep || r.vendedor_codigo !== DEP);
+  let base = baseClientes();
   if (vSel !== '__todos') base = base.filter(r => r.vendedor === vSel);
   const activos = base.filter(r => r.activo);
   const enRamo = r => rSel === '__todos' || r.ramo === rSel;
 
-  // ---- KPIs
   const altas = base.filter(r => r.mes_alta && meses.includes(r.mes_alta) && enRamo(r));
   const sinCompra = activos.filter(r => !r.primera_compra);
-  $('#kActivos').textContent = activos.length.toLocaleString('es-AR');
-  $('#kActivosRamo').textContent = activos.filter(enRamo).length.toLocaleString('es-AR');
+  $('#kActivos').textContent = fmtN(activos.length);
+  $('#kActivosRamo').textContent = fmtN(activos.filter(enRamo).length);
   $('#kActivosRamoL').textContent = 'Activos · ' + nombreRamo;
-  $('#kAltas').textContent = altas.length.toLocaleString('es-AR');
+  $('#kAltas').textContent = fmtN(altas.length);
   $('#kAltasL').textContent = 'Altas en el período · ' + nombreRamo;
-  $('#kSinCompra').textContent = sinCompra.length.toLocaleString('es-AR');
+  $('#kSinCompra').textContent = fmtN(sinCompra.length);
 
-  // ---- Tabla 1: activos por vendedor x ramo
+  // Activos por vendedor x ramo
   const ramos = ordenarRamos([...new Set(activos.map(r => r.ramo))]);
   const vends = [...new Set(activos.map(r => r.vendedor))].sort();
   const f1 = vends.map(v => {
-    const fila = [v];
-    let t = 0;
+    const fila = [v]; let t = 0;
     ramos.forEach(ra => { const n = activos.filter(r => r.vendedor === v && r.ramo === ra).length; fila.push(n); t += n; });
     fila.push(t);
     return fila;
@@ -277,7 +396,7 @@ function render(){
   $('#tActivos').innerHTML = tabla('activos', ['Vendedor', ...ramos, 'Total'], f1,
     { totalUltima: true, clsCol: i => (iAfh > 0 && i === iAfh) ? 'afh' : '' });
 
-  // ---- Tabla 2: altas por vendedor x mes
+  // Altas por vendedor x mes
   $('#tAltasTitulo').textContent = 'Altas por vendedor y mes · ' + nombreRamo;
   const vendsA = [...new Set(altas.map(r => r.vendedor))].sort();
   const f2 = vendsA.map(v => {
@@ -293,42 +412,272 @@ function render(){
   }
   $('#tAltas').innerHTML = tabla('altas', ['Vendedor', ...meses.map(mesLabel), 'Total'], f2, { totalUltima: true });
 
-  // ---- Tabla 3: detalle de altas
+  // Detalle de altas
   $('#tDetalleSub').textContent = altas.length + ' clientes · ' + nombreRamo;
   const f3 = altas
-    .sort((a,b) => b.alta.localeCompare(a.alta))
+    .slice().sort((a,b) => b.alta.localeCompare(a.alta))
     .map(r => [fechaLabel(r.alta), fechaLabel(r.primera_compra) || 'Sin compras', r.codigo, r.nombre, r.localidad || '', r.vendedor, r.ramo, r.subramo, r.segmento,
                r.activo ? '<span class="tag ok">Activo</span>' : '<span class="tag">Inactivo</span>']);
-  TABLAS.detalle = null;
   $('#tDetalle').innerHTML = tabla('detalle',
     ['Alta','Primera compra','Código','Cliente','Localidad','Vendedor','Ramo','SubRamo','Segmento','Estado'], f3,
-    { txtCols: [2,3,4,5,6,7,8], html: [9] });
-  TABLAS.detalle.filas = f3.map(f => [...f.slice(0,9), f[9].includes('Activo') ? 'Activo' : 'Inactivo']);
+    { txtCols: [2,3,4,5,6,7,8], html: [9],
+      exportFilas: f3.map(f => [...f.slice(0,9), f[9].includes('Activo') ? 'Activo' : 'Inactivo']) });
 
-  // ---- Tabla 4: activos sin compras
+  // Activos sin compras
   const f4 = sinCompra
-    .sort((a,b) => a.vendedor.localeCompare(b.vendedor) || a.nombre.localeCompare(b.nombre))
+    .slice().sort((a,b) => a.vendedor.localeCompare(b.vendedor) || a.nombre.localeCompare(b.nombre))
     .map(r => [r.codigo, r.nombre, r.localidad || '', r.vendedor, r.ramo, r.subramo, r.segmento]);
   $('#tSinCompra').innerHTML = tabla('sincompra',
     ['Código','Cliente','Localidad','Vendedor','Ramo','SubRamo','Segmento'], f4,
     { txtCols: [0,1,2,3,4,5,6] });
 }
 
+// ------------------------------------------------ COBERTURA DE MARCAS
+async function cargarMarcas(refresh){
+  if (!getPin()) { mostrarLogin(); return; }
+  const mes = $('#mMes').value || hoyAR().slice(0,7);
+  $('#mMes').value = mes;
+  $('#mNota').textContent = 'Cargando ventas del mes…';
+  try {
+    const [m, o] = await Promise.all([
+      api(`/api/seguimiento-clientes/marcas?mes=${mes}` + (refresh ? '&refresh=1' : '')),
+      api(`/api/seguimiento-clientes/objetivos?mes=${mes}`)
+    ]);
+    MARCAS = m;
+    OBJETIVOS = o.objetivos || {};
+    const d = new Date(m.actualizado);
+    $('#mNota').textContent = `Mes ${mesLabel(m.mes)} por fecha de entrega · cubierto = ${m.drop} unidades o más de la marca (las notas de crédito restan) · datos de Gescom actualizados ${d.toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' })}` + (o.aviso ? ' · Objetivos no disponibles: ' + o.aviso : '');
+    armarChips();
+    renderMarcas();
+  } catch(e) {
+    if (e.message !== 'sin PIN') $('#mNota').textContent = 'Error: ' + e.message;
+  }
+}
+$('#mMes').addEventListener('change', () => cargarMarcas(false));
+$('#mMarca').addEventListener('change', () => { guardarLocal('clientesMarcaDetalle', $('#mMarca').value); renderMarcas(); });
+
+function marcasDisponibles(){
+  if (!MARCAS) return [];
+  const tot = {};
+  MARCAS.filas.forEach(f => { tot[f.marca] = (tot[f.marca] || 0) + f.hoy + f.oport; });
+  return Object.keys(tot).filter(m => tot[m] > 0).sort((a,b) => a.localeCompare(b));
+}
+
+function marcasElegidas(){
+  const disp = marcasDisponibles();
+  let sel = leerLocal('clientesMarcas', null);
+  if (!Array.isArray(sel)) sel = disp.filter(m => MARCAS_DEFECTO.includes(norm(m)));
+  return ordenarMarcas(disp.filter(m => sel.includes(m)));
+}
+
+// Orden de la matinal: Lays, Doritos, Cheetos, 3D, Pehuamar, Pep, Twistos, Dinamita, Sweet Chili; después el resto
+function ordenarMarcas(lista){
+  const rango = m => { const i = MARCAS_DEFECTO.indexOf(norm(m) === '3ds' ? '3d' : norm(m)); return i < 0 ? 99 : i; };
+  return lista.slice().sort((a,b) => rango(a) - rango(b) || a.localeCompare(b));
+}
+
+function armarChips(){
+  const disp = ordenarMarcas(marcasDisponibles());
+  const sel = marcasElegidas();
+  $('#mChips').innerHTML = disp.map(m =>
+    `<label class="chip ${sel.includes(m)?'on':''}"><input type="checkbox" value="${esc(m)}" ${sel.includes(m)?'checked':''}>${esc(m)}</label>`).join('');
+  $('#mChips').querySelectorAll('input').forEach(c => c.addEventListener('change', () => {
+    c.parentElement.classList.toggle('on', c.checked);
+    const elegidas = [...$('#mChips').querySelectorAll('input:checked')].map(x => x.value);
+    guardarLocal('clientesMarcas', elegidas);
+    renderMarcas();
+  }));
+}
+
+function diasHabilesRestantes(mes, hoy){
+  const [y, m] = mes.split('-').map(Number);
+  const ultimo = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  let desde;
+  if (hoy.slice(0,7) > mes) return 0;
+  if (hoy.slice(0,7) < mes) desde = 1; else desde = Number(hoy.slice(8,10));
+  let n = 0;
+  for (let d = desde; d <= ultimo; d++) if (new Date(Date.UTC(y, m - 1, d)).getUTCDay() !== 0) n++;
+  return n;
+}
+
+// Color tipo semáforo: con objetivo, según cumplimiento; sin objetivo, según la cobertura
+function colorHeat(cob, obj){
+  let t = obj > 0 ? Math.max(0, Math.min(1, (cob / obj - 0.6) / 0.4)) : Math.max(0, Math.min(1, cob / 0.7));
+  return `background:hsl(${Math.round(t * 120)},62%,84%)`;
+}
+
+function renderMarcas(){
+  if (!MARCAS || !DATA.length) return;
+  const incDep = $('#mDeposito').checked;
+  const elegidas = marcasElegidas();
+  const filas = MARCAS.filas.filter(f => incDep || String(f.vendedor_codigo ?? '') !== DEP);
+  const mes = MARCAS.mes, hoy = MARCAS.hoy;
+  const dias = diasHabilesRestantes(mes, hoy);
+
+  // Universo = clientes activos por vendedor
+  const activos = baseClientes().filter(r => r.activo);
+  const universo = {};
+  activos.forEach(r => { universo[r.vendedor] = (universo[r.vendedor] || 0) + 1; });
+  const vendedores = Object.keys(universo).sort();
+  const U = activos.length;
+
+  // Acumulados: vendedor|marca -> {hoy, ayer, oport} y marca -> {...}
+  const vm = {}, mm = {};
+  filas.forEach(f => {
+    const k = f.vendedor_nombre + '|' + f.marca;
+    const a = vm[k] || (vm[k] = { hoy:0, ayer:0, oport:0 });
+    const b = mm[f.marca] || (mm[f.marca] = { hoy:0, ayer:0, oport:0 });
+    a.hoy += f.hoy; a.ayer += f.ayer; a.oport += f.oport;
+    b.hoy += f.hoy; b.ayer += f.ayer; b.oport += f.oport;
+  });
+  const g = (v, m) => vm[v + '|' + m] || { hoy:0, ayer:0, oport:0 };
+
+  $('#mResumenSub').textContent = `Universo: ${fmtN(U)} clientes activos · quedan ${dias} días hábiles en el mes · cargá el objetivo de cobertura (%) de cada marca y tocá "Guardar objetivos"`;
+
+  // ---------- Resumen por marca (con objetivo editable)
+  const resumen = elegidas.map(m => {
+    const x = mm[m] || { hoy:0, ayer:0, oport:0 };
+    const cob = pct(x.hoy, U);
+    const obj = OBJETIVOS[m] != null ? OBJETIVOS[m] / 100 : null;
+    const objCli = obj != null ? Math.ceil(obj * U) : null;
+    const faltan = objCli != null ? Math.max(0, objCli - x.hoy) : null;
+    return { m, x, cob, obj, objCli, faltan, nec: faltan != null && dias > 0 ? Math.ceil(faltan / dias) : (faltan ? faltan : null) };
+  });
+  const fR = resumen.map(r => [
+    r.m, fmtN(r.x.ayer), fmtN(r.x.hoy),
+    r.x.hoy - r.x.ayer > 0 ? `<span class="pos">+${fmtN(r.x.hoy - r.x.ayer)}</span>` : '0',
+    fmtPct(r.cob),
+    `<input class="obj" type="number" step="0.01" min="0" max="100" data-marca="${esc(r.m)}" value="${OBJETIVOS[r.m] ?? ''}" placeholder="%">`,
+    r.obj ? `<span class="${r.cob >= r.obj ? 'pos' : 'neg'}">${fmtPct(pct(r.cob, r.obj))}</span>` : '–',
+    r.faltan != null ? fmtN(r.faltan) : '–',
+    r.nec != null ? fmtN(r.nec) : '–',
+    fmtN(r.x.oport)
+  ]);
+  $('#tmResumen').innerHTML = tabla('mResumen',
+    ['Marca','Cubiertos hasta ayer','Cubiertos hoy','Nuevos hoy','Cobertura','Objetivo %','Cumplimiento','Faltan (clientes)','Necesidad diaria','Oportunidades (1-2 u.)'],
+    fR, { html: [3,5,6], txtCols: [0],
+      estilo: (i, v, f, idx) => i === 4 ? colorHeat(resumen[idx].cob, resumen[idx].obj) : '',
+      exportFilas: resumen.map(r => [r.m, r.x.ayer, r.x.hoy, r.x.hoy - r.x.ayer, +(r.cob*100).toFixed(1),
+        OBJETIVOS[r.m] ?? '', r.obj ? +(pct(r.cob, r.obj)*100).toFixed(1) : '', r.faltan ?? '', r.nec ?? '', r.x.oport]) });
+
+  // ---------- Matriz vendedor x marca
+  const fM = vendedores.map(v => [v, fmtN(universo[v]), ...elegidas.map(m => {
+    const x = g(v, m); const n = x.hoy - x.ayer;
+    return fmtPct(pct(x.hoy, universo[v])) + (n > 0 ? `<span class="nuevo">+${n}</span>` : '');
+  })]);
+  fM.push(['TOTAL', fmtN(U), ...elegidas.map(m => {
+    const x = mm[m] || { hoy:0, ayer:0 }; const n = x.hoy - x.ayer;
+    return fmtPct(pct(x.hoy, U)) + (n > 0 ? `<span class="nuevo">+${n}</span>` : '');
+  })]);
+  $('#tmMatriz').innerHTML = tabla('mMatriz', ['Vendedor','Universo', ...elegidas], fM, {
+    totalUltima: true, html: elegidas.map((_, i) => i + 2),
+    clsCelda: i => i >= 2 ? 'heat' : '',
+    estilo: (i, v, f, idx, tot) => {
+      if (i < 2 || tot) return '';
+      const m = elegidas[i - 2], ve = vendedores[idx];
+      const obj = OBJETIVOS[m] != null ? OBJETIVOS[m] / 100 : null;
+      return colorHeat(pct(g(ve, m).hoy, universo[ve]), obj);
+    },
+    exportFilas: [
+      ...vendedores.map(v => [v, universo[v], ...elegidas.map(m => +(pct(g(v, m).hoy, universo[v]) * 100).toFixed(1))]),
+      ['TOTAL', U, ...elegidas.map(m => +(pct((mm[m] || {hoy:0}).hoy, U) * 100).toFixed(1))]
+    ]
+  });
+
+  // ---------- Detalle de una marca por vendedor
+  const opciones = elegidas.length ? elegidas : marcasDisponibles();
+  const prev = $('#mMarca').value || leerLocal('clientesMarcaDetalle', '');
+  $('#mMarca').innerHTML = opciones.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+  $('#mMarca').value = opciones.includes(prev) ? prev : (opciones[0] || '');
+  const marca = $('#mMarca').value;
+  $('#mDetTitulo').textContent = 'Detalle por vendedor · ' + (marca || '—');
+  const objM = OBJETIVOS[marca] != null ? OBJETIVOS[marca] / 100 : null;
+  const det = vendedores.map(v => {
+    const x = g(v, marca), u = universo[v];
+    const objCli = objM != null ? Math.ceil(objM * u) : null;
+    const faltan = objCli != null ? Math.max(0, objCli - x.hoy) : null;
+    const nec = faltan != null ? (dias > 0 ? Math.ceil(faltan / dias) : faltan) : null;
+    return [v, u, objCli ?? '–', x.ayer, x.hoy, x.hoy - x.ayer, pct(x.hoy, u), faltan ?? '–', nec ?? '–', x.oport];
+  });
+  const totD = ['TOTAL', U, objM != null ? Math.ceil(objM * U) : '–'];
+  [3,4,5].forEach(i => totD[i] = det.reduce((s, f) => s + f[i], 0));
+  totD[6] = pct(totD[4], U);
+  totD[7] = objM != null ? det.reduce((s, f) => s + (typeof f[7] === 'number' ? f[7] : 0), 0) : '–';
+  totD[8] = objM != null ? det.reduce((s, f) => s + (typeof f[8] === 'number' ? f[8] : 0), 0) : '–';
+  totD[9] = det.reduce((s, f) => s + f[9], 0);
+  const detTodo = det.length ? [...det, totD] : [];
+  $('#tmDetalle').innerHTML = tabla('mDetalle',
+    ['Vendedor','Universo','Objetivo (clientes)','Acum. hasta ayer','Acum. hoy','Nuevos hoy','Cobertura','Faltan','Necesidad diaria','Oportunidades (1-2 u.)'],
+    detTodo.map(f => f.map((v, i) => i === 6 ? fmtPct(v) : i === 5 ? (v > 0 ? `<span class="pos">+${v}</span>` : v) : v)),
+    { totalUltima: true, html: [5],
+      estilo: (i, v, f, idx, tot) => (i === 6 && !tot) ? colorHeat(detTodo[idx][6], objM) : '',
+      exportFilas: detTodo.map(f => f.map((v, i) => i === 6 ? +(v * 100).toFixed(1) : v)) });
+
+  // ---------- Nuevos cubiertos por día (marca del detalle)
+  $('#mDiaTitulo').textContent = 'Clientes nuevos cubiertos por día · ' + (marca || '—');
+  const delMes = filas.filter(f => f.marca === marca && f.dia && f.hoy > 0);
+  const diasMes = [...new Set(delMes.map(f => f.dia))].sort();
+  const porDia = {};
+  delMes.forEach(f => { const k = f.vendedor_nombre + '|' + f.dia; porDia[k] = (porDia[k] || 0) + f.hoy; });
+  const fD = vendedores.map(v => {
+    const fila = [v]; let t = 0;
+    diasMes.forEach(d => { const n = porDia[v + '|' + d] || 0; fila.push(n); t += n; });
+    fila.push(t);
+    return fila;
+  });
+  if (fD.length && diasMes.length) {
+    const tot = ['TOTAL'];
+    for (let i = 1; i <= diasMes.length + 1; i++) tot.push(fD.reduce((s, f) => s + f[i], 0));
+    fD.push(tot);
+  }
+  const etiquetaDia = d => d.slice(8,10) + '/' + d.slice(5,7) + (d === hoy ? ' (hoy)' : '');
+  $('#tmDias').innerHTML = diasMes.length
+    ? tabla('mDias', ['Vendedor', ...diasMes.map(etiquetaDia), 'Total'], fD, { totalUltima: true })
+    : (TABLAS.mDias = { headers: [], filas: [] }, '<div class="vacio">Sin clientes cubiertos todavía para esta marca.</div>');
+}
+
+async function guardarObjetivos(){
+  if (!MARCAS) return;
+  const nuevos = {};
+  document.querySelectorAll('input.obj').forEach(i => {
+    const v = i.value.trim().replace(',', '.');
+    nuevos[i.dataset.marca] = v === '' ? null : Number(v);
+  });
+  const btn = $('#btnObj');
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try {
+    await api('/api/seguimiento-clientes/objetivos', { method: 'POST', body: JSON.stringify({ mes: MARCAS.mes, objetivos: nuevos }) });
+    Object.entries(nuevos).forEach(([m, v]) => { if (v == null || !Number.isFinite(v)) delete OBJETIVOS[m]; else OBJETIVOS[m] = v; });
+    renderMarcas();
+    btn.textContent = 'Guardado ✓';
+  } catch(e) {
+    alert('No se pudieron guardar los objetivos: ' + e.message);
+    btn.textContent = 'Guardar objetivos';
+  }
+  setTimeout(() => { btn.disabled = false; btn.textContent = 'Guardar objetivos'; }, 1500);
+}
+
+// ------------------------------------------------ EXPORTAR
 function exportar(key, nombre){
   const t = TABLAS[key];
   if (!t || !t.filas.length) { alert('No hay datos para descargar.'); return; }
-  const celda = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const limpiar = v => typeof v === 'string' ? v.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : v;
+  const celda = v => {
+    v = limpiar(v);
+    if (typeof v === 'number') return String(v).replace('.', ',');
+    return '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  };
   const csv = '﻿' + [t.headers, ...t.filas].map(f => f.map(celda).join(';')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
-  const hoy = new Date().toISOString().slice(0,10);
   a.href = URL.createObjectURL(blob);
-  a.download = `${nombre}_${hoy}.csv`;
+  a.download = `${nombre}_${hoyAR()}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-['#fVendedor','#fRamo','#fDesde','#fHasta','#fDeposito'].forEach(s => $(s).addEventListener('change', render));
+['#fVendedor','#fRamo','#fDesde','#fHasta'].forEach(s => $(s).addEventListener('change', render));
+$('#mMes').value = hoyAR().slice(0,7);
 cargar(false);
 </script>
 </body>

@@ -1,32 +1,58 @@
 // ================================================================
-//  MÓDULO PROVISORIO: Seguimiento de clientes  ->  /clientes
+//  MÓDULO PROVISORIO: Seguimiento de clientes y cobertura de marcas  ->  /clientes
 //  Para QUITARLO: borrar este archivo, clientes.html (en la raíz)
 //  y la línea  require('./server/rutas/clientes.js');  de index.js.
-//  No toca nada más de BeniQ ni usa la base propia (Supabase).
+//  (Opcional) en Supabase: DROP TABLE clientes_objetivo_marca;
 //
 //  Variables de entorno (Render > Environment):
 //      CLIENTES_PIN   -> PIN de acceso del supervisor de ventas (obligatoria)
 //      GESCOM_TENANT  -> tenant de BIDO en Gescom (por defecto 116)
 //
 //  FECHA DE ALTA: Gescom no la guarda (la primera versión de todo cliente
-//  figura con fecha 2000-01-01). Se estima con el número correlativo hist_id:
-//  la primera fila de un cliente nuevo recibe el número siguiente al último que
-//  había, así que su alta es la fecha de la primera fila con fecha real que entró
-//  después. Los clientes que ya existían al empezar el registro quedan como
-//  "previos" (sin fecha de alta).
+//  figura con fecha 2000-01-01). Se estima con el número correlativo hist_id.
+//
+//  COBERTURA DE MARCAS (igual que la planilla Batalla de Marcas):
+//   - Mes = comprobantes con FECHA DE ENTREGA dentro del mes.
+//   - Se suman las unidades por cliente y marca: facturas suman, notas de crédito restan.
+//   - Cliente cubierto = 3 unidades o más de la marca en el mes (DROP_MINIMO).
+//     Con 1 o 2 unidades queda como "oportunidad".
+//   - "Hasta ayer" = comprobantes cargados antes de hoy; "hoy" = todo lo cargado hasta ahora.
+//   - El vendedor es el vendedor actual del cliente (ruta vigente en Gescom).
 // ================================================================
 const path = require('path');
 const { app, pool } = require('../core.js');
+const { db } = require('../base.js');
 
 const TENANT = Number(process.env.GESCOM_TENANT || 116);
-// El PIN se lee en cada pedido y sin espacios (por si quedó un espacio al cargarlo en Render)
-const leerPin = () => String(process.env.CLIENTES_PIN || '').trim();
 const CACHE_MS = 10 * 60 * 1000; // 10 minutos, para no cargar a Gescom en cada visita
+const DROP_MINIMO = 3;           // unidades mínimas en el mes para contar al cliente como cubierto
 
-// Comprobantes que NO cuentan como compra: remitos de comodato (REME/REMI) y notas de crédito (NCR-A/B)
+// Comprobantes que NO cuentan como compra para las altas (remitos de comodato y notas de crédito)
 const EXCLUIR_COMPROBANTES = ['REM%', 'NC%'];
 
-const SQL = `
+// Submarcas que Gescom guarda dentro de otra marca: se reconocen por la descripción del artículo.
+// Para sumar otra, agregar una línea { nombre, patron } (patron usa % como comodín).
+const SUBMARCAS = [
+    { nombre: 'Dinamita', patron: '%dinamita%' },
+    { nombre: 'Sweet Chili', patron: '%sweet chil%' }
+];
+
+// El PIN se lee en cada pedido y sin espacios (por si quedó un espacio al cargarlo en Render)
+const leerPin = () => String(process.env.CLIENTES_PIN || '').trim();
+
+function controlPin(req, res, next) {
+    const PIN = leerPin();
+    if (!PIN) return res.status(500).json({ error: 'Falta configurar CLIENTES_PIN en Render.' });
+    if (String(req.get('x-pin') || '').trim() !== PIN) return res.status(401).json({ error: 'PIN incorrecto' });
+    next();
+}
+
+const hoyAR = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }); // YYYY-MM-DD
+
+// =====================================================================
+//  CLIENTES: activos, vendedor, ramo, alta estimada, primera compra
+// =====================================================================
+const SQL_CLIENTES = `
 WITH h AS (
   SELECT id, hist_id, fecha_inicio
   FROM cliente_hist
@@ -88,45 +114,205 @@ LEFT JOIN pc   ON pc.cliente_id = cli.id
 ORDER BY cli.nombre;
 `;
 
-let cache = { t: 0, data: null, pendiente: null };
+let cacheClientes = { t: 0, data: null, pendiente: null };
 
-async function obtenerDatos(forzar) {
-    if (!forzar && cache.data && Date.now() - cache.t < CACHE_MS) return cache.data;
-    if (cache.pendiente) return cache.pendiente;
-    cache.pendiente = (async () => {
+async function obtenerClientes(forzar) {
+    if (!forzar && cacheClientes.data && Date.now() - cacheClientes.t < CACHE_MS) return cacheClientes.data;
+    if (cacheClientes.pendiente) return cacheClientes.pendiente;
+    cacheClientes.pendiente = (async () => {
         try {
-            const { rows } = await pool.query(SQL, [TENANT, EXCLUIR_COMPROBANTES]);
-            cache.data = rows;
-            cache.t = Date.now();
+            const { rows } = await pool.query(SQL_CLIENTES, [TENANT, EXCLUIR_COMPROBANTES]);
+            cacheClientes.data = rows;
+            cacheClientes.t = Date.now();
             return rows;
         } finally {
-            cache.pendiente = null;
+            cacheClientes.pendiente = null;
         }
     })();
-    return cache.pendiente;
+    return cacheClientes.pendiente;
 }
 
+// =====================================================================
+//  COBERTURA DE MARCAS: por vendedor, marca y día en que el cliente llegó al drop
+// =====================================================================
+const SQL_MARCAS = `
+WITH ruta AS (
+  SELECT DISTINCT ON (r.cliente_id) r.cliente_id, r.vendedor_codigo, r.vendedor_nombre
+  FROM cliente_ruta_hist r
+  WHERE r.actual AND r.tenant_id = $1
+  ORDER BY r.cliente_id, (r.fuerza_venta = 'Principal') DESC NULLS LAST, r.vendedor_codigo
+),
+lineas AS (
+  SELECT v.cliente_id,
+         COALESCE(v.fecha_carga, v.fecha_creacion, v.fecha_comprobante)::date AS dia,
+         i.marca_desc,
+         COALESCE(i.descripcion, '') AS descripcion,
+         vi.cantidad * COALESCE(NULLIF(vi.unidad_factor, 0), 1)
+           * CASE WHEN v.tipo_comprobante_codigo ILIKE 'NC%' THEN -1 ELSE 1 END AS u
+  FROM venta v
+  JOIN venta_item vi ON vi.venta_id = v.id AND vi.tenant_id = v.tenant_id
+  JOIN item i        ON i.id = vi.item_id  AND i.tenant_id = v.tenant_id
+  WHERE v.tenant_id = $1
+    AND v.fecha_entrega >= $2::date AND v.fecha_entrega < $3::date
+    AND (v.tipo_comprobante_codigo ILIKE 'FAC%' OR v.tipo_comprobante_codigo ILIKE 'NC%')
+),
+por_marca AS (
+  SELECT cliente_id, dia, COALESCE(NULLIF(trim(marca_desc), ''), 'Sin marca') AS marca, u FROM lineas
+  UNION ALL
+  SELECT l.cliente_id, l.dia, s.nombre, l.u
+  FROM lineas l
+  JOIN unnest($5::text[], $6::text[]) AS s(nombre, patron) ON l.descripcion ILIKE s.patron
+),
+diario AS (
+  SELECT cliente_id, marca, dia, SUM(u) AS u FROM por_marca GROUP BY 1, 2, 3
+),
+acum AS (
+  SELECT cliente_id, marca, dia, u,
+         SUM(u) OVER (PARTITION BY cliente_id, marca ORDER BY dia) AS acu
+  FROM diario
+),
+cli AS (
+  SELECT cliente_id, marca,
+         SUM(u) AS u_total,
+         COALESCE(SUM(u) FILTER (WHERE dia < $4::date), 0) AS u_ayer,
+         MIN(dia) FILTER (WHERE acu >= $7) AS dia_cruce
+  FROM acum
+  GROUP BY 1, 2
+)
+SELECT r.vendedor_codigo,
+       COALESCE(r.vendedor_nombre, 'Sin vendedor') AS vendedor_nombre,
+       c.marca,
+       to_char(c.dia_cruce, 'YYYY-MM-DD') AS dia,
+       (COUNT(*) FILTER (WHERE c.u_total >= $7))::int AS hoy,
+       (COUNT(*) FILTER (WHERE c.u_ayer  >= $7))::int AS ayer,
+       (COUNT(*) FILTER (WHERE c.u_total > 0 AND c.u_total < $7))::int AS oport
+FROM cli c
+LEFT JOIN ruta r ON r.cliente_id = c.cliente_id
+GROUP BY 1, 2, 3, 4;
+`;
+
+const cacheMarcas = new Map(); // mes -> { t, data, pendiente }
+
+function rangoMes(mes) {
+    const [y, m] = mes.split('-').map(Number);
+    const desde = `${y}-${String(m).padStart(2, '0')}-01`;
+    const sig = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+    return { desde, hasta: sig };
+}
+
+async function obtenerMarcas(mes, forzar) {
+    const c = cacheMarcas.get(mes) || {};
+    if (!forzar && c.data && Date.now() - c.t < CACHE_MS) return c;
+    if (c.pendiente) return c.pendiente;
+    const { desde, hasta } = rangoMes(mes);
+    const hoy = hoyAR();
+    c.pendiente = (async () => {
+        try {
+            const { rows } = await pool.query(SQL_MARCAS, [
+                TENANT, desde, hasta, hoy,
+                SUBMARCAS.map(s => s.nombre), SUBMARCAS.map(s => s.patron),
+                DROP_MINIMO
+            ]);
+            const nuevo = { t: Date.now(), data: rows, hoy };
+            cacheMarcas.set(mes, nuevo);
+            return nuevo;
+        } finally {
+            c.pendiente = null;
+        }
+    })();
+    cacheMarcas.set(mes, c);
+    return c.pendiente;
+}
+
+// =====================================================================
+//  OBJETIVOS DE COBERTURA POR MARCA (se cargan desde la página, quedan en Supabase)
+// =====================================================================
+let tablaObjetivosLista = false;
+async function asegurarTablaObjetivos() {
+    if (!db) throw new Error('La base propia (Supabase) no está configurada.');
+    if (tablaObjetivosLista) return;
+    await db.query(`CREATE TABLE IF NOT EXISTS clientes_objetivo_marca (
+        mes text NOT NULL,
+        marca text NOT NULL,
+        objetivo numeric NOT NULL,
+        actualizado timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (mes, marca)
+    )`);
+    tablaObjetivosLista = true;
+}
+
+const mesValido = m => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(m || ''));
+
+// =====================================================================
+//  RUTAS
+// =====================================================================
 app.get('/clientes', (req, res) => {
     res.sendFile(path.join(__dirname, '..', '..', 'clientes.html'));
 });
 
-app.get('/api/seguimiento-clientes/datos', async (req, res) => {
-    const PIN = leerPin();
-    if (!PIN) {
-        return res.status(500).json({ error: 'Falta configurar CLIENTES_PIN en Render.' });
-    }
-    if (String(req.get('x-pin') || '').trim() !== PIN) {
-        return res.status(401).json({ error: 'PIN incorrecto' });
-    }
+app.get('/api/seguimiento-clientes/datos', controlPin, async (req, res) => {
     try {
-        const filas = await obtenerDatos(req.query.refresh === '1');
-        res.json({ actualizado: new Date(cache.t).toISOString(), filas });
+        const filas = await obtenerClientes(req.query.refresh === '1');
+        res.json({ actualizado: new Date(cacheClientes.t).toISOString(), filas });
     } catch (err) {
-        console.error('❌ [clientes] Error en consulta:', err.message);
+        console.error('❌ [clientes] Error en consulta de clientes:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
 
-console.log('📊 Módulo provisorio de seguimiento de clientes activo en /clientes');
+app.get('/api/seguimiento-clientes/marcas', controlPin, async (req, res) => {
+    const mes = mesValido(req.query.mes) ? req.query.mes : hoyAR().slice(0, 7);
+    try {
+        const r = await obtenerMarcas(mes, req.query.refresh === '1');
+        res.json({
+            mes, hoy: r.hoy, drop: DROP_MINIMO,
+            submarcas: SUBMARCAS.map(s => s.nombre),
+            actualizado: new Date(r.t).toISOString(),
+            filas: r.data
+        });
+    } catch (err) {
+        console.error('❌ [clientes] Error en consulta de marcas:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/seguimiento-clientes/objetivos', controlPin, async (req, res) => {
+    const mes = mesValido(req.query.mes) ? req.query.mes : hoyAR().slice(0, 7);
+    try {
+        await asegurarTablaObjetivos();
+        const { rows } = await db.query(`SELECT marca, objetivo::float AS objetivo FROM clientes_objetivo_marca WHERE mes = $1`, [mes]);
+        const obj = {};
+        rows.forEach(r => { obj[r.marca] = r.objetivo; });
+        res.json({ mes, objetivos: obj });
+    } catch (err) {
+        res.json({ mes, objetivos: {}, aviso: err.message });
+    }
+});
+
+app.post('/api/seguimiento-clientes/objetivos', controlPin, async (req, res) => {
+    const { mes, objetivos } = req.body || {};
+    if (!mesValido(mes) || !objetivos || typeof objetivos !== 'object') {
+        return res.status(400).json({ error: 'Datos inválidos' });
+    }
+    try {
+        await asegurarTablaObjetivos();
+        for (const [marca, valor] of Object.entries(objetivos)) {
+            const m = String(marca).slice(0, 60);
+            if (valor === null || valor === '' || !Number.isFinite(Number(valor))) {
+                await db.query(`DELETE FROM clientes_objetivo_marca WHERE mes = $1 AND marca = $2`, [mes, m]);
+            } else {
+                const v = Math.max(0, Math.min(100, Number(valor)));
+                await db.query(`INSERT INTO clientes_objetivo_marca (mes, marca, objetivo) VALUES ($1, $2, $3)
+                    ON CONFLICT (mes, marca) DO UPDATE SET objetivo = EXCLUDED.objetivo, actualizado = now()`, [mes, m, v]);
+            }
+        }
+        res.json({ exito: true });
+    } catch (err) {
+        console.error('❌ [clientes] Error guardando objetivos:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+console.log('📊 Módulo provisorio de seguimiento de clientes y cobertura de marcas activo en /clientes');
 
 module.exports = {};
