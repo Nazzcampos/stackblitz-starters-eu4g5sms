@@ -19,7 +19,8 @@ const path = require('path');
 const { app, pool } = require('../core.js');
 
 const TENANT = Number(process.env.GESCOM_TENANT || 116);
-const PIN = process.env.CLIENTES_PIN || '';
+// El PIN se lee en cada pedido y sin espacios (por si quedó un espacio al cargarlo en Render)
+const leerPin = () => String(process.env.CLIENTES_PIN || '').trim();
 const CACHE_MS = 10 * 60 * 1000; // 10 minutos, para no cargar a Gescom en cada visita
 
 // Comprobantes que NO cuentan como compra: remitos de comodato (REME/REMI) y notas de crédito (NCR-A/B)
@@ -110,10 +111,11 @@ app.get('/clientes', (req, res) => {
 });
 
 app.get('/api/clientes/datos', async (req, res) => {
+    const PIN = leerPin();
     if (!PIN) {
         return res.status(500).json({ error: 'Falta configurar CLIENTES_PIN en Render.' });
     }
-    if (req.get('x-pin') !== PIN) {
+    if (String(req.get('x-pin') || '').trim() !== PIN) {
         return res.status(401).json({ error: 'PIN incorrecto' });
     }
     try {
