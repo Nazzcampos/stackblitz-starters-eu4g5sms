@@ -150,6 +150,10 @@
       <label>Mes
         <input type="month" id="mMes">
       </label>
+      <label>Cobertura al
+        <input type="date" id="mFecha">
+      </label>
+      <button class="sec" onclick="fechaUltima()" title="Vuelve al último día con ventas cargadas">Último día con ventas</button>
       <label class="chk"><input type="checkbox" id="mDeposito" class="fDep"> Incluir "Deposito" (cód. 20)</label>
       <div style="flex-basis:100%;font-size:12px;color:var(--gris)">Marcas a seguir (tocá para sumar o quitar):
         <div class="chips" id="mChips"></div>
@@ -170,7 +174,7 @@
 
     <div class="card">
       <div class="top">
-        <div><h2>Cobertura acumulada por vendedor</h2><div class="sub">% de clientes activos del vendedor con drop de la marca en el mes · en verde, los nuevos de hoy</div></div>
+        <div><h2>Cobertura acumulada por vendedor</h2><div class="sub" id="mMatSub"></div></div>
         <button class="sec" onclick="exportar('mMatriz','cobertura_vendedor_marca')">Descargar Excel</button>
       </div>
       <div class="tw" id="tmMatriz"></div>
@@ -178,7 +182,7 @@
 
     <div class="card">
       <div class="top">
-        <div><h2 id="mDetTitulo">Detalle por vendedor</h2><div class="sub">Acumulado hasta ayer vs acumulado hoy · necesidad diaria = clientes que faltan para el objetivo ÷ días hábiles que quedan (lunes a sábado, hoy incluido)</div></div>
+        <div><h2 id="mDetTitulo">Detalle por vendedor</h2><div class="sub" id="mDetSub"></div></div>
         <div style="display:flex;gap:8px;align-items:center">
           <select id="mMarcaDet" class="selMarca" data-clave="clientesMarcaDetalle"></select>
           <button class="sec" onclick="exportar('mDetalle','cobertura_detalle_vendedor')">Descargar Excel</button>
@@ -216,6 +220,8 @@ const MARCAS_DEFECTO = ['lays','doritos','cheetos','3d','3ds','pehuamar','pep','
 let DATA = [];
 let MARCAS = null;      // respuesta de /marcas
 let OBJETIVOS = {};     // marca -> % objetivo del mes elegido
+let FECHA_ELEGIDA = null; // fecha de corte elegida a mano (null = último día con ventas)
+const VCOD = {};        // vendedor -> código
 let vistaActual = 'vClientes';
 const TABLAS = {};
 const $ = s => document.querySelector(s);
@@ -228,6 +234,12 @@ const pct = (a, b) => b > 0 ? a / b : 0;
 const fmtPct = x => (x * 100).toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
 const fmtN = n => Number(n || 0).toLocaleString('es-AR');
 const hoyAR = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+
+// Vendedores ordenados por código y mostrados como "21 - Santini Alejandro"
+const codNum = v => { const c = Number(VCOD[v]); return Number.isFinite(c) && VCOD[v] !== '' ? c : 99999; };
+const ordenarVend = lista => lista.slice().sort((a,b) => codNum(a) - codNum(b) || a.localeCompare(b));
+const etiqVend = v => VCOD[v] ? VCOD[v] + ' - ' + v : v;
+const fCorta = d => d ? d.slice(8,10) + '/' + d.slice(5,7) : '—';
 
 function guardarLocal(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
 function leerLocal(k, def){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : def; } catch(e){ return def; } }
@@ -294,6 +306,7 @@ async function cargar(refresh){
     vendedor: f.vendedor_nombre || 'Sin vendedor',
     mes_alta: f.alta ? f.alta.slice(0,7) : null
   }));
+  DATA.forEach(r => { if (r.vendedor_codigo && !VCOD[r.vendedor]) VCOD[r.vendedor] = r.vendedor_codigo; });
   const d = new Date(j.actualizado);
   $('#estado').textContent = 'Actualizado ' + d.toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' });
   armarFiltros();
@@ -304,9 +317,9 @@ async function cargar(refresh){
 function armarFiltros(){
   const vSel = $('#fVendedor').value || '__todos';
   const rSel = $('#fRamo').value || '';
-  const vendedores = [...new Set(DATA.filter(r => (r.activo || r.mes_alta) && r.vendedor !== SIN_VEND).map(r => r.vendedor))].sort();
+  const vendedores = ordenarVend([...new Set(DATA.filter(r => (r.activo || r.mes_alta) && r.vendedor !== SIN_VEND).map(r => r.vendedor))]);
   $('#fVendedor').innerHTML = '<option value="__todos">Todos</option>' +
-    vendedores.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    vendedores.map(v => `<option value="${esc(v)}">${esc(etiqVend(v))}</option>`).join('');
   $('#fVendedor').value = vendedores.includes(vSel) ? vSel : '__todos';
 
   const ramos = ordenarRamos([...new Set(DATA.map(r => r.ramo))]);
@@ -385,9 +398,9 @@ function render(){
 
   // Activos por vendedor x ramo
   const ramos = ordenarRamos([...new Set(activos.map(r => r.ramo))]);
-  const vends = [...new Set(activos.map(r => r.vendedor))].sort();
+  const vends = ordenarVend([...new Set(activos.map(r => r.vendedor))]);
   const f1 = vends.map(v => {
-    const fila = [v]; let t = 0;
+    const fila = [etiqVend(v)]; let t = 0;
     ramos.forEach(ra => { const n = activos.filter(r => r.vendedor === v && r.ramo === ra).length; fila.push(n); t += n; });
     fila.push(t);
     return fila;
@@ -403,9 +416,9 @@ function render(){
 
   // Altas por vendedor x mes
   $('#tAltasTitulo').textContent = 'Altas por vendedor y mes · ' + nombreRamo;
-  const vendsA = [...new Set(altas.map(r => r.vendedor))].sort();
+  const vendsA = ordenarVend([...new Set(altas.map(r => r.vendedor))]);
   const f2 = vendsA.map(v => {
-    const fila = [v]; let t = 0;
+    const fila = [etiqVend(v)]; let t = 0;
     meses.forEach(m => { const n = altas.filter(r => r.vendedor === v && r.mes_alta === m).length; fila.push(n); t += n; });
     fila.push(t);
     return fila;
@@ -421,7 +434,7 @@ function render(){
   $('#tDetalleSub').textContent = altas.length + ' clientes · ' + nombreRamo;
   const f3 = altas
     .slice().sort((a,b) => b.alta.localeCompare(a.alta))
-    .map(r => [fechaLabel(r.alta), fechaLabel(r.primera_compra) || 'Sin compras', r.codigo, r.nombre, r.localidad || '', r.vendedor, r.ramo, r.subramo, r.segmento,
+    .map(r => [fechaLabel(r.alta), fechaLabel(r.primera_compra) || 'Sin compras', r.codigo, r.nombre, r.localidad || '', etiqVend(r.vendedor), r.ramo, r.subramo, r.segmento,
                r.activo ? '<span class="tag ok">Activo</span>' : '<span class="tag">Inactivo</span>']);
   $('#tDetalle').innerHTML = tabla('detalle',
     ['Alta','Primera compra','Código','Cliente','Localidad','Vendedor','Ramo','SubRamo','Segmento','Estado'], f3,
@@ -430,8 +443,8 @@ function render(){
 
   // Activos sin compras
   const f4 = sinCompra
-    .slice().sort((a,b) => a.vendedor.localeCompare(b.vendedor) || a.nombre.localeCompare(b.nombre))
-    .map(r => [r.codigo, r.nombre, r.localidad || '', r.vendedor, r.ramo, r.subramo, r.segmento]);
+    .slice().sort((a,b) => codNum(a.vendedor) - codNum(b.vendedor) || a.nombre.localeCompare(b.nombre))
+    .map(r => [r.codigo, r.nombre, r.localidad || '', etiqVend(r.vendedor), r.ramo, r.subramo, r.segmento]);
   $('#tSinCompra').innerHTML = tabla('sincompra',
     ['Código','Cliente','Localidad','Vendedor','Ramo','SubRamo','Segmento'], f4,
     { txtCols: [0,1,2,3,4,5,6] });
@@ -445,11 +458,15 @@ async function cargarMarcas(refresh){
   $('#mNota').textContent = 'Cargando ventas del mes…';
   try {
     const [m, o] = await Promise.all([
-      api(`/api/seguimiento-clientes/marcas?mes=${mes}` + (refresh ? '&refresh=1' : '')),
+      api(`/api/seguimiento-clientes/marcas?mes=${mes}` + (FECHA_ELEGIDA ? '&fecha=' + FECHA_ELEGIDA : '') + (refresh ? '&refresh=1' : '')),
       api(`/api/seguimiento-clientes/objetivos?mes=${mes}`)
     ]);
     MARCAS = m;
     OBJETIVOS = o.objetivos || {};
+    MARCAS.filas.forEach(f => { if (f.vendedor_codigo && !VCOD[f.vendedor_nombre]) VCOD[f.vendedor_nombre] = String(f.vendedor_codigo); });
+    $('#mFecha').min = m.primero || (mes + '-01');
+    $('#mFecha').max = m.hoy;
+    $('#mFecha').value = m.corte || '';
     const d = new Date(m.actualizado);
     $('#mNota').textContent = `Mes ${mesLabel(m.mes)} por fecha de entrega · cubierto = ${m.drop} unidades o más de la marca (las notas de crédito restan) · datos de Gescom actualizados ${d.toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' })}` + (o.aviso ? ' · Objetivos no disponibles: ' + o.aviso : '');
     armarChips();
@@ -458,7 +475,9 @@ async function cargarMarcas(refresh){
     if (e.message !== 'sin PIN') $('#mNota').textContent = 'Error: ' + e.message;
   }
 }
-$('#mMes').addEventListener('change', () => cargarMarcas(false));
+$('#mMes').addEventListener('change', () => { FECHA_ELEGIDA = null; cargarMarcas(false); });
+$('#mFecha').addEventListener('change', () => { FECHA_ELEGIDA = $('#mFecha').value || null; cargarMarcas(false); });
+function fechaUltima(){ FECHA_ELEGIDA = null; cargarMarcas(true); }
 document.querySelectorAll('.selMarca').forEach(sel => sel.addEventListener('change', () => {
   guardarLocal(sel.dataset.clave, sel.value); renderMarcas();
 }));
@@ -505,12 +524,13 @@ function armarChips(){
   }));
 }
 
-function diasHabilesRestantes(mes, hoy){
+// Días hábiles (lunes a sábado) que quedan en el mes DESPUÉS de la fecha de corte
+function diasHabilesRestantes(mes, corte){
   const [y, m] = mes.split('-').map(Number);
   const ultimo = new Date(Date.UTC(y, m, 0)).getUTCDate();
   let desde;
-  if (hoy.slice(0,7) > mes) return 0;
-  if (hoy.slice(0,7) < mes) desde = 1; else desde = Number(hoy.slice(8,10));
+  if (corte.slice(0,7) > mes) return 0;
+  if (corte.slice(0,7) < mes) desde = 1; else desde = Number(corte.slice(8,10)) + 1;
   let n = 0;
   for (let d = desde; d <= ultimo; d++) if (new Date(Date.UTC(y, m - 1, d)).getUTCDay() !== 0) n++;
   return n;
@@ -527,14 +547,17 @@ function renderMarcas(){
   const incDep = $('#mDeposito').checked;
   const elegidas = marcasElegidas();
   const filas = MARCAS.filas.filter(f => f.vendedor_nombre !== SIN_VEND && (incDep || String(f.vendedor_codigo ?? '') !== DEP));
-  const mes = MARCAS.mes, hoy = MARCAS.hoy;
+  const mes = MARCAS.mes, hoy = MARCAS.corte || MARCAS.hoy;
   const dias = diasHabilesRestantes(mes, hoy);
+  const LA = 'Acum. al ' + fCorta(MARCAS.base), LH = 'Acum. al ' + fCorta(hoy), LN = 'Nuevos el ' + fCorta(hoy);
+  $('#mMatSub').textContent = `% de clientes activos del vendedor con drop de la marca, acumulado al ${fCorta(hoy)} · en verde, los nuevos del ${fCorta(hoy)} (vs. ${fCorta(MARCAS.base)})`;
+  $('#mDetSub').textContent = `${LA} vs ${LH} · necesidad diaria = clientes que faltan para el objetivo ÷ días hábiles que quedan después del ${fCorta(hoy)} (lunes a sábado: ${dias})`;
 
   // Universo = clientes activos por vendedor
   const activos = baseClientes().filter(r => r.activo);
   const universo = {};
   activos.forEach(r => { universo[r.vendedor] = (universo[r.vendedor] || 0) + 1; });
-  const vendedores = Object.keys(universo).sort();
+  const vendedores = ordenarVend(Object.keys(universo));
   const U = activos.length;
 
   // Acumulados: vendedor|marca -> {hoy, ayer, oport} y marca -> {...}
@@ -548,7 +571,7 @@ function renderMarcas(){
   });
   const g = (v, m) => vm[v + '|' + m] || { hoy:0, ayer:0, oport:0 };
 
-  $('#mResumenSub').textContent = `Universo: ${fmtN(U)} clientes activos · quedan ${dias} días hábiles en el mes · cargá el objetivo de cobertura (%) de cada marca y tocá "Guardar objetivos"`;
+  $('#mResumenSub').textContent = `Cobertura al ${fCorta(hoy)} vs ${fCorta(MARCAS.base)} · universo: ${fmtN(U)} clientes activos · quedan ${dias} días hábiles en el mes · cargá el objetivo de cobertura (%) de cada marca y tocá "Guardar objetivos"`;
 
   // ---------- Resumen por marca (con objetivo editable)
   const resumen = elegidas.map(m => {
@@ -570,14 +593,14 @@ function renderMarcas(){
     fmtN(r.x.oport)
   ]);
   $('#tmResumen').innerHTML = tabla('mResumen',
-    ['Marca','Cubiertos hasta ayer','Cubiertos hoy','Nuevos hoy','Cobertura','Objetivo %','Cumplimiento','Faltan (clientes)','Necesidad diaria','Oportunidades (1-2 u.)'],
+    ['Marca', LA, LH, LN, 'Cobertura','Objetivo %','Cumplimiento','Faltan (clientes)','Necesidad diaria','Oportunidades (1-2 u.)'],
     fR, { html: [3,5,6], txtCols: [0],
       estilo: (i, v, f, idx) => i === 4 ? colorHeat(resumen[idx].cob, resumen[idx].obj) : '',
       exportFilas: resumen.map(r => [r.m, r.x.ayer, r.x.hoy, r.x.hoy - r.x.ayer, +(r.cob*100).toFixed(1),
         OBJETIVOS[r.m] ?? '', r.obj ? +(pct(r.cob, r.obj)*100).toFixed(1) : '', r.faltan ?? '', r.nec ?? '', r.x.oport]) });
 
   // ---------- Matriz vendedor x marca
-  const fM = vendedores.map(v => [v, fmtN(universo[v]), ...elegidas.map(m => {
+  const fM = vendedores.map(v => [etiqVend(v), fmtN(universo[v]), ...elegidas.map(m => {
     const x = g(v, m); const n = x.hoy - x.ayer;
     return fmtPct(pct(x.hoy, universo[v])) + (n > 0 ? `<span class="nuevo">+${n}</span>` : '');
   })]);
@@ -612,7 +635,7 @@ function renderMarcas(){
     const objCli = objM != null ? Math.ceil(objM * u) : null;
     const faltan = objCli != null ? Math.max(0, objCli - x.hoy) : null;
     const nec = faltan != null ? (dias > 0 ? Math.ceil(faltan / dias) : faltan) : null;
-    return [v, u, objCli ?? '–', x.ayer, x.hoy, x.hoy - x.ayer, pct(x.hoy, u), faltan ?? '–', nec ?? '–', x.oport];
+    return [etiqVend(v), u, objCli ?? '–', x.ayer, x.hoy, x.hoy - x.ayer, pct(x.hoy, u), faltan ?? '–', nec ?? '–', x.oport];
   });
   const totD = ['TOTAL', U, objM != null ? Math.ceil(objM * U) : '–'];
   [3,4,5].forEach(i => totD[i] = det.reduce((s, f) => s + f[i], 0));
@@ -622,7 +645,7 @@ function renderMarcas(){
   totD[9] = det.reduce((s, f) => s + f[9], 0);
   const detTodo = det.length ? [...det, totD] : [];
   $('#tmDetalle').innerHTML = tabla('mDetalle',
-    ['Vendedor','Universo','Objetivo (clientes)','Acum. hasta ayer','Acum. hoy','Nuevos hoy','Cobertura','Faltan','Necesidad diaria','Oportunidades (1-2 u.)'],
+    ['Vendedor','Universo','Objetivo (clientes)', LA, LH, LN, 'Cobertura','Faltan','Necesidad diaria','Oportunidades (1-2 u.)'],
     detTodo.map(f => f.map((v, i) => i === 6 ? fmtPct(v) : i === 5 ? (v > 0 ? `<span class="pos">+${v}</span>` : v) : v)),
     { totalUltima: true, html: [5],
       estilo: (i, v, f, idx, tot) => (i === 6 && !tot) ? colorHeat(detTodo[idx][6], objM) : '',
@@ -638,7 +661,7 @@ function renderMarcas(){
   const porDia = {};
   delMes.forEach(f => { const k = f.vendedor_nombre + '|' + diaCol(f.dia); porDia[k] = (porDia[k] || 0) + f.hoy; });
   const fD = vendedores.map(v => {
-    const fila = [v]; let t = 0;
+    const fila = [etiqVend(v)]; let t = 0;
     diasMes.forEach(d => { const n = porDia[v + '|' + d] || 0; fila.push(n); t += n; });
     fila.push(t);
     return fila;
@@ -648,7 +671,7 @@ function renderMarcas(){
     for (let i = 1; i <= diasMes.length + 1; i++) tot.push(fD.reduce((s, f) => s + f[i], 0));
     fD.push(tot);
   }
-  const etiquetaDia = d => d === ANTES ? 'Cargado antes del 1/' + Number(mes.slice(5,7)) : d.slice(8,10) + '/' + d.slice(5,7) + (d === hoy ? ' (hoy)' : '');
+  const etiquetaDia = d => d === ANTES ? 'Cargado antes del 1/' + Number(mes.slice(5,7)) : d.slice(8,10) + '/' + d.slice(5,7) + (d === MARCAS.hoy ? ' (hoy)' : '');
   $('#tmDias').innerHTML = diasMes.length
     ? tabla('mDias', ['Vendedor', ...diasMes.map(etiquetaDia), 'Total'], fD, { totalUltima: true })
     : (TABLAS.mDias = { headers: [], filas: [] }, '<div class="vacio">Sin clientes cubiertos todavía para esta marca.</div>');

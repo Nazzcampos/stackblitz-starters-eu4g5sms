@@ -16,7 +16,8 @@
 //   - Se suman las unidades por cliente y marca: facturas suman, notas de crédito restan.
 //   - Cliente cubierto = 3 unidades o más de la marca en el mes (DROP_MINIMO).
 //     Con 1 o 2 unidades queda como "oportunidad".
-//   - "Hasta ayer" = comprobantes cargados antes de hoy; "hoy" = todo lo cargado hasta ahora.
+//   - Fecha de corte (por defecto, el último día con ventas cargadas): se compara lo cargado hasta
+//     el corte contra lo cargado hasta el día anterior con ventas (ej. lunes 16 vs viernes 14).
 //   - El vendedor es el vendedor actual del cliente (ruta vigente en Gescom).
 // ================================================================
 const path = require('path');
@@ -156,6 +157,12 @@ lineas AS (
     AND v.fecha_entrega >= $2::date AND v.fecha_entrega < $3::date
     AND (v.tipo_comprobante_codigo ILIKE 'FAC%' OR v.tipo_comprobante_codigo ILIKE 'NC%')
 ),
+fechas AS (
+  SELECT COALESCE($8::date, (SELECT MAX(dia) FROM lineas WHERE dia <= $4::date), $4::date) AS corte
+),
+fechas2 AS (
+  SELECT corte, (SELECT MAX(dia) FROM lineas WHERE dia < (SELECT corte FROM fechas)) AS base FROM fechas
+),
 por_marca AS (
   SELECT cliente_id, dia, COALESCE(NULLIF(trim(marca_desc), ''), 'Sin marca') AS marca, u FROM lineas
   UNION ALL
@@ -164,7 +171,10 @@ por_marca AS (
   JOIN unnest($5::text[], $6::text[]) AS s(nombre, patron) ON l.descripcion ILIKE s.patron
 ),
 diario AS (
-  SELECT cliente_id, marca, dia, SUM(u) AS u FROM por_marca GROUP BY 1, 2, 3
+  SELECT cliente_id, marca, dia, SUM(u) AS u
+  FROM por_marca
+  WHERE dia <= (SELECT corte FROM fechas2)
+  GROUP BY 1, 2, 3
 ),
 acum AS (
   SELECT cliente_id, marca, dia, u,
@@ -174,7 +184,7 @@ acum AS (
 cli AS (
   SELECT cliente_id, marca,
          SUM(u) AS u_total,
-         COALESCE(SUM(u) FILTER (WHERE dia < $4::date), 0) AS u_ayer,
+         COALESCE(SUM(u) FILTER (WHERE dia < (SELECT corte FROM fechas2)), 0) AS u_ayer,
          MIN(dia) FILTER (WHERE acu >= $7) AS dia_cruce
   FROM acum
   GROUP BY 1, 2
@@ -191,7 +201,24 @@ LEFT JOIN ruta r ON r.cliente_id = c.cliente_id
 GROUP BY 1, 2, 3, 4;
 `;
 
-const cacheMarcas = new Map(); // mes -> { t, data, pendiente }
+// Fecha de corte por defecto y anterior con ventas, aunque todavía no haya filas de marcas
+const SQL_FECHAS = `
+WITH dias AS (
+  SELECT DISTINCT COALESCE(v.fecha_carga, v.fecha_creacion, v.fecha_comprobante)::date AS dia
+  FROM venta v
+  WHERE v.tenant_id = $1
+    AND v.fecha_entrega >= $2::date AND v.fecha_entrega < $3::date
+    AND (v.tipo_comprobante_codigo ILIKE 'FAC%' OR v.tipo_comprobante_codigo ILIKE 'NC%')
+),
+f AS (SELECT COALESCE($5::date, (SELECT MAX(dia) FROM dias WHERE dia <= $4::date), $4::date) AS corte)
+SELECT to_char(f.corte, 'YYYY-MM-DD') AS corte,
+       to_char((SELECT MAX(dia) FROM dias WHERE dia < f.corte), 'YYYY-MM-DD') AS base,
+       to_char((SELECT MIN(dia) FROM dias), 'YYYY-MM-DD') AS primero,
+       to_char((SELECT MAX(dia) FROM dias), 'YYYY-MM-DD') AS ultimo
+FROM f;
+`;
+
+const cacheMarcas = new Map(); // mes|fecha -> { t, data, fechas, pendiente }
 
 function rangoMes(mes) {
     const [y, m] = mes.split('-').map(Number);
@@ -200,27 +227,31 @@ function rangoMes(mes) {
     return { desde, hasta: sig };
 }
 
-async function obtenerMarcas(mes, forzar) {
-    const c = cacheMarcas.get(mes) || {};
+async function obtenerMarcas(mes, fecha, forzar) {
+    const clave = mes + '|' + (fecha || '');
+    const c = cacheMarcas.get(clave) || {};
     if (!forzar && c.data && Date.now() - c.t < CACHE_MS) return c;
     if (c.pendiente) return c.pendiente;
     const { desde, hasta } = rangoMes(mes);
     const hoy = hoyAR();
     c.pendiente = (async () => {
         try {
-            const { rows } = await pool.query(SQL_MARCAS, [
-                TENANT, desde, hasta, hoy,
-                SUBMARCAS.map(s => s.nombre), SUBMARCAS.map(s => s.patron),
-                DROP_MINIMO
+            const [{ rows }, f] = await Promise.all([
+                pool.query(SQL_MARCAS, [
+                    TENANT, desde, hasta, hoy,
+                    SUBMARCAS.map(s => s.nombre), SUBMARCAS.map(s => s.patron),
+                    DROP_MINIMO, fecha || null
+                ]),
+                pool.query(SQL_FECHAS, [TENANT, desde, hasta, hoy, fecha || null])
             ]);
-            const nuevo = { t: Date.now(), data: rows, hoy };
-            cacheMarcas.set(mes, nuevo);
+            const nuevo = { t: Date.now(), data: rows, hoy, fechas: f.rows[0] || {} };
+            cacheMarcas.set(clave, nuevo);
             return nuevo;
         } finally {
             c.pendiente = null;
         }
     })();
-    cacheMarcas.set(mes, c);
+    cacheMarcas.set(clave, c);
     return c.pendiente;
 }
 
@@ -262,10 +293,12 @@ app.get('/api/seguimiento-clientes/datos', controlPin, async (req, res) => {
 
 app.get('/api/seguimiento-clientes/marcas', controlPin, async (req, res) => {
     const mes = mesValido(req.query.mes) ? req.query.mes : hoyAR().slice(0, 7);
+    const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.fecha || '')) ? req.query.fecha : null;
     try {
-        const r = await obtenerMarcas(mes, req.query.refresh === '1');
+        const r = await obtenerMarcas(mes, fecha, req.query.refresh === '1');
         res.json({
             mes, hoy: r.hoy, drop: DROP_MINIMO,
+            corte: r.fechas.corte, base: r.fechas.base, primero: r.fechas.primero, ultimo: r.fechas.ultimo,
             submarcas: SUBMARCAS.map(s => s.nombre),
             actualizado: new Date(r.t).toISOString(),
             filas: r.data
