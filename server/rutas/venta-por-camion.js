@@ -132,7 +132,7 @@ app.get('/api/admin/venta-camion', requireAdmin, requireDb, async (req, res) => 
         res.json(r);
     } catch (err) {
         console.error('❌ Venta por camión:', err.message);
-        res.status(500).json({ error: 'No se pudo leer la venta por camión' });
+        res.status(500).json({ error: 'No se pudo leer la venta por camión', detalle: String(err.message || '').slice(0, 300) });
     }
 });
 app.get('/api/admin/venta-camion/exportar', requireAdmin, requireDb, async (req, res) => {

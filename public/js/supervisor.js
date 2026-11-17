@@ -905,8 +905,21 @@
         try {
             const res = await adminFetch('/api/admin/venta-camion?' + venParams());
             d = await res.json().catch(() => ({}));
-            if (!res.ok) { rc.innerHTML = dc.innerHTML = `<tr><td colspan="7" class="empty-row">${escapeHtml(d.error || 'No se pudo cargar')}</td></tr>`; venMensaje(''); return; }
-        } catch (e) { if (e.message !== 'SESION') rc.innerHTML = dc.innerHTML = '<tr><td colspan="7" class="empty-row">No se pudo conectar con el servidor.</td></tr>'; return; }
+            if (!res.ok) {
+                const fila = `<tr><td colspan="7" class="empty-row">${escapeHtml(d.error || 'No se pudo cargar')}</td></tr>`;
+                rc.innerHTML = dc.innerHTML = fila;
+                document.querySelector('#tabla-venta-costos tbody').innerHTML = fila.replace('colspan="7"', 'colspan="9"');
+                document.getElementById('venCostoTiles').innerHTML = ''; document.getElementById('venCostoNota').textContent = '';
+                venMensaje(d.detalle ? 'Detalle del error: ' + d.detalle : '', 'error'); return;
+            }
+        } catch (e) {
+            if (e.message !== 'SESION') {
+                const fila = '<tr><td colspan="7" class="empty-row">No se pudo conectar con el servidor.</td></tr>';
+                rc.innerHTML = dc.innerHTML = fila;
+                document.querySelector('#tabla-venta-costos tbody').innerHTML = fila.replace('colspan="7"', 'colspan="9"');
+            }
+            return;
+        }
         pintarCostoLogistico(d);
         const pat = f => f.dominio ? escapeHtml(f.dominio) : '<span style="color:var(--muted)">sin asignar</span>';
         const totImp = d.resumen.reduce((a, t) => a + t.importe, 0), totKg = d.resumen.reduce((a, t) => a + t.kg, 0), totCli = d.resumen.reduce((a, t) => a + t.clientes, 0);
