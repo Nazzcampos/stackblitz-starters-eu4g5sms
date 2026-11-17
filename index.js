@@ -19,6 +19,7 @@ require('./server/rutas/ruta-sugerida.js');
 require('./server/rutas/comprobantes.js');
 require('./server/rutas/notificaciones.js');
 require('./server/rutas/planificacion.js');
+require('./server/rutas/clientes.js');
 
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en el puerto ${PORT}`);
