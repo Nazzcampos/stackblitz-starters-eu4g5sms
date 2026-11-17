@@ -34,18 +34,29 @@ async function costosFlota(desde, hasta) {
 }
 const redondear = (n, d = 2) => n === null || n === undefined || !isFinite(n) ? null : Math.round(n * 10 ** d) / 10 ** d;
 
+// Algunas bases de Gescom no traen la columna "cancelado" en reparto: si no está, no se filtra por ella.
+let _repartoCancelado = null;
+async function repartoTieneCancelado() {
+    if (_repartoCancelado !== null) return _repartoCancelado;
+    try {
+        const r = await pool.query(`/*COLREPARTO*/ SELECT 1 FROM information_schema.columns WHERE table_name = 'reparto' AND column_name = 'cancelado' LIMIT 1`);
+        _repartoCancelado = r.rows.length > 0;
+    } catch (e) { return true; }
+    return _repartoCancelado;
+}
 async function consultarVentaCamion(q) {
     const rango = rangoFechas(q);
     if (!rango) return { error: 'Indicá desde y hasta (AAAA-MM-DD).' };
     if ((Date.parse(rango.hasta) - Date.parse(rango.desde)) > 92 * 86400000) return { error: 'El período máximo es de 3 meses.' };
     const filtro = await filtroAnuladas();
     const excluidos = new Set((process.env.CLIENTES_EXCLUIDOS_REPARTO || '').split(',').map(x => x.trim()).filter(Boolean));
+    const validos = (await repartoTieneCancelado()) ? ` AND ${SQL_REPARTOS_VALIDOS}` : '';
     const desde = `FROM reparto r JOIN venta v ON v.reparto_codigo::text = r.reparto_codigo::text
-                   WHERE r.fecha_entrega BETWEEN $1::date AND $2::date AND ${SQL_REPARTOS_VALIDOS}${filtro}`;
+                   WHERE r.fecha_entrega BETWEEN $1::date AND $2::date${validos}${filtro}`;
     const cab = await pool.query(`/*VENTACAMION*/ SELECT v.id::text AS id, v.cliente_id::text AS cliente_id, v.razon_social AS nombre,
             v.importe_total AS total, v.tipo_comprobante_codigo AS tipo, r.reparto_codigo::text AS reparto,
             to_char(r.fecha_entrega, 'YYYY-MM-DD') AS fecha, r.vehiculo_codigo::text AS codigo, r.vehiculo_nombre AS camion,
-            r.empleado_chofer_nombre AS chofer ${desde}`, [rango.desde, rango.hasta]);
+            v.empleado_chofer_nombre AS chofer ${desde}`, [rango.desde, rango.hasta]);
     const items = await pool.query(`/*VENTACAMION2*/ SELECT vi.venta_id::text AS id,
             COALESCE(SUM(COALESCE(NULLIF(vi.unidades, 0), vi.cantidad * COALESCE(NULLIF(vi.unidad_factor, 0), 1)) * COALESCE(it.peso, 0)), 0) AS gramos,
             COALESCE(SUM(vi.importe_total_c_imp), 0) AS importe
