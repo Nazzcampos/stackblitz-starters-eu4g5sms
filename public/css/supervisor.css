@@ -535,3 +535,6 @@ td .acciones { display: flex; gap: 6px; flex-wrap: nowrap; }
 .tabla-herramientas .buscador { flex: 1 1 200px; max-width: 300px; }
 td b { white-space: nowrap; }
 #tabla-orden td { white-space: nowrap; }
+.cl-tiles { grid-template-columns: repeat(4, 1fr); margin-bottom: 8px; }
+@media (max-width: 900px) { .cl-tiles { grid-template-columns: repeat(2, 1fr); } }
+#tabla-venta-costos td, #tabla-venta-resumen td { white-space: nowrap; }

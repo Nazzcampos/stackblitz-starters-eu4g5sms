@@ -554,6 +554,7 @@
             <div class="busqueda" style="flex-wrap:wrap;">
                 <input type="date" class="campo" id="venDesde" style="max-width:170px;" title="Desde">
                 <input type="date" class="campo" id="venHasta" style="max-width:170px;" title="Hasta">
+                <label class="buscador" style="max-width:290px;" title="Sueldo, seguro, mantenimiento, etc. por cada día de camión en ruta. Se suma al combustible. Vacío = solo combustible."><span style="white-space:nowrap;font-size:.78rem;font-weight:700;">Otros costos por día $</span><input type="number" id="venOtros" min="0" step="1000" placeholder="0"></label>
                 <button type="button" onclick="cargarVentaCamion()">Buscar</button>
                 <button type="button" class="btn-suave" onclick="descargarVentaCamion(this)">📥 Excel</button>
                 <button type="button" class="btn-suave" onclick="alternarMapeoCamiones()">🚚 Asignar patentes</button>
@@ -566,7 +567,17 @@
                 </div>
                 <datalist id="venDominios"></datalist>
             </div>
-            <h3 class="section-sub" style="margin:14px 0 6px; font-weight:800; color:var(--text);">Resumen por camión</h3>
+            <h3 class="section-sub" style="margin:14px 0 6px; font-weight:800; color:var(--text);">Costo logístico</h3>
+            <p class="section-sub" style="margin:0 0 10px;">Combustible cargado en el período (más los "otros costos por día" si los indicás) contra lo que vendió cada camión. Los km salen del GPS.</p>
+            <div class="imp-stats cl-tiles" id="venCostoTiles"></div>
+            <div class="export-estado" id="venCostoNota"></div>
+            <div class="table-wrap">
+                <table id="tabla-venta-costos">
+                    <thead><tr><th>Camión</th><th>Patente</th><th class="num">Venta</th><th class="num">Km</th><th class="num">Combustible</th><th class="num">Costo por cliente</th><th class="num">Costo por km</th><th class="num">% de la venta</th><th class="num">Por 100 kg</th></tr></thead>
+                    <tbody><tr><td colspan="9" class="empty-row">Cargando…</td></tr></tbody>
+                </table>
+            </div>
+            <h3 class="section-sub" style="margin:18px 0 6px; font-weight:800; color:var(--text);">Resumen por camión</h3>
             <div class="table-wrap">
                 <table id="tabla-venta-resumen">
                     <thead><tr><th>Camión</th><th>Patente</th><th class="num">Días</th><th class="num">Clientes</th><th class="num">Importe</th><th class="num">Promedio por día</th><th class="num">Kg aprox.</th></tr></thead>

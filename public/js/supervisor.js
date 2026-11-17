@@ -859,9 +859,37 @@
     }
 
     // ---------- Venta por camión ----------
-    function venParams() { return new URLSearchParams({ desde: document.getElementById('venDesde').value, hasta: document.getElementById('venHasta').value }).toString(); }
+    function venParams() {
+        const otros = document.getElementById('venOtros').value;
+        try { localStorage.setItem('flota_ven_otros', otros); } catch (e) {}
+        const p = { desde: document.getElementById('venDesde').value, hasta: document.getElementById('venHasta').value };
+        if (otros) p.otros = otros;
+        return new URLSearchParams(p).toString();
+    }
+    function pintarCostoLogistico(d) {
+        const T = d.totales || {}, cuerpo = document.querySelector('#tabla-venta-costos tbody');
+        const p = v => v === null || v === undefined ? '<span style="color:var(--muted)">—</span>' : formatoPesos(v);
+        const pct = v => v === null || v === undefined ? '<span style="color:var(--muted)">—</span>' : formatoNumero(v, 1) + ' %';
+        const tile = (l, v, s, cls) => `<div class="imp-stat ${cls || ''}"><span class="l">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
+        const dash = '—';
+        document.getElementById('venCostoTiles').innerHTML =
+            tile('Costo logístico por cliente', T.costoCliente === null ? dash : formatoPesos(T.costoCliente), `${formatoNumero(T.clientes || 0)} clientes visitados`)
+            + tile('Costo por km', T.costoKm === null ? dash : formatoPesos(T.costoKm), `${formatoNumero(T.km || 0, 1)} km recorridos`)
+            + tile('% sobre la venta', T.pctVenta === null ? dash : formatoNumero(T.pctVenta, 1) + ' %', `${formatoPesos(T.costoLogistico || 0)} sobre ${formatoPesos(T.importe || 0)}`)
+            + tile('Venta por km', T.ventaKm === null ? dash : formatoPesos(T.ventaKm), `${formatoNumero(T.camionesConCosto || 0)} camiones con datos`);
+        const notas = [];
+        if (T.sinPatente) notas.push(`${T.sinPatente} camión(es) sin patente asignada (usá "Asignar patentes")`);
+        if (T.sinDatos) notas.push(`${T.sinDatos} sin combustible ni km en el período`);
+        if (d.resumen.some(t => t.combustibleEstimado)) notas.push('* hay cargas sin costo: se estimaron con el precio promedio del período');
+        notas.push(T.otrosPorDia ? `Se suman ${formatoPesos(T.otrosPorDia)} por día de camión en ruta` : 'Solo combustible (podés sumar otros costos por día arriba)');
+        const n = document.getElementById('venCostoNota'); n.textContent = notas.join(' · '); n.className = 'export-estado';
+        cuerpo.innerHTML = d.resumen.length ? d.resumen.map(t =>
+            `<tr><td><b>${escapeHtml(t.camion)}</b></td><td>${t.dominio ? escapeHtml(t.dominio) : '<span style="color:var(--muted)">sin asignar</span>'}</td><td class="num">${formatoPesos(t.importe)}</td><td class="num">${t.km ? formatoNumero(t.km, 1) : '<span style="color:var(--muted)">—</span>'}</td><td class="num">${p(t.combustible)}${t.combustibleEstimado ? ' <span title="Incluye cargas sin costo estimadas">*</span>' : ''}</td><td class="num">${p(t.costoCliente)}</td><td class="num">${p(t.costoKm)}</td><td class="num">${pct(t.pctVenta)}</td><td class="num">${p(t.costoKg)}</td></tr>`).join('')
+            : '<tr><td colspan="9" class="empty-row">No hay repartos en esas fechas.</td></tr>';
+    }
     function venMensaje(t, clase) { const e = document.getElementById('venEstado'); e.textContent = t || ''; e.className = 'export-estado' + (clase ? ' ' + clase : ''); }
     function iniciarVentaCamion() {
+        try { const o = localStorage.getItem('flota_ven_otros'); if (o && !document.getElementById('venOtros').value) document.getElementById('venOtros').value = o; } catch (e) {}
         if (!document.getElementById('venDesde').value) {
             const h = hoyArAdm();
             document.getElementById('venHasta').value = h;
@@ -872,12 +900,14 @@
     async function cargarVentaCamion() {
         const rc = document.querySelector('#tabla-venta-resumen tbody'), dc = document.querySelector('#tabla-venta-dia tbody');
         rc.innerHTML = dc.innerHTML = '<tr><td colspan="7" class="empty-row">Cargando…</td></tr>';
+        document.querySelector('#tabla-venta-costos tbody').innerHTML = '<tr><td colspan="9" class="empty-row">Cargando…</td></tr>';
         let d;
         try {
             const res = await adminFetch('/api/admin/venta-camion?' + venParams());
             d = await res.json().catch(() => ({}));
             if (!res.ok) { rc.innerHTML = dc.innerHTML = `<tr><td colspan="7" class="empty-row">${escapeHtml(d.error || 'No se pudo cargar')}</td></tr>`; venMensaje(''); return; }
         } catch (e) { if (e.message !== 'SESION') rc.innerHTML = dc.innerHTML = '<tr><td colspan="7" class="empty-row">No se pudo conectar con el servidor.</td></tr>'; return; }
+        pintarCostoLogistico(d);
         const pat = f => f.dominio ? escapeHtml(f.dominio) : '<span style="color:var(--muted)">sin asignar</span>';
         const totImp = d.resumen.reduce((a, t) => a + t.importe, 0), totKg = d.resumen.reduce((a, t) => a + t.kg, 0), totCli = d.resumen.reduce((a, t) => a + t.clientes, 0);
         venMensaje(`${d.filas.length} reparto${d.filas.length === 1 ? '' : 's'} · ${formatoPesos(totImp)}`);

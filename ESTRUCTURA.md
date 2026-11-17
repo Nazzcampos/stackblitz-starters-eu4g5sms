@@ -23,7 +23,7 @@ server/
     documentacion.js       Documentación de camiones y choferes
     deposito.js            Retorno del camión y usuarios del depósito
     jornadas.js            Jornadas y kilómetros
-    venta-por-camion.js    Venta por camión + Excel
+    venta-por-camion.js    Venta por camión + costo logístico (combustible, km GPS) + Excel
     ruta-sugerida.js       Ruta sugerida, resumen del reparto, diagnóstico
     comprobantes.js        Comprobantes en PDF
 ```
@@ -34,4 +34,4 @@ Dónde tocar según lo que quieras cambiar:
 - Cómo se comporta una pantalla → `public/js/<pantalla>.js`.
 - Una tabla nueva → `server/base.js` (MIGRACION).
 
-Novedades: campanita de notificaciones (server/avisos.js + rutas/notificaciones.js + public/js/campana.js), aviso de retornos compacto, cajas obligatorias, resumen mensual de combustible, cabecera con saludo.
+Novedades: campanita de notificaciones (server/avisos.js + rutas/notificaciones.js + public/js/campana.js), aviso de retornos compacto, cajas obligatorias, resumen mensual de combustible, cabecera con saludo, rediseño del panel admin, costo logístico por cliente/km/% de la venta en Venta por camión.
