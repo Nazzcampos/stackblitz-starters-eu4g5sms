@@ -133,11 +133,20 @@
             </div>
         </div>
         <div class="topbar-right">
+            <div class="zona-estado" title="Estado de la conexión">
+                <span class="live-pill"><span class="live-dot"></span><span class="txt" id="lblActualizado">En vivo · cada 10 s</span></span>
+                <span class="zona-sep"></span>
+                <span class="live-pill pill-db" id="pillDb" title="Estado de la base de datos (Supabase)"><span class="live-dot"></span><span class="txt" id="lblDb">Base de datos…</span></span>
+            </div>
             <div id="campana"></div>
-            <span class="live-pill"><span class="live-dot"></span><span class="txt" id="lblActualizado">En vivo · cada 10 s</span></span>
-            <span class="live-pill pill-db" id="pillDb" title="Estado de la base de datos (Supabase)"><span class="live-dot"></span><span class="txt" id="lblDb">Base de datos…</span></span>
-            <button type="button" onclick="cargarDatos()">Actualizar</button>
-            <button type="button" class="btn-suave" onclick="cerrarSesionAdmin()">Salir</button>
+            <button type="button" class="btn-actualizar" onclick="cargarDatos()">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+                <span>Actualizar</span>
+            </button>
+            <span class="zona-sep alto"></span>
+            <button type="button" class="btn-icono" onclick="cerrarSesionAdmin()" title="Cerrar sesión" aria-label="Cerrar sesión">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+            </button>
         </div>
     </div>
 </header>
@@ -147,10 +156,10 @@
     <!-- PESTAÑA 1: CONTROL DE FLOTA Y GPS -->
     <div id="seccion-gps" class="vista-seccion active">
         <div class="kpis">
-            <div class="kpi"><div class="kpi-icon">🚚</div><div><div class="kpi-value" id="kpiVehiculos">0</div><div class="kpi-label">Vehículos en ruta</div></div></div>
-            <div class="kpi"><div class="kpi-icon">🛣️</div><div><div class="kpi-value" id="kpiKm">0</div><div class="kpi-label">Km recorridos</div></div></div>
-            <div class="kpi" id="kpiFallasBox"><div class="kpi-icon">📋</div><div><div class="kpi-value" id="kpiChecklists">0</div><div class="kpi-label" id="kpiChecklistsLbl">Check-lists</div></div></div>
-            <div class="kpi"><div class="kpi-icon">⛽</div><div><div class="kpi-value" id="kpiLitros">0</div><div class="kpi-label">Litros cargados</div></div></div>
+            <div class="kpi kpi-azul"><div class="kpi-icon">🚚</div><div class="kpi-cuerpo"><div class="kpi-value" id="kpiVehiculos">0</div><div class="kpi-label">Vehículos en ruta</div><div class="kpi-ctx" id="kpiVehCtx">Sin datos todavía</div></div></div>
+            <div class="kpi kpi-cian"><div class="kpi-icon">🛣️</div><div class="kpi-cuerpo"><div class="kpi-value" id="kpiKm">0</div><div class="kpi-label">Km recorridos</div><div class="kpi-ctx" id="kpiKmCtx">Sin recorridos</div></div></div>
+            <div class="kpi kpi-verde" id="kpiFallasBox"><div class="kpi-icon">📋</div><div class="kpi-cuerpo"><div class="kpi-value" id="kpiChecklists">0</div><div class="kpi-label" id="kpiChecklistsLbl">Check-lists</div><div class="kpi-ctx" id="kpiChkCtx">Sin check-lists</div></div></div>
+            <div class="kpi kpi-ambar"><div class="kpi-icon">⛽</div><div class="kpi-cuerpo"><div class="kpi-value" id="kpiLitros">0</div><div class="kpi-label">Litros cargados</div><div class="kpi-ctx" id="kpiLitCtx">Sin cargas</div></div></div>
         </div>
 
         <div class="grid-container">
@@ -360,13 +369,17 @@
                 </div>
                 <div>
                     <h2 class="section-title">Orden de reparto del camionero</h2>
-                    <p class="section-sub">Gescom no comparte el campo "Orden de reparto" (pestaña Entrega del cliente). Exportá la lista de clientes desde Gescom (Abm - Cliente) con esa columna y subila acá: la app la guarda y ordena la hoja de ruta de los choferes con ese orden. Los clientes sin dato quedan al final.</p>
+                    <p class="section-sub">Gescom no comparte el campo "Orden de reparto" (pestaña Entrega del cliente). Exportá la lista de clientes desde Gescom (Abm - Cliente) con esa columna y subila acá.</p>
                 </div>
             </div>
-            <div class="export-estado" id="ordImpEstado"></div>
-            <div class="busqueda" style="flex-wrap:wrap;">
-                <input type="file" class="campo" id="ordImpArchivo" accept=".xlsx,.xls,.csv" style="max-width:340px;" onchange="ordImpLeer(this)">
-            </div>
+            <div class="imp-grid">
+                <div class="imp-zona">
+                    <div class="imp-subir">
+                        <div class="imp-nube"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg></div>
+                        <div class="imp-texto"><b>Subí la planilla exportada de Gescom</b><span>Excel (.xlsx, .xls) o CSV con el código del cliente y el orden de reparto.</span></div>
+                        <input type="file" class="campo" id="ordImpArchivo" accept=".xlsx,.xls,.csv" onchange="ordImpLeer(this)">
+                    </div>
+                    <div class="export-estado" id="ordImpEstado"></div>
             <div id="ordImpPaso2" style="display:none;margin-top:10px;">
                 <div class="busqueda" style="flex-wrap:wrap;">
                     <label class="section-sub" style="margin:0;">Columna del código de cliente</label>
@@ -377,6 +390,14 @@
                 </div>
                 <div class="section-sub" id="ordImpVista" style="margin-top:8px;"></div>
             </div>
+                </div>
+                <div class="imp-stats">
+                    <div class="imp-stat"><span class="l">Clientes con orden</span><span class="v" id="impClientes">–</span><span class="s" id="impClientesSub">cargados en la app</span></div>
+                    <div class="imp-stat"><span class="l">Última importación</span><span class="v" id="impUltima">–</span><span class="s" id="impUltimaSub"></span></div>
+                    <div class="imp-stat"><span class="l">Propuestas para revisar</span><span class="v" id="impRevisar">–</span><span class="s">enviadas por los choferes</span></div>
+                    <div class="imp-stat"><span class="l">Aprobadas · falta Gescom</span><span class="v" id="impFalta">–</span><span class="s">bajá el Excel y cargalo en Gescom</span></div>
+                </div>
+            </div>
         </div>
         <div class="card">
             <div class="section-head">
@@ -384,11 +405,20 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                 </div>
                 <div>
-                    <h2 class="section-title">Orden de reparto</h2>
-                    <p class="section-sub">Propuestas de los choferes sobre el orden de reparto. Al aprobarlas, la hoja de ruta ya usa el nuevo orden; después bajá el Excel, cargalo en Gescom (pestaña Entrega, "Orden de reparto") y marcá la propuesta como cargada. La app no modifica Gescom.</p>
+                    <h2 class="section-title">Propuestas de orden de reparto</h2>
+                    <p class="section-sub">Propuestas de los choferes sobre el orden de reparto. Al aprobarlas, la hoja de ruta ya usa el nuevo orden; después bajá el Excel, cargalo en Gescom (pestaña Entrega del cliente) y marcala como cargada.</p>
                 </div>
             </div>
-            <div class="busqueda">
+            <div class="tabla-herramientas">
+                <label class="buscador"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="search" id="ordBuscar" placeholder="Buscar por chofer o zona…" oninput="ordFiltrar()"></label>
+                <select class="campo" id="ordFZona" onchange="ordFiltrar()"><option value="">Todas las zonas</option></select>
+                <select class="campo" id="ordFDia" onchange="ordFiltrar()">
+                    <option value="">Todos los días</option><option value="__todos">Sin día (todos)</option>
+                    <option value="lunes">Lunes</option><option value="martes">Martes</option><option value="miercoles">Miércoles</option><option value="jueves">Jueves</option><option value="viernes">Viernes</option><option value="sabado">Sábado</option>
+                </select>
+                <select class="campo" id="ordFEstado" onchange="ordFiltrar()">
+                    <option value="">Todos los estados</option><option value="enviada">Para revisar</option><option value="aprobada">Aprobada · falta cargar</option><option value="aplicada">Cargada en Gescom</option><option value="rechazada">Rechazada</option>
+                </select>
                 <button type="button" class="btn-suave" onclick="cargarOrden()">Actualizar</button>
                 <button type="button" id="btnExpOrdenAprobadas" onclick="descargarOrden('', this)">📥 Excel de todas las aprobadas</button>
             </div>
@@ -409,6 +439,7 @@
                     <tbody><tr><td colspan="7" class="empty-row">Cargando…</td></tr></tbody>
                 </table>
             </div>
+            <div class="paginacion"><span id="ordTotal"></span><div class="pag-botones" id="ordPag"></div></div>
         </div>
     </div>
     <!-- PESTAÑA 6: DOCUMENTACIÓN -->
@@ -559,6 +590,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
         Menú
     </button>
+    <div class="nav-grupo">Operación</div>
     <button type="button" class="nav-btn active" onclick="cambiarVistaAdmin('gps', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4z"/><path d="M8 2v16"/><path d="M16 6v16"/></svg>
         Flota
@@ -571,6 +603,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18"/><path d="M3 22h12"/><path d="M15 12h2a2 2 0 0 1 2 2v3a2 2 0 0 0 4 0V9l-3-3"/><path d="M6 8h6"/></svg>
         Combustible
     </button>
+    <div class="nav-grupo">Gestión</div>
     <button type="button" class="nav-btn" onclick="cambiarVistaAdmin('choferes', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Choferes
@@ -591,10 +624,12 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
         Jornadas
     </button>
+    <div class="nav-grupo">Análisis</div>
     <button type="button" class="nav-btn" id="btnVentaDock" onclick="cambiarVistaAdmin('venta', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         Venta
     </button>
+    <div class="nav-pie"><b>BENI<i>Q</i></b><span>Logistics &amp; Operations</span></div>
 </nav>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

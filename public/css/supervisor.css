@@ -405,3 +405,133 @@
         .pend-fila { display: flex; justify-content: space-between; gap: 10px; padding: 6px 4px; font-size: .85rem; border-bottom: 1px solid rgba(148,163,184,.1); }
         .pend-fila small { color: var(--muted); }
         #campana { margin-right: 2px; }
+
+/* =====================================================================
+   REDISEÑO PANEL ADMINISTRACIÓN
+   Cabecera 68 px · menú lateral 240 px · tarjetas 16 px · base 8 px
+   ===================================================================== */
+:root { --r-card: 16px; --azul: #3b82f6; --cian: #22d3ee; --verde: #34d399; --ambar: #fbbf24; --rojo: #fb7185; }
+body { font-family: 'Inter', 'Manrope', 'Segoe UI', system-ui, sans-serif; }
+
+/* ---------- A. Cabecera ---------- */
+.topbar { padding: calc(8px + env(safe-area-inset-top)) 16px 8px; }
+.topbar-inner { min-height: 68px; border-radius: 18px; padding: 8px 16px; gap: 16px; flex-wrap: nowrap; background: rgba(15, 26, 51, .88); }
+.brand-title { font-size: 1.1rem; }
+.topbar-right { gap: 16px; flex-wrap: nowrap; margin-left: auto; }
+.zona-estado { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-radius: 12px; background: rgba(255,255,255,.035); border: 1px solid var(--border); }
+.zona-estado .live-pill { padding: 0; background: none; border: none; gap: 8px; font-size: .74rem; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.zona-estado .live-dot { width: 8px; height: 8px; }
+.zona-estado .pill-db.ok { color: var(--muted); background: none; border: none; }
+.zona-estado .pill-db.mal { color: var(--rojo); background: none; border: none; font-weight: 700; }
+.zona-sep { width: 1px; height: 18px; background: var(--border-strong); flex: none; }
+.zona-sep.alto { height: 28px; }
+.btn-actualizar { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 18px; border-radius: 12px; font-size: .88rem; font-weight: 700; color: #fff; border: none; background: linear-gradient(135deg, #2563eb, #3b82f6); box-shadow: 0 6px 18px rgba(37, 99, 235, .4); cursor: pointer; white-space: nowrap; }
+.btn-actualizar:hover { filter: brightness(1.1); transform: none; }
+.btn-actualizar:active svg { transform: rotate(180deg); transition: transform .4s; }
+.btn-icono { display: inline-grid; place-items: center; width: 40px; height: 40px; padding: 0; border-radius: 12px; color: var(--muted); background: rgba(255,255,255,.05); border: 1px solid var(--border); box-shadow: none; cursor: pointer; }
+.btn-icono:hover { color: #fff; background: rgba(251,113,133,.16); border-color: rgba(251,113,133,.45); filter: none; transform: none; }
+#campana { margin: 0; }
+
+/* ---------- B. Menú lateral ---------- */
+.nav-grupo, .nav-pie { display: none; }
+@media (min-width: 900px) {
+    body { --side-w: 272px; }
+    body.menu-min { --side-w: 92px; }
+    .nav-island { top: 92px; padding: 12px; gap: 2px; border-radius: 18px; }
+    .nav-grupo { display: block; margin: 14px 8px 6px; font-size: .66rem; font-weight: 800; letter-spacing: 1.4px; text-transform: uppercase; color: #6b7aa6; white-space: nowrap; }
+    .nav-toggle + .nav-grupo { margin-top: 6px; }
+    .nav-btn { padding: 11px 14px; border-radius: 12px; font-weight: 600; color: #aab4d6; }
+    .nav-btn svg { stroke-width: 1.8; }
+    .nav-btn:hover { background: rgba(255,255,255,.05); color: #fff; }
+    .nav-btn.active { background: rgba(59, 130, 246, .16); box-shadow: none; color: #fff; }
+    .nav-btn.active svg { color: #60a5fa; }
+    .nav-btn.active::before { top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: #60a5fa; }
+    .nav-pie { display: flex; flex-direction: column; margin-top: auto; padding: 14px 8px 4px; border-top: 1px solid var(--border); font-size: .66rem; color: #6b7aa6; letter-spacing: 1.1px; text-transform: uppercase; white-space: nowrap; }
+    .nav-pie b { font-size: .95rem; letter-spacing: .4px; color: var(--text); text-transform: none; }
+    .nav-pie b i { color: #60a5fa; font-style: normal; }
+    body.menu-min .nav-grupo { height: 1px; margin: 10px 14px; padding: 0; font-size: 0; background: var(--border); }
+    body.menu-min .nav-pie { display: none; }
+}
+
+/* ---------- C. Indicadores ---------- */
+.kpis { gap: 16px; }
+.kpi { position: relative; overflow: hidden; border-radius: var(--r-card); padding: 18px 20px; align-items: flex-start; gap: 16px; transition: transform .2s, border-color .2s; }
+.kpi::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--acc, var(--azul)); opacity: .9; }
+.kpi:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+.kpi-azul { --acc: var(--azul); } .kpi-cian { --acc: var(--cian); } .kpi-verde { --acc: var(--verde); } .kpi-ambar { --acc: var(--ambar); }
+.kpi-icon { background: color-mix(in srgb, var(--acc) 16%, transparent); }
+.kpi-cuerpo { min-width: 0; }
+.kpi-value { font-size: 1.75rem; }
+.kpi-ctx { margin-top: 8px; font-size: .76rem; color: var(--muted); line-height: 1.3; }
+.kpi.alerta { --acc: var(--rojo); border-color: rgba(251,113,133,.5); }
+.kpi.alerta .kpi-icon { background: rgba(251,113,133,.16); }
+.kpi.alerta .kpi-ctx { color: #ffb4c0; }
+.kpi.sin-senal { --acc: var(--ambar); }
+.kpi.sin-senal .kpi-ctx { color: var(--ambar); }
+
+/* ---------- D. Tablas ---------- */
+.table-wrap { border-radius: var(--r-card); }
+th { padding: 14px 16px; font-size: .68rem; color: #8ea2d6; background: rgba(37, 99, 235, .14); border-bottom: 1px solid var(--border-strong); }
+td { padding: 8px 16px; height: 54px; font-size: .88rem; }
+tbody tr:hover { background: rgba(59, 130, 246, .07); }
+.badge { padding: 3px 10px; font-size: .72rem; font-weight: 700; border-radius: 999px; letter-spacing: .1px; white-space: nowrap; }
+.badge-ok { background: rgba(52,211,153,.08); border-color: rgba(52,211,153,.25); }
+.badge-warn { background: rgba(251,191,36,.08); border-color: rgba(251,191,36,.28); }
+.badge-info { background: rgba(34,211,238,.08); border-color: rgba(34,211,238,.25); }
+.badge-falla { background: rgba(251,113,133,.1); border-color: rgba(251,113,133,.35); color: #ffc2cc; }
+td .acciones { display: flex; gap: 6px; flex-wrap: nowrap; }
+.btn-mini, td button { padding: 6px 12px; font-size: .78rem; border-radius: 10px; white-space: nowrap; }
+.tabla-herramientas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.tabla-herramientas .campo { width: auto; min-width: 150px; height: 40px; padding: 0 12px; }
+.tabla-herramientas > button { height: 40px; }
+.tabla-herramientas #btnExpOrdenAprobadas { margin-left: auto; }
+.buscador { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; max-width: 340px; height: 40px; padding: 0 12px; border-radius: 12px; background: rgba(255,255,255,.05); border: 1px solid var(--border-strong); color: var(--muted); }
+.buscador:focus-within { border-color: var(--azul); box-shadow: 0 0 0 3px rgba(59,130,246,.2); }
+.buscador input { flex: 1; min-width: 0; height: 100%; padding: 0; border: none; background: none; outline: none; box-shadow: none; color: var(--text); font-size: .88rem; }
+.paginacion { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 12px; font-size: .8rem; color: var(--muted); min-height: 32px; }
+.pag-botones { display: flex; gap: 4px; }
+.pag-btn { min-width: 34px; height: 34px; padding: 0 8px; border-radius: 10px; font-size: .82rem; font-weight: 700; color: var(--muted); background: rgba(255,255,255,.05); border: 1px solid var(--border); box-shadow: none; cursor: pointer; }
+.pag-btn:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,.1); filter: none; transform: none; }
+.pag-btn.act { color: #fff; background: #2563eb; border-color: #3b82f6; }
+.pag-btn:disabled { opacity: .35; cursor: default; }
+
+/* ---------- E. Orden: importación ---------- */
+#cardImportOrden .imp-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.imp-subir { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 18px; border-radius: var(--r-card); border: 1.5px dashed rgba(96,165,250,.45); background: rgba(59,130,246,.06); }
+.imp-nube { flex: none; display: grid; place-items: center; width: 56px; height: 56px; border-radius: 16px; color: #60a5fa; background: rgba(59,130,246,.15); }
+.imp-texto { flex: 1 1 200px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.imp-texto b { font-size: .95rem; }
+.imp-texto span { font-size: .8rem; color: var(--muted); }
+.imp-subir input[type=file] { flex: 1 1 100%; }
+.imp-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.imp-stat { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); min-width: 0; }
+.imp-stat .l { font-size: .68rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+.imp-stat .v { font-size: 1.45rem; font-weight: 800; line-height: 1.15; }
+.imp-stat .s { font-size: .74rem; color: var(--muted); line-height: 1.3; }
+.imp-stat.aviso { border-color: rgba(251,191,36,.45); background: rgba(251,191,36,.07); }
+.imp-stat.aviso .s { color: var(--ambar); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1100px) { #cardImportOrden .imp-grid { grid-template-columns: 1fr; } }
+@media (max-width: 899px) {
+    .topbar-inner { padding: 8px 12px; }
+    .zona-estado { display: none; }
+    .topbar-right { gap: 8px; }
+}
+@media (max-width: 640px) {
+    .topbar-inner { gap: 8px; }
+    .btn-actualizar span { display: none; }
+    .btn-actualizar { width: 40px; padding: 0; justify-content: center; }
+    .zona-sep.alto { display: none; }
+    .brand-title { font-size: .98rem; }
+    .kpi { padding: 14px; gap: 10px; } .kpi-icon { width: 38px; height: 38px; }
+    .kpi-value { font-size: 1.4rem; }
+    .tabla-herramientas .campo, .buscador { flex: 1 1 100%; max-width: none; }
+    .tabla-herramientas #btnExpOrdenAprobadas { margin-left: 0; flex: 1 1 100%; }
+    .imp-stats { grid-template-columns: 1fr 1fr; }
+}
+.tabla-herramientas .campo { font-size: .84rem; min-width: 0; flex: 0 1 auto; padding: 0 28px 0 12px; }
+.tabla-herramientas > button { white-space: nowrap; font-size: .84rem; padding: 0 14px; }
+.tabla-herramientas .buscador { flex: 1 1 200px; max-width: 300px; }
+td b { white-space: nowrap; }
+#tabla-orden td { white-space: nowrap; }

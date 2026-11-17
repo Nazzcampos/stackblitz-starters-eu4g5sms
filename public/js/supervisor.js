@@ -346,6 +346,9 @@
         e.innerText = texto || '';
     }
 
+    let ordPagina = 1;
+    const ORD_POR_PAGINA = 10;
+    function ordFiltrar() { ordPagina = 1; pintarOrden(); }
     async function cargarOrden() {
         const cuerpo = document.querySelector('#tabla-orden tbody');
         try {
@@ -360,12 +363,46 @@
         const pendientes = listaOrden.filter(p => p.estado === 'enviada').length;
         const btn = document.getElementById('btnOrdenDock');
         if (btn) btn.classList.toggle('con-aviso', pendientes > 0);
+        // zonas disponibles para el filtro
+        const selZ = document.getElementById('ordFZona');
+        if (selZ) {
+            const actual = selZ.value;
+            const zonas = [...new Set(listaOrden.map(p => p.ruta).filter(Boolean))].sort();
+            selZ.innerHTML = '<option value="">Todas las zonas</option>' + zonas.map(z => `<option value="${escapeHtml(z)}">${escapeHtml(z)}</option>`).join('');
+            if (zonas.includes(actual)) selZ.value = actual;
+        }
+        const poner = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+        poner('impRevisar', pendientes);
+        poner('impFalta', listaOrden.filter(p => p.estado === 'aprobada').length);
+        pintarOrden();
+    }
+    function pintarOrden() {
+        const cuerpo = document.querySelector('#tabla-orden tbody');
+        const q = ordImpNorm(document.getElementById('ordBuscar').value);
+        const fz = document.getElementById('ordFZona').value;
+        const fd = document.getElementById('ordFDia').value;
+        const fe = document.getElementById('ordFEstado').value;
+        const lista = listaOrden.filter(p =>
+            (!q || ordImpNorm(p.chofer + ' ' + p.ruta).includes(q)) &&
+            (!fz || p.ruta === fz) &&
+            (!fd || (fd === '__todos' ? !p.dia : p.dia === fd)) &&
+            (!fe || p.estado === fe));
+        const total = lista.length;
+        const paginas = Math.max(1, Math.ceil(total / ORD_POR_PAGINA));
+        if (ordPagina > paginas) ordPagina = paginas;
+        const desde = (ordPagina - 1) * ORD_POR_PAGINA;
+        const info = document.getElementById('ordTotal');
+        const pag = document.getElementById('ordPag');
         if (!listaOrden.length) {
             cuerpo.innerHTML = '<tr><td colspan="7" class="empty-row">Todavía no hay propuestas de orden. Cuando un chofer envíe una, aparece acá.</td></tr>';
-            return;
+            info.textContent = ''; pag.innerHTML = ''; return;
+        }
+        if (!total) {
+            cuerpo.innerHTML = '<tr><td colspan="7" class="empty-row">Ninguna propuesta coincide con los filtros.</td></tr>';
+            info.textContent = '0 de ' + listaOrden.length + ' propuestas'; pag.innerHTML = ''; return;
         }
         cuerpo.innerHTML = '';
-        listaOrden.forEach(p => {
+        lista.slice(desde, desde + ORD_POR_PAGINA).forEach(p => {
             const [clase, texto] = ESTADOS_ORDEN[p.estado] || ['badge', p.estado];
             const tr = document.createElement('tr');
             tr.innerHTML = `
@@ -378,17 +415,30 @@
                 <td><div class="acciones"></div></td>`;
             const acc = tr.querySelector('.acciones');
             const bVer = document.createElement('button');
-            bVer.type = 'button'; bVer.className = 'btn-suave'; bVer.textContent = '👁 Ver';
+            bVer.type = 'button'; bVer.className = 'btn-suave btn-mini'; bVer.textContent = '👁 Ver';
             bVer.onclick = () => abrirOrden(p.id);
             acc.appendChild(bVer);
             if (p.estado === 'aprobada' || p.estado === 'aplicada') {
                 const bX = document.createElement('button');
-                bX.type = 'button'; bX.className = 'btn-suave'; bX.textContent = '📥 Excel';
+                bX.type = 'button'; bX.className = 'btn-suave btn-mini'; bX.textContent = '📥 Excel';
                 bX.onclick = (ev) => descargarOrden(p.id, ev.currentTarget);
                 acc.appendChild(bX);
             }
             cuerpo.appendChild(tr);
         });
+        info.textContent = `Mostrando ${desde + 1}–${Math.min(desde + ORD_POR_PAGINA, total)} de ${total} propuestas`;
+        pag.innerHTML = '';
+        if (paginas > 1) {
+            const mk = (txt, pg, act, dis) => {
+                const b = document.createElement('button');
+                b.type = 'button'; b.textContent = txt; b.className = 'pag-btn' + (act ? ' act' : '');
+                b.disabled = !!dis; b.onclick = () => { ordPagina = pg; pintarOrden(); };
+                pag.appendChild(b);
+            };
+            mk('‹', ordPagina - 1, false, ordPagina === 1);
+            for (let i = 1; i <= paginas; i++) mk(String(i), i, i === ordPagina);
+            mk('›', ordPagina + 1, false, ordPagina === paginas);
+        }
     }
 
     async function abrirOrden(id) {
@@ -732,11 +782,26 @@
     let ordImpDatos = null; // { cab: [...], filas: [[...]] }
     function ordImpMsg(t, clase) { const e = document.getElementById('ordImpEstado'); e.textContent = t || ''; e.className = 'export-estado' + (clase ? ' ' + clase : ''); }
     async function ordImpEstado() {
+        const poner = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
         try {
             const r = await adminFetch('/api/admin/orden-reparto/estado');
             if (!r.ok) return;
             const d = await r.json();
-            ordImpMsg(d.total ? `Orden cargado para ${d.total} clientes · última importación ${new Date(d.actualizado).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires' })}` : 'Todavía no se importó ningún orden de reparto.');
+            const t = document.getElementById('ordImpEstado');
+            if (!d.total) {
+                poner('impClientes', '0'); poner('impClientesSub', 'todavía no se importó nada');
+                poner('impUltima', 'Nunca'); poner('impUltimaSub', 'subí la planilla de Gescom');
+                ordImpMsg('Todavía no se importó ningún orden de reparto.');
+                return;
+            }
+            const f = new Date(d.actualizado);
+            const dias = Math.floor((Date.now() - f.getTime()) / 86400000);
+            const cuando = dias <= 0 ? 'hoy' : dias === 1 ? 'ayer' : `hace ${dias} días`;
+            const fh = f.toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            poner('impClientes', formatoNumero(d.total)); poner('impClientesSub', 'con orden de reparto cargado');
+            poner('impUltima', cuando); poner('impUltimaSub', fh + (dias >= 30 ? ' · conviene reimportar' : ''));
+            document.getElementById('impUltima').closest('.imp-stat').classList.toggle('aviso', dias >= 30);
+            ordImpMsg(`✔ Último archivo procesado: ${formatoNumero(d.total)} clientes · ${fh}`, 'ok');
         } catch (e) {}
     }
     function ordImpNorm(t) { return String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
@@ -1288,6 +1353,17 @@
             const hayFallas = checklistsConFallas > 0;
             document.getElementById('kpiChecklistsLbl').innerText = hayFallas ? `Check-lists · ${checklistsConFallas} con fallas` : 'Check-lists';
             document.getElementById('kpiFallasBox').classList.toggle('alerta', hayFallas);
+
+            // contexto de cada indicador (solo con datos reales)
+            const ctx = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
+            const ahoraMs = Date.now();
+            const conSenal = listaVehiculos.filter(v => v.fecha_hora && (ahoraMs - new Date(v.fecha_hora).getTime()) < 15 * 60000).length;
+            ctx('kpiVehCtx', listaVehiculos.length ? `${conSenal} con señal reciente · ${listaVehiculos.length - conSenal} sin señal` : 'Sin datos todavía');
+            const vConKm = listaVehiculos.filter(v => Number(v.distanciaTotalKm) > 0).length;
+            ctx('kpiKmCtx', vConKm ? `Promedio ${formatoNumero(kmTotales / vConKm, 1)} km por vehículo` : 'Sin recorridos');
+            ctx('kpiChkCtx', checklists.length ? (hayFallas ? `${checklistsConFallas} con fallas · ${checklists.length - checklistsConFallas} sin novedades` : 'Todos sin novedades') : 'Sin check-lists');
+            ctx('kpiLitCtx', listaCombustible.length ? `${listaCombustible.length} ${listaCombustible.length === 1 ? 'carga' : 'cargas'} registradas` : 'Sin cargas');
+            document.getElementById('kpiVehiculos').closest('.kpi').classList.toggle('sin-senal', listaVehiculos.length > 0 && conSenal === 0);
 
             document.getElementById('lblActualizado').innerText = 'En vivo · ' + formatoHora(new Date());
 
