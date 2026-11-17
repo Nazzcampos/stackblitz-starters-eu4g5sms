@@ -858,6 +858,167 @@
         finally { btn.disabled = false; }
     }
 
+
+    // ---------- Planificación de repartos y acompañantes ----------
+    let planDatos = null;
+    const NIVEL_CARGA = { alta: ['badge badge-falla', 'Alta'], media: ['badge badge-warn', 'Media'], baja: ['badge badge-ok', 'Baja'] };
+    function planMsg(t, clase) { const e = document.getElementById('planEstado'); e.textContent = t || ''; e.className = 'export-estado' + (clase ? ' ' + clase : ''); }
+    function planSumarDias(f, n) { return new Date(Date.parse(f + 'T12:00:00Z') + n * 86400000).toISOString().slice(0, 10); }
+    function planFechaTxt(f) {
+        const t = new Date(Date.parse(f + 'T12:00:00Z')).toLocaleDateString('es-AR', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' });
+        return t.charAt(0).toUpperCase() + t.slice(1);
+    }
+    function iniciarPlan() {
+        const inp = document.getElementById('planFecha');
+        if (!inp.value) inp.value = planSumarDias(hoyArAdm(), 1);
+        cargarPlan(); cargarAcompanantes();
+    }
+    function planIrA(n) { document.getElementById('planFecha').value = planSumarDias(hoyArAdm(), n); cargarPlan(); }
+    function planMoverDia(n) { const i = document.getElementById('planFecha'); if (!i.value) return; i.value = planSumarDias(i.value, n); cargarPlan(); }
+    async function cargarPlan() {
+        const fecha = document.getElementById('planFecha').value;
+        const cuerpo = document.querySelector('#tabla-plan tbody');
+        if (!fecha) return;
+        cuerpo.innerHTML = '<tr><td colspan="7" class="empty-row">Buscando la carga en Gescom…</td></tr>';
+        try {
+            const res = await adminFetch('/api/admin/plan?fecha=' + fecha);
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) { cuerpo.innerHTML = `<tr><td colspan="7" class="empty-row">${escapeHtml(d.error || 'No se pudo cargar')}</td></tr>`; planMsg(d.detalle ? 'Detalle del error: ' + d.detalle : '', 'error'); return; }
+            if (document.getElementById('planFecha').value !== fecha) return; // el usuario ya cambió de día
+            planDatos = d; pintarPlan();
+        } catch (e) { if (e.message !== 'SESION') cuerpo.innerHTML = '<tr><td colspan="7" class="empty-row">No se pudo conectar con el servidor.</td></tr>'; }
+    }
+    function pintarPlan() {
+        const d = planDatos; if (!d) return;
+        const cuerpo = document.querySelector('#tabla-plan tbody');
+        const activos = d.acompanantes.filter(a => a.activo);
+        const asignados = d.acompanantes.filter(a => a.asignacion);
+        const libres = activos.filter(a => !a.asignacion);
+        // Origen de los datos
+        const o = document.getElementById('planOrigen');
+        if (d.errorGescom) o.innerHTML = `<div class="plan-aviso err">${escapeHtml(d.errorGescom)}</div>`;
+        else if (d.origen === 'estimado') o.innerHTML = `<div class="plan-aviso warn">Gescom todavía no tiene armados los repartos del <b>${escapeHtml(planFechaTxt(d.fecha))}</b>. Se muestra, como referencia, la carga del <b>${escapeHtml(planFechaTxt(d.fechaBase))}</b>. Quien se asigne verá el dato marcado como estimado.</div>`;
+        else if (d.origen === 'vacio') o.innerHTML = '<div class="plan-aviso warn">No hay repartos en Gescom para ese día ni en las dos semanas anteriores.</div>';
+        else o.innerHTML = '';
+        // Sugeridos: los repartos más pesados sin acompañante, tantos como acompañantes libres
+        const sugeridos = new Set(d.repartos.filter(r => !r.acompanantes.length && r.nivel !== 'baja').slice(0, libres.length).map(r => r.clave));
+        const sinVer = asignados.filter(a => !a.asignacion.visto).length;
+        const tile = (l, v, s, cls) => `<div class="imp-stat ${cls || ''}"><span class="l">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`;
+        document.getElementById('planTiles').innerHTML =
+            tile('Camiones en ruta', d.repartos.length, d.origen === 'estimado' ? 'según la semana anterior' : 'con reparto en Gescom')
+            + tile('Acompañantes disponibles', libres.length, `de ${activos.length} activos`)
+            + tile('Ya asignados', asignados.length, asignados.length ? 'para ese día' : 'todavía ninguno', asignados.length ? '' : 'aviso')
+            + tile('Sin ver todavía', sinVer, sinVer ? 'no abrieron su pantalla' : (asignados.length ? 'todos lo vieron ✔' : '—'), sinVer ? 'aviso' : '');
+        // Tabla de camiones
+        const opciones = r => '<option value="">+ Asignar…</option>'
+            + '<optgroup label="Acompaña">' + activos.filter(a => !a.asignacion).map(a => `<option value="${escapeHtml(a.clave)}|acompanante">${escapeHtml(a.nombre)}${a.manejaReparto ? ' (maneja ' + escapeHtml(a.manejaReparto) + ')' : ''}</option>`).join('') + '</optgroup>'
+            + '<optgroup label="Cubre como chofer">' + activos.filter(a => !a.asignacion).map(a => `<option value="${escapeHtml(a.clave)}|chofer">${escapeHtml(a.nombre)}</option>`).join('') + '</optgroup>';
+        const max = Math.max(1, ...d.repartos.map(r => r.puntaje));
+        cuerpo.innerHTML = d.repartos.length ? d.repartos.map((r, i) => {
+            const [clase, texto] = NIVEL_CARGA[r.nivel] || NIVEL_CARGA.baja;
+            const chips = d.acompanantes.filter(a => a.asignacion && a.asignacion.camion_clave === r.clave).map(a => {
+                const ch = a.asignacion.rol === 'chofer';
+                return `<span class="plan-chip${ch ? ' chofer' : ''}" title="${a.asignacion.visto ? 'Ya lo vio' : 'Todavía no lo vio'}">${ch ? '🚚' : '🧍'} ${escapeHtml(a.nombre)}${ch ? ' <small>chofer</small>' : ''} <i class="${a.asignacion.visto ? 'ok' : 'no'}">${a.asignacion.visto ? '✔' : '•'}</i><button type="button" onclick="planQuitar('${escapeHtml(a.clave)}')" aria-label="Quitar">×</button></span>`;
+            }).join('');
+            return `<tr><td><b>${escapeHtml(r.camion)}</b>${r.dominio ? `<div class="plan-sub">${escapeHtml(r.dominio)}</div>` : ''}${sugeridos.has(r.clave) ? ' <span class="plan-sug" title="Carga alta sin acompañante">⭐ Sugerido</span>' : ''}</td>
+                <td>${escapeHtml(r.chofer || '—')}</td><td class="num">${formatoNumero(r.clientes)}</td><td class="num">${formatoNumero(r.kg)}</td>
+                <td class="num">${r.km ? '~' + formatoNumero(r.km) : '<span style="color:var(--muted)">—</span>'}</td>
+                <td><div class="plan-barra" title="Puntaje de carga: ${r.puntaje}/100"><span style="width:${Math.round(r.puntaje / max * 100)}%"></span></div><span class="${clase}">${texto}</span></td>
+                <td><div class="plan-asig">${chips}${libres.length ? `<select class="campo plan-sel" onchange="planAsignar(${i}, this)">${opciones(r)}</select>` : (chips ? '' : '<span class="plan-sub">Sin acompañantes libres</span>')}</div></td></tr>`;
+        }).join('') : '<tr><td colspan="7" class="empty-row">No hay repartos para mostrar.</td></tr>';
+        // Panel de acompañantes
+        const cont = document.getElementById('planAcomp');
+        cont.innerHTML = d.acompanantes.length ? d.acompanantes.map(a => {
+            let est, cls = '';
+            if (!a.activo) { est = 'Desactivado'; cls = 'off'; }
+            else if (a.asignacion) { est = (a.asignacion.rol === 'chofer' ? 'Maneja ' : 'Va en ') + escapeHtml(a.asignacion.camion) + (a.asignacion.visto ? ' · lo vio ✔' : ' · sin ver'); cls = 'on'; }
+            else if (a.manejaReparto) { est = 'Figura como chofer de ' + escapeHtml(a.manejaReparto) + ' en Gescom'; cls = 'chofer'; }
+            else est = 'Libre';
+            return `<div class="plan-ac ${cls}"><b>${escapeHtml(a.nombre)}</b><span>${est}</span></div>`;
+        }).join('') : '<p class="section-sub">Todavía no cargaste acompañantes: creá el primero en "Usuarios de acompañantes", más abajo.</p>';
+        if (d.asignacionesHuerfanas && d.asignacionesHuerfanas.length)
+            cont.innerHTML += `<p class="section-sub" style="grid-column:1/-1;">⚠ Hay asignaciones a camiones que ya no figuran ese día: ${d.asignacionesHuerfanas.map(a => escapeHtml(a.acompanante + ' → ' + a.camion)).join(', ')}.</p>`;
+    }
+    async function planAsignar(i, sel) {
+        const v = sel.value; if (!v || !planDatos) return;
+        const [acomp, rol] = v.split('|'), r = planDatos.repartos[i];
+        sel.disabled = true;
+        const a = planDatos.acompanantes.find(x => x.clave === acomp);
+        if (a && a.manejaReparto && rol === 'acompanante' && !confirm(`${a.nombre} figura como chofer de ${a.manejaReparto} ese día. ¿Asignarlo igual como acompañante?`)) { sel.value = ''; sel.disabled = false; return; }
+        try {
+            const res = await adminFetch('/api/admin/plan/asignar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+                fecha: planDatos.fecha, acompanante: acomp, rol, camionClave: r.clave, camion: r.camion, dominio: r.dominio, chofer: r.chofer,
+                clientes: r.clientes, kg: r.kg, importe: r.importe, km: r.km, estimado: planDatos.origen === 'estimado' }) });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) { planMsg(d.error || 'No se pudo asignar.', 'error'); sel.disabled = false; return; }
+            planMsg('✔ Asignado', 'ok'); cargarPlan();
+        } catch (e) { if (e.message !== 'SESION') planMsg('No se pudo conectar con el servidor.', 'error'); sel.disabled = false; }
+    }
+    async function planQuitar(clave) {
+        if (!planDatos) return;
+        try {
+            await adminFetch('/api/admin/plan/quitar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha: planDatos.fecha, acompanante: clave }) });
+            planMsg('Asignación quitada', 'ok'); cargarPlan();
+        } catch (e) {}
+    }
+    // Mensaje listo para pegar en el grupo de WhatsApp (hoy el supervisor lo arma a mano)
+    async function copiarPlanWhatsApp(boton) {
+        if (!planDatos) return;
+        const asig = planDatos.acompanantes.filter(a => a.asignacion);
+        if (!asig.length) { planMsg('Todavía no asignaste a nadie para ese día.', 'error'); return; }
+        const num = n => Number(n).toLocaleString('es-AR', { maximumFractionDigits: 0 });
+        const lineas = asig.map(a => {
+            const x = a.asignacion;
+            const det = [x.clientes ? num(x.clientes) + ' clientes' : '', x.kg ? num(x.kg) + ' kg' : ''].filter(Boolean).join(', ');
+            return x.rol === 'chofer'
+                ? `• *${a.nombre}* maneja el ${x.camion}${x.dominio ? ' (' + x.dominio + ')' : ''}${x.chofer ? ' en lugar de ' + x.chofer : ''}${det ? ' · ' + det : ''}`
+                : `• *${a.nombre}* sale con *${x.chofer || 'el chofer'}* en el ${x.camion}${x.dominio ? ' (' + x.dominio + ')' : ''}${det ? ' · ' + det : ''}`;
+        });
+        const texto = `*Acompañantes · ${planFechaTxt(planDatos.fecha)}*\n` + lineas.join('\n');
+        try { await navigator.clipboard.writeText(texto); planMsg('✔ Copiado: pegalo en WhatsApp', 'ok'); }
+        catch (e) { window.prompt('Copiá este mensaje (Ctrl+C):', texto); }
+    }
+    // Usuarios de acompañantes
+    async function cargarAcompanantes() {
+        const cuerpo = document.getElementById('tablaAcomp');
+        try {
+            const res = await adminFetch('/api/admin/acompanantes');
+            const lista = await res.json().catch(() => []);
+            if (!res.ok) { cuerpo.innerHTML = '<tr><td colspan="4" class="empty-row">No se pudo cargar la lista.</td></tr>'; return; }
+            cuerpo.innerHTML = lista.length ? lista.map(u => `<tr><td><b>${escapeHtml(u.nombre)}</b></td>
+                <td><span class="badge ${u.activo ? 'badge-ok' : 'badge-falla'}">${u.activo ? 'Activo' : 'Desactivado'}</span></td>
+                <td style="color:var(--muted);">${u.ultimo_ingreso ? escapeHtml(formatoFechaHora(u.ultimo_ingreso)) : 'Nunca'}</td>
+                <td><div class="acciones"><button type="button" class="btn-suave btn-mini" onclick="pinAcompanante('${escapeHtml(u.clave)}')">Nuevo PIN</button>
+                    <button type="button" class="btn-suave btn-mini" onclick="activoAcompanante('${escapeHtml(u.clave)}', ${u.activo ? 'false' : 'true'})">${u.activo ? 'Desactivar' : 'Activar'}</button></div></td></tr>`).join('')
+                : '<tr><td colspan="4" class="empty-row">Todavía no hay acompañantes. Creá el primero arriba.</td></tr>';
+        } catch (e) { if (e.message !== 'SESION') cuerpo.innerHTML = '<tr><td colspan="4" class="empty-row">No se pudo conectar con el servidor.</td></tr>'; }
+    }
+    function acMsg(t, clase) { const e = document.getElementById('acEstado'); e.textContent = t || ''; e.className = 'export-estado' + (clase ? ' ' + clase : ''); }
+    async function crearAcompanante() {
+        const inp = document.getElementById('acNombre'), nombre = inp.value.trim();
+        if (nombre.length < 2) { acMsg('Escribí el nombre del acompañante.', 'error'); return; }
+        try {
+            const res = await adminFetch('/api/admin/acompanantes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nombre }) });
+            const d = await res.json().catch(() => ({}));
+            if (!res.ok) { acMsg(d.error || 'No se pudo crear.', 'error'); return; }
+            inp.value = ''; acMsg('✔ Creado', 'ok'); mostrarPinDeposito(d.nombre, d.pin); cargarAcompanantes(); cargarPlan();
+        } catch (e) { if (e.message !== 'SESION') acMsg('No se pudo conectar con el servidor.', 'error'); }
+    }
+    async function pinAcompanante(clave) {
+        if (!confirm('¿Generar un PIN nuevo? El anterior deja de servir y se cierra su sesión.')) return;
+        try {
+            const res = await adminFetch('/api/admin/acompanantes/pin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clave }) });
+            const d = await res.json().catch(() => ({}));
+            if (res.ok) mostrarPinDeposito(d.nombre, d.pin); else acMsg(d.error || 'No se pudo cambiar el PIN.', 'error');
+        } catch (e) {}
+    }
+    async function activoAcompanante(clave, activo) {
+        try {
+            await adminFetch('/api/admin/acompanantes/activo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clave, activo }) });
+            cargarAcompanantes(); cargarPlan();
+        } catch (e) {}
+    }
+
     // ---------- Venta por camión ----------
     function venParams() {
         const otros = document.getElementById('venOtros').value;
@@ -1192,6 +1353,9 @@
         } else if (vista === 'venta') {
             document.getElementById('seccion-venta').classList.add('active');
             iniciarVentaCamion();
+        } else if (vista === 'plan') {
+            document.getElementById('seccion-plan').classList.add('active');
+            iniciarPlan();
         }
         btn.classList.add('active');
         window.scrollTo({ top: 0, behavior: 'smooth' });

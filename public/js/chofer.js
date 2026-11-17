@@ -204,6 +204,7 @@
             } catch (e) { sel.innerHTML = '<option value="">No se pudo cargar la lista</option>'; }
         }
         function elegirRol(r) {
+            if (r === 'acomp') { location.href = '/acompanante.html'; return; }
             if (!SUBS[r]) r = 'chofer';
             document.querySelectorAll('#roles button').forEach(b => { const on = b.dataset.rol === r; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
             document.getElementById('loginForm').style.display = r === 'chofer' ? '' : 'none';
@@ -215,7 +216,7 @@
         }
         document.querySelectorAll('#roles button').forEach(b => b.addEventListener('click', () => elegirRol(b.dataset.rol)));
         let rolInicial = 'chofer';
-        try { rolInicial = localStorage.getItem('flota_rol') || 'chofer'; } catch (e) {}
+        try { rolInicial = localStorage.getItem('flota_rol') || 'chofer'; if (rolInicial === 'acomp') rolInicial = 'chofer'; } catch (e) {}
         elegirRol(rolInicial);
 
         function guardar(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }

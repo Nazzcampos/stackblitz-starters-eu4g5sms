@@ -228,6 +228,38 @@ CREATE TABLE IF NOT EXISTS flota_notificacion (
 CREATE INDEX IF NOT EXISTS flota_notificacion_destino_idx ON flota_notificacion (destino, archivada, actualizado DESC);
 ALTER TABLE flota_notificacion ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flota_deposito ENABLE ROW LEVEL SECURITY;
+-- Acompañantes (ayudantes de reparto) y su planificación diaria
+CREATE TABLE IF NOT EXISTS flota_acompanante (
+    clave text PRIMARY KEY,
+    nombre text NOT NULL,
+    pin_hash text NOT NULL,
+    activo boolean NOT NULL DEFAULT true,
+    sesion_desde timestamptz NOT NULL DEFAULT now(),
+    creado timestamptz NOT NULL DEFAULT now(),
+    ultimo_ingreso timestamptz
+);
+CREATE TABLE IF NOT EXISTS flota_plan (
+    fecha date NOT NULL,
+    acompanante text NOT NULL,
+    rol text NOT NULL DEFAULT 'acompanante',
+    camion_clave text NOT NULL,
+    camion text NOT NULL,
+    dominio text NOT NULL DEFAULT '',
+    chofer text NOT NULL DEFAULT '',
+    clientes integer NOT NULL DEFAULT 0,
+    kg numeric NOT NULL DEFAULT 0,
+    importe numeric NOT NULL DEFAULT 0,
+    km numeric,
+    estimado boolean NOT NULL DEFAULT false,
+    nota text NOT NULL DEFAULT '',
+    asignado_por text NOT NULL DEFAULT '',
+    visto timestamptz,
+    actualizado timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (fecha, acompanante)
+);
+CREATE INDEX IF NOT EXISTS flota_plan_acomp_idx ON flota_plan (acompanante, fecha);
+ALTER TABLE flota_acompanante ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flota_plan ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flota_retorno ENABLE ROW LEVEL SECURITY;
 CREATE TABLE IF NOT EXISTS flota_jornada (
     id bigserial PRIMARY KEY,

@@ -98,3 +98,17 @@
         #rtCajas.sacude { animation: sacude .4s; }
         @keyframes sacude { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
         .quien #campana { display: inline-flex; }
+
+        /* ---------- Pantalla del acompañante ---------- */
+        .ac-sec { margin: 18px 4px 8px; font-size: .78rem; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+        .ac-card { position: relative; overflow: hidden; }
+        .ac-card.ac-hoy { border-color: rgba(96,165,250,.55); box-shadow: 0 0 0 1px rgba(96,165,250,.25), 0 18px 50px rgba(0,0,0,.4); }
+        .ac-dia { font-size: .74rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--claro); }
+        .ac-titulo { margin-top: 6px; font-size: 1.3rem; }
+        .ac-camion { margin-top: 6px; color: var(--muted); font-size: .95rem; }
+        .ac-con { display: inline-block; margin-left: 4px; color: var(--text); }
+        .ac-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+        .ac-tile { padding: 12px; text-align: center; border-radius: 14px; background: rgba(255,255,255,.05); border: 1px solid var(--border); }
+        .ac-tile b { display: block; font-size: 1.4rem; line-height: 1.1; }
+        .ac-tile span { font-size: .7rem; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+        .ac-nota { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(251,191,36,.08); border: 1px solid rgba(251,191,36,.3); font-size: .88rem; }

@@ -538,3 +538,27 @@ td b { white-space: nowrap; }
 .cl-tiles { grid-template-columns: repeat(4, 1fr); margin-bottom: 8px; }
 @media (max-width: 900px) { .cl-tiles { grid-template-columns: repeat(2, 1fr); } }
 #tabla-venta-costos td, #tabla-venta-resumen td { white-space: nowrap; }
+
+/* ---------- Planificación de repartos ---------- */
+.plan-aviso { margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; font-size: .86rem; line-height: 1.4; border: 1px solid var(--border); background: rgba(255,255,255,.04); }
+.plan-aviso.warn { color: var(--warn); border-color: rgba(251,191,36,.4); background: rgba(251,191,36,.07); }
+.plan-aviso.err { color: #ffd0d8; border-color: rgba(251,113,133,.5); background: rgba(251,113,133,.1); }
+.plan-sub { font-size: .74rem; color: var(--muted); }
+.plan-sug { display: inline-block; margin-left: 4px; padding: 2px 8px; border-radius: 999px; font-size: .68rem; font-weight: 800; color: var(--warn); background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.35); white-space: nowrap; }
+.plan-barra { width: 90px; height: 6px; margin-bottom: 4px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; }
+.plan-barra span { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #3b82f6, #22d3ee); }
+.plan-asig { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 220px; }
+.plan-sel { width: auto; min-width: 150px; height: 36px; padding: 0 26px 0 10px; font-size: .82rem; }
+.plan-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 10px; border-radius: 999px; font-size: .82rem; font-weight: 700; white-space: nowrap; background: rgba(59,130,246,.14); border: 1px solid rgba(96,165,250,.4); }
+.plan-chip.chofer { background: rgba(251,191,36,.1); border-color: rgba(251,191,36,.4); }
+.plan-chip small { font-weight: 600; color: var(--muted); }
+.plan-chip i { font-style: normal; font-size: .8rem; } .plan-chip i.ok { color: var(--ok); } .plan-chip i.no { color: var(--warn); }
+.plan-chip button { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: none; font-size: .9rem; line-height: 1; color: var(--muted); background: rgba(255,255,255,.08); box-shadow: none; cursor: pointer; }
+.plan-chip button:hover { color: #fff; background: rgba(251,113,133,.5); filter: none; transform: none; }
+.plan-acomp { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.plan-ac { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); }
+.plan-ac span { font-size: .78rem; color: var(--muted); }
+.plan-ac.on { border-color: rgba(96,165,250,.45); background: rgba(59,130,246,.08); } .plan-ac.on span { color: #bfdbfe; }
+.plan-ac.chofer { border-color: rgba(251,191,36,.4); } .plan-ac.chofer span { color: var(--warn); }
+.plan-ac.off { opacity: .55; }
+#tabla-plan td { white-space: nowrap; }

@@ -90,7 +90,7 @@
 <div class="login-overlay" id="modalPinDeposito">
     <div class="login-card">
         <h2 id="pinDepTitulo">PIN del encargado</h2>
-        <p>Anotá este PIN y pasáselo al encargado: <b>solo se muestra ahora</b> (en el sistema queda cifrado).</p>
+        <p>Anotá este PIN y pasáselo a la persona: <b>solo se muestra ahora</b> (en el sistema queda cifrado).</p>
         <div class="campo" id="pinDepValor" style="font-size:2rem;letter-spacing:8px;font-weight:800;">----</div>
         <div class="modal-pin-fila"><button type="button" onclick="document.getElementById('modalPinDeposito').classList.remove('on')">Listo</button></div>
     </div>
@@ -593,6 +593,60 @@
             </div>
         </div>
     </div>
+
+    <!-- PLANIFICACIÓN DE REPARTOS Y ACOMPAÑANTES -->
+    <div id="seccion-plan" class="vista-seccion">
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg>
+                </div>
+                <div>
+                    <h2 class="section-title">Planificación de repartos</h2>
+                    <p class="section-sub">Mirá la carga de cada camión (clientes, kilos y kilómetros) y asigná a los acompañantes. Ellos lo ven al entrar con su PIN.</p>
+                </div>
+            </div>
+            <div class="tabla-herramientas">
+                <button type="button" class="btn-suave btn-mini" onclick="planMoverDia(-1)" aria-label="Día anterior">‹</button>
+                <input type="date" class="campo" id="planFecha" onchange="cargarPlan()" style="max-width:170px;">
+                <button type="button" class="btn-suave btn-mini" onclick="planMoverDia(1)" aria-label="Día siguiente">›</button>
+                <button type="button" class="btn-suave" onclick="planIrA(1)">Mañana</button>
+                <button type="button" class="btn-suave" onclick="planIrA(0)">Hoy</button>
+                <button type="button" id="btnPlanWsp" onclick="copiarPlanWhatsApp(this)">📋 Copiar para WhatsApp</button>
+            </div>
+            <div id="planOrigen"></div>
+            <div class="imp-stats cl-tiles" id="planTiles"></div>
+            <div class="table-wrap">
+                <table id="tabla-plan">
+                    <thead><tr><th>Camión</th><th>Chofer</th><th class="num">Clientes</th><th class="num">Kg</th><th class="num">Km aprox.</th><th>Carga</th><th>Acompañante</th></tr></thead>
+                    <tbody><tr><td colspan="7" class="empty-row">Cargando…</td></tr></tbody>
+                </table>
+            </div>
+            <div class="export-estado" id="planEstado"></div>
+            <div class="doc-sub">Acompañantes</div>
+            <div id="planAcomp" class="plan-acomp"></div>
+        </div>
+        <div class="card">
+            <div class="section-head">
+                <div class="section-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div>
+                    <h2 class="section-title">Usuarios de acompañantes</h2>
+                    <p class="section-sub">Cada acompañante entra con su nombre y PIN desde "Ingreso → Acompañ." o directo en la pantalla de acompañante.</p>
+                </div>
+            </div>
+            <div class="busqueda" style="flex-wrap:wrap;">
+                <input type="text" class="campo" id="acNombre" placeholder="Nombre del acompañante" maxlength="40" style="max-width:260px;" onkeydown="if(event.key==='Enter')crearAcompanante()">
+                <button type="button" onclick="crearAcompanante()">➕ Crear acompañante</button>
+                <a class="link-chip" href="/acompanante.html" target="_blank">🧍 Pantalla del acompañante</a>
+            </div>
+            <div class="export-estado" id="acEstado"></div>
+            <div class="table-wrap">
+                <table><thead><tr><th>Acompañante</th><th>Estado</th><th>Último ingreso</th><th></th></tr></thead><tbody id="tablaAcomp"><tr><td colspan="4" class="empty-row">Cargando…</td></tr></tbody></table>
+            </div>
+        </div>
+    </div>
 </main>
 
 <!-- DOCK DE NAVEGACIÓN (9 SOLAPAS) -->
@@ -622,6 +676,10 @@
     <button type="button" class="nav-btn" id="btnOrdenDock" onclick="cambiarVistaAdmin('orden', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
         Orden
+    </button>
+    <button type="button" class="nav-btn" id="btnPlanDock" onclick="cambiarVistaAdmin('plan', this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="M9 16l2 2 4-4"/></svg>
+        Planificación
     </button>
     <button type="button" class="nav-btn" id="btnDocsDock" onclick="cambiarVistaAdmin('docs', this)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>

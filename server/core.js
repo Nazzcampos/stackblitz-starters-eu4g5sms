@@ -9,6 +9,7 @@ app.get(['/', '/index.html'], (req, res) => res.sendFile(path.join(__dirname, '.
 app.get('/admin.html', (req, res) => res.sendFile(path.join(__dirname, '..', 'admin.html')));
 app.use('/public', express.static(path.join(__dirname, '..', 'public')));
 app.get('/deposito.html', (req, res) => res.sendFile(path.join(__dirname, '..', 'deposito.html')));
+app.get('/acompanante.html', (req, res) => res.sendFile(path.join(__dirname, '..', 'acompanante.html')));
 const PORT = process.env.PORT || 3000;
 
 // Render usa un proxy: así req.ip es la IP real del cliente

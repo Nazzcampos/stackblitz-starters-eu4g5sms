@@ -98,7 +98,7 @@ async function consultarVentaCamion(q) {
     // ---- Costo logístico: combustible (cargas del período) + otros costos por día de camión que indique el usuario ----
     const otros = Math.max(0, Number(String(q.otros || '0').replace(',', '.')) || 0);
     let costos = null;
-    try { costos = await costosFlota(rango.desde, rango.hasta); } catch (e) { console.error('⚠ Costos de flota:', e.message); }
+    if (!q.sinCostos) try { costos = await costosFlota(rango.desde, rango.hasta); } catch (e) { console.error('⚠ Costos de flota:', e.message); }
     let ref = { importe: 0, clientes: 0, dias: 0, km: 0, combustible: 0, kg: 0 }, sinPatente = 0, sinDatos = 0;
     resumen.forEach(t => {
         const clave = claveDom(t.dominio);

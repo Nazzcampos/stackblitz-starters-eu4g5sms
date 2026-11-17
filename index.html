@@ -60,6 +60,7 @@
                 <button type="button" role="tab" data-rol="chofer" id="rolChofer">Chofer</button>
                 <button type="button" role="tab" data-rol="sup" id="rolSup">Supervisor</button>
                 <button type="button" role="tab" data-rol="dep" id="rolDep">Depósito</button>
+                <button type="button" role="tab" data-rol="acomp" id="rolAcomp">Acompañ.</button>
             </div>
             <p class="login-sub" id="loginSubRol">Elegí tu nombre e ingresá tu PIN para ver tu reparto.</p>
             <form id="loginForm" autocomplete="off">
@@ -331,6 +332,7 @@
             const rol = localStorage.getItem('flota_rol');
             if (rol === 'sup' && localStorage.getItem('flota_admin_token')) location.replace('/admin.html');
             else if (rol === 'dep' && localStorage.getItem('flota_dep_token')) location.replace('/deposito.html');
+            else if (rol === 'acomp' && localStorage.getItem('flota_acomp_token')) location.replace('/acompanante.html');
         } catch (e) {}
     })();
 </script>
