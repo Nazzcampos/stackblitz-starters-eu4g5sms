@@ -10,6 +10,7 @@ app.get('/api/diagnostico-indicadores', async (req, res) => {
     const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || 30, 1), 120);
     if (req.query.paso === '2') return diagnosticoPaso2(req, res);
     if (req.query.paso === '3') return diagnosticoPaso3(req, res);
+    if (req.query.paso === '4') return diagnosticoPaso4(req, res);
     const salida = { dias };
     const paso = async (clave, fn) => {
         try { salida[clave] = await fn(); } catch (err) { salida[clave] = { error: err.message }; }
@@ -206,6 +207,58 @@ async function diagnosticoPaso3(req, res) {
             GROUP BY 1 ORDER BY 1`, [desde, hasta]);
         return r.rows;
     });
+
+    res.json(salida);
+}
+
+// Paso 4: datos diarios por chofer (facturación, rechazos por motivo, cartón y facturas rechazadas) para probar fórmulas contra el informe de Pepsico
+// /api/diagnostico-indicadores?token=...&paso=4&desde=2026-10-01&hasta=2026-11-18
+async function diagnosticoPaso4(req, res) {
+    const fechaOk = f => /^\d{4}-\d{2}-\d{2}$/.test(String(f || ''));
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+    const hasta = fechaOk(req.query.hasta) ? req.query.hasta : hoy;
+    const desde = fechaOk(req.query.desde) ? req.query.desde : hoy.slice(0, 7) + '-01';
+    const salida = { desde, hasta };
+    const paso = async (clave, fn) => {
+        try { salida[clave] = await fn(); } catch (err) { salida[clave] = { error: err.message }; }
+    };
+    const DIA = `to_char(v.fecha_entrega::date, 'YYYY-MM-DD')`;
+    const CH = `trim(v.empleado_chofer_nombre)`;
+    const RANGO = `v.fecha_entrega::date BETWEEN $1::date AND $2::date AND COALESCE(v.empleado_chofer_nombre, '') <> ''`;
+
+    // Facturación y cantidad de facturas por día y chofer (con las que ya figuran entregadas)
+    await paso('fac_dia', async () => (await pool.query(`/*DIAGIND14*/ SELECT ${DIA} AS dia, ${CH} AS chofer,
+            ROUND(SUM(v.importe_total)::numeric, 0) AS fac, COUNT(*)::int AS facturas,
+            COUNT(*) FILTER (WHERE COALESCE(v.entregada, 0) = 1)::int AS entregadas
+        FROM venta v WHERE ${RANGO} AND v.tipo_comprobante_codigo ILIKE 'FAC%' GROUP BY 1, 2 ORDER BY 1, 2`, [desde, hasta])).rows);
+
+    // Notas de crédito con motivo de rechazo, por día, chofer y motivo
+    await paso('rechazo_dia', async () => (await pool.query(`/*DIAGIND15*/ SELECT ${DIA} AS dia, ${CH} AS chofer,
+            v.motivo_rechazo_codigo AS motivo, COALESCE(v.es_adicional, 0)::int AS adicional,
+            ROUND(SUM(ABS(v.importe_total))::numeric, 0) AS importe, COUNT(*)::int AS notas
+        FROM venta v WHERE ${RANGO} AND v.tipo_comprobante_codigo ILIKE 'NCR%' AND COALESCE(v.motivo_rechazo_codigo, '') <> ''
+        GROUP BY 1, 2, 3, 4 ORDER BY 1, 2`, [desde, hasta])).rows);
+
+    // Cartón por día y chofer
+    await paso('carton_dia', async () => (await pool.query(`/*DIAGIND16*/ SELECT ${DIA} AS dia, ${CH} AS chofer,
+            COALESCE(SUM(vi.cantidad) FILTER (WHERE v.tipo_comprobante_codigo = 'REME'), 0)::int AS reme,
+            COALESCE(SUM(vi.cantidad) FILTER (WHERE v.tipo_comprobante_codigo = 'REMI'), 0)::int AS remi
+        FROM venta v JOIN venta_item vi ON vi.venta_id = v.id AND vi.tenant_id = v.tenant_id
+        WHERE ${RANGO} AND vi.item_codigo = '1100000130' AND v.tipo_comprobante_codigo IN ('REME', 'REMI')
+        GROUP BY 1, 2 ORDER BY 1, 2`, [desde, hasta])).rows);
+
+    // Facturas rechazadas completas o parcialmente: nota de crédito con motivo del mismo cliente y día
+    await paso('efectividad_dia', async () => (await pool.query(`/*DIAGIND17*/ WITH f AS (
+            SELECT v.id, ${DIA} AS dia, ${CH} AS chofer, v.cliente_id, v.importe_total AS imp FROM venta v
+            WHERE ${RANGO} AND v.tipo_comprobante_codigo ILIKE 'FAC%'),
+        n AS (
+            SELECT v.cliente_id, ${DIA} AS dia, SUM(ABS(v.importe_total)) AS imp FROM venta v
+            WHERE v.fecha_entrega::date BETWEEN $1::date AND $2::date AND v.tipo_comprobante_codigo ILIKE 'NCR%' AND COALESCE(v.motivo_rechazo_codigo, '') <> ''
+            GROUP BY 1, 2)
+        SELECT f.dia, f.chofer, COUNT(*)::int AS facturas,
+               COUNT(*) FILTER (WHERE n.imp >= 0.98 * f.imp AND f.imp > 0)::int AS rechazo_total,
+               COUNT(*) FILTER (WHERE n.imp > 0 AND n.imp < 0.98 * f.imp)::int AS rechazo_parcial
+        FROM f LEFT JOIN n ON n.cliente_id = f.cliente_id AND n.dia = f.dia GROUP BY 1, 2 ORDER BY 1, 2`, [desde, hasta])).rows);
 
     res.json(salida);
 }
