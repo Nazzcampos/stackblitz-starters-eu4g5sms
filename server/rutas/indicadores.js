@@ -8,6 +8,7 @@ app.get('/api/diagnostico-indicadores', async (req, res) => {
     const tokenAdmin = process.env.ADMIN_TOKEN;
     if (!tokenAdmin || req.query.token !== tokenAdmin) return res.status(404).json({ error: 'No encontrado' });
     const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || 30, 1), 120);
+    if (req.query.paso === '2') return diagnosticoPaso2(req, res);
     const salida = { dias };
     const paso = async (clave, fn) => {
         try { salida[clave] = await fn(); } catch (err) { salida[clave] = { error: err.message }; }
@@ -75,5 +76,84 @@ app.get('/api/diagnostico-indicadores', async (req, res) => {
 
     res.json(salida);
 });
+
+// Paso 2: por chofer y para un período, varias formas posibles de calcular cada indicador, para compararlas con el informe de Pepsico.
+// /api/diagnostico-indicadores?token=...&paso=2&desde=2026-11-01&hasta=2026-11-15
+async function diagnosticoPaso2(req, res) {
+    const fechaOk = f => /^\d{4}-\d{2}-\d{2}$/.test(String(f || ''));
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+    const hasta = fechaOk(req.query.hasta) ? req.query.hasta : hoy;
+    const desde = fechaOk(req.query.desde) ? req.query.desde : hoy.slice(0, 7) + '-01';
+    const salida = { desde, hasta };
+    const paso = async (clave, fn) => {
+        try { salida[clave] = await fn(); } catch (err) { salida[clave] = { error: err.message }; }
+    };
+    const FAC = `v.tipo_comprobante_codigo ILIKE 'FAC%'`, NCR = `v.tipo_comprobante_codigo ILIKE 'NCR%'`;
+    const MOT = `COALESCE(v.motivo_rechazo_codigo, '') <> ''`;
+
+    // Por chofer: facturación, notas de crédito (con y sin motivo de rechazo) y conteos de entrega
+    await paso('por_chofer', async () => {
+        const r = await pool.query(`/*DIAGIND6*/ SELECT trim(v.empleado_chofer_nombre) AS chofer,
+                ROUND(SUM(v.importe_total) FILTER (WHERE ${FAC})::numeric, 0) AS facturacion,
+                ROUND(SUM(ABS(v.importe_total)) FILTER (WHERE ${NCR})::numeric, 0) AS ncr_total,
+                ROUND(SUM(ABS(v.importe_total)) FILTER (WHERE ${NCR} AND COALESCE(v.es_adicional, 0) = 1)::numeric, 0) AS ncr_adicional,
+                ROUND(SUM(ABS(v.importe_total)) FILTER (WHERE ${NCR} AND ${MOT})::numeric, 0) AS ncr_con_motivo_rechazo,
+                ROUND(SUM(ABS(v.importe_total)) FILTER (WHERE ${MOT})::numeric, 0) AS cualquier_con_motivo_rechazo,
+                COUNT(*) FILTER (WHERE ${FAC})::int AS facturas,
+                COUNT(*) FILTER (WHERE ${FAC} AND COALESCE(v.entregada, 0) = 0)::int AS facturas_sin_entregada,
+                COUNT(*) FILTER (WHERE ${FAC} AND COALESCE(v.no_entregada, 0) = 1)::int AS facturas_no_entregada,
+                COUNT(*) FILTER (WHERE ${FAC} AND ${MOT})::int AS facturas_con_motivo_rechazo,
+                COUNT(DISTINCT v.cliente_id) FILTER (WHERE ${FAC})::int AS clientes
+            FROM venta v
+            WHERE v.fecha_entrega::date BETWEEN $1::date AND $2::date AND COALESCE(v.empleado_chofer_nombre, '') <> ''
+            GROUP BY 1 ORDER BY 1`, [desde, hasta]);
+        return r.rows;
+    });
+
+    // Motivos de rechazo: qué comprobantes los llevan y cuánto suman
+    await paso('motivos_rechazo', async () => {
+        const r = await pool.query(`/*DIAGIND7*/ SELECT COALESCE(v.tipo_comprobante_codigo, '') AS tipo, v.motivo_rechazo_codigo AS codigo, v.motivo_rechazo_desc AS descripcion,
+                COUNT(*)::int AS ventas, ROUND(SUM(ABS(v.importe_total))::numeric, 0) AS importe
+            FROM venta v WHERE v.fecha_entrega::date BETWEEN $1::date AND $2::date AND ${MOT}
+            GROUP BY 1, 2, 3 ORDER BY importe DESC NULLS LAST LIMIT 40`, [desde, hasta]);
+        return r.rows;
+    });
+    await paso('motivos_cambio', async () => {
+        const r = await pool.query(`/*DIAGIND8*/ SELECT COALESCE(v.tipo_comprobante_codigo, '') AS tipo, v.motivo_cambio_codigo AS codigo, v.motivo_cambio_desc AS descripcion,
+                COUNT(*)::int AS ventas, ROUND(SUM(ABS(v.importe_total))::numeric, 0) AS importe
+            FROM venta v WHERE v.fecha_entrega::date BETWEEN $1::date AND $2::date AND COALESCE(v.motivo_cambio_codigo, '') <> ''
+            GROUP BY 1, 2, 3 ORDER BY importe DESC NULLS LAST LIMIT 40`, [desde, hasta]);
+        return r.rows;
+    });
+
+    // Cartón por chofer: cajas en remitos REME y REMI (artículo "Caja de Carton Recuperada Buen Estado")
+    await paso('carton_por_chofer', async () => {
+        const r = await pool.query(`/*DIAGIND9*/ SELECT trim(v.empleado_chofer_nombre) AS chofer,
+                SUM(vi.cantidad) FILTER (WHERE v.tipo_comprobante_codigo = 'REME')::int AS reme,
+                SUM(vi.cantidad) FILTER (WHERE v.tipo_comprobante_codigo = 'REMI')::int AS remi,
+                SUM(vi.cantidad) FILTER (WHERE v.tipo_comprobante_codigo = 'REME' AND COALESCE(v.es_adicional, 0) = 1)::int AS reme_adicional,
+                SUM(vi.cantidad) FILTER (WHERE v.tipo_comprobante_codigo = 'REMI' AND COALESCE(v.es_adicional, 0) = 1)::int AS remi_adicional,
+                COUNT(DISTINCT v.id) FILTER (WHERE v.tipo_comprobante_codigo = 'REME')::int AS remitos_reme,
+                COUNT(DISTINCT v.id) FILTER (WHERE v.tipo_comprobante_codigo = 'REMI')::int AS remitos_remi
+            FROM venta v JOIN venta_item vi ON vi.venta_id = v.id AND vi.tenant_id = v.tenant_id
+            WHERE v.fecha_entrega::date BETWEEN $1::date AND $2::date AND vi.item_codigo = '1100000130'
+              AND v.tipo_comprobante_codigo IN ('REME', 'REMI')
+            GROUP BY 1 ORDER BY 1`, [desde, hasta]);
+        return r.rows;
+    });
+
+    // Cajas de producto que salen por chofer (por si el retorno se mide contra lo despachado)
+    await paso('cajas_producto_por_chofer', async () => {
+        const r = await pool.query(`/*DIAGIND10*/ SELECT trim(v.empleado_chofer_nombre) AS chofer,
+                ROUND(SUM(vi.cantidad)::numeric, 0) AS unidades_facturadas
+            FROM venta v JOIN venta_item vi ON vi.venta_id = v.id AND vi.tenant_id = v.tenant_id
+            WHERE v.fecha_entrega::date BETWEEN $1::date AND $2::date AND ${FAC}
+              AND COALESCE(v.empleado_chofer_nombre, '') <> ''
+            GROUP BY 1 ORDER BY 1`, [desde, hasta]);
+        return r.rows;
+    });
+
+    res.json(salida);
+}
 
 module.exports = {};
