@@ -1085,7 +1085,7 @@
     // =====================================================================
     const RADIO_AVISO_METROS = 250;      // a esta distancia de un cliente se muestra el aviso
     const INTERVALO_ENVIO_MS = 30000;    // cada cuánto se informa la posición al servidor
-    const PRECISION_MAX_ENVIO_M = 150;   // no se envían posiciones con más de este error
+    const PRECISION_MAX_ENVIO_M = 50;    // no se envían posiciones con más de este error
     const MODO_PRUEBA = new URLSearchParams(location.search).has('sim'); // ?sim=1 → tocar el mapa simula la ubicación
 
     let watchId = null;
@@ -1189,7 +1189,7 @@
 
     // Al estar en segundo plano, Android frena los pedidos de la página; el envío nativo no se frena
     function enviarUbicacionServidor(lat, lon) {
-        const cuerpo = { chofer_id: choferActual, vehiculo: vehiculoActual, latitud: lat, longitud: lon };
+        const cuerpo = { chofer_id: choferActual, vehiculo: vehiculoActual, latitud: lat, longitud: lon, precision: ultimaPosicion ? ultimaPosicion.precision : 0 };
         const viaWeb = () => apiFetch('/api/ubicacion', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo)
         }).then(r => marcarEnvio(r.ok, r.ok ? '' : 'error ' + r.status)).catch(() => marcarEnvio(false, 'sin conexión'));

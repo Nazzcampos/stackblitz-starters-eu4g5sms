@@ -562,3 +562,8 @@ td b { white-space: nowrap; }
 .plan-ac.chofer { border-color: rgba(251,191,36,.4); } .plan-ac.chofer span { color: var(--warn); }
 .plan-ac.off { opacity: .55; }
 #tabla-plan td { white-space: nowrap; }
+
+/* Mapa: vista satélite y resumen del camión elegido */
+#map.vista-satelite .leaflet-tile-pane { filter: none; }
+.btn-satelite { background: rgba(15, 26, 51, .92); color: #eef1ff; border: 1px solid rgba(255,255,255,.18); border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.mapa-resumen { background: rgba(15, 26, 51, .92); color: #eef1ff; border: 1px solid rgba(255,255,255,.18); border-radius: 12px; padding: 10px 14px; font-size: 13px; line-height: 1.5; box-shadow: 0 4px 14px rgba(0,0,0,.35); }

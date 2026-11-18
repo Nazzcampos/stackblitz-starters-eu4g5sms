@@ -1,5 +1,5 @@
 // GPS (odómetro diario) y check-lists de los vehículos.
-const { app } = require('../core.js');
+const { app, pool } = require('../core.js');
 const { db, requireDb, INICIO_DIA_AR } = require('../base.js');
 const { requireChofer, requireAdmin } = require('../auth.js');
 const { notificar } = require('../avisos.js');
@@ -24,7 +24,9 @@ app.post('/api/ubicacion', requireChofer, requireDb, async (req, res) => {
         if (previo.rows[0]) {
             km = previo.rows[0].km;
             const tramo = calcularDistancia(previo.rows[0].latitud, previo.rows[0].longitud, latitud, longitud);
-            if (tramo < 10 && tramo > 0.001) km += tramo;
+            // Con el vehículo quieto el GPS "baila" unos metros: un tramo menor al error informado (o a 20 m) no se suma
+            const errorKm = Math.min(Math.max(Number((req.body || {}).precision) || 0, 0), 150) / 1000;
+            if (tramo < 10 && tramo >= Math.max(0.02, errorKm)) km += tramo;
         }
         km = Number(km.toFixed(3));
         await db.query(
@@ -120,3 +122,31 @@ app.delete('/api/checklist/:id', requireAdmin, requireDb, async (req, res) => {
 
 
 module.exports = {  };
+
+// Clientes del día con su ubicación, para verlos en el mapa del supervisor (se guarda 5 minutos)
+let cacheMapaClientes = { t: 0, fecha: '', datos: null };
+app.get('/api/admin/mapa-clientes', requireAdmin, async (req, res) => {
+    try {
+        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+        if (cacheMapaClientes.datos && cacheMapaClientes.fecha === hoy && Date.now() - cacheMapaClientes.t < 5 * 60 * 1000) {
+            return res.json(cacheMapaClientes.datos);
+        }
+        const r = await pool.query(`/*MAPACLIENTES*/
+            SELECT DISTINCT v.cliente_id AS id, v.razon_social AS nombre, v.empleado_chofer_nombre AS chofer,
+                   rh.latitud::float8 AS lat, rh.longitud::float8 AS lon
+            FROM venta v
+            JOIN cliente_ruta_hist rh ON rh.cliente_id = v.cliente_id AND rh.actual = true
+            WHERE v.fecha_entrega::date = $1::date
+              AND v.empleado_chofer_nombre IS NOT NULL
+              AND rh.latitud IS NOT NULL AND rh.latitud != 0
+              AND rh.longitud IS NOT NULL AND rh.longitud != 0`, [hoy]);
+        // El chofer figura como "cliente" del remito de cajas: no es una parada
+        const palabras = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+        const datos = r.rows.filter(f => palabras(f.nombre) !== palabras(f.chofer));
+        cacheMapaClientes = { t: Date.now(), fecha: hoy, datos };
+        res.json(datos);
+    } catch (err) {
+        console.error('❌ Error al leer clientes del mapa:', err.message);
+        res.status(500).json({ error: 'No se pudieron leer los clientes del día' });
+    }
+});

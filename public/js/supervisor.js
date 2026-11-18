@@ -1371,15 +1371,154 @@
 
     // Mapa de OpenStreetMap (sin clave); el tono oscuro se logra con un filtro CSS sobre las baldosas
     const map = L.map('map').setView([-33.2814, -62.1785], 14);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const capaCalles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '© OpenStreetMap'
     }).addTo(map);
+    // Vista satélite (fotos aéreas); se cambia con el botón de arriba a la derecha
+    const capaSatelite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        attribution: 'Imágenes © Esri'
+    });
+    const BotonSatelite = L.Control.extend({
+        options: { position: 'topright' },
+        onAdd: function () {
+            const b = L.DomUtil.create('button', 'btn-satelite');
+            b.type = 'button';
+            b.textContent = '🛰 Satélite';
+            L.DomEvent.disableClickPropagation(b);
+            b.onclick = () => {
+                const activo = map.hasLayer(capaSatelite);
+                if (activo) { map.removeLayer(capaSatelite); capaCalles.addTo(map); }
+                else { map.removeLayer(capaCalles); capaSatelite.addTo(map); }
+                document.getElementById('map').classList.toggle('vista-satelite', !activo);
+                b.textContent = activo ? '🛰 Satélite' : '🗺 Mapa';
+            };
+            return b;
+        }
+    });
+    new BotonSatelite().addTo(map);
 
     let marcadores = {};
     let lineasRecorrido = {};
     let primerEncuadre = true;
     let vehSel = null; // el trazo celeste solo se muestra para el camión tocado
+
+    const MIN_HUECO_MS = 5 * 60 * 1000;   // más de 5 min sin posiciones = tramo sin señal (se dibuja punteado)
+    const MIN_PARADA_MS = 5 * 60 * 1000;  // quieto 5 min o más = parada
+    const RADIO_PARADA_M = 40;            // se considera quieto dentro de este radio
+    const RADIO_VISITA_M = 60;            // cliente visitado = el camión pasó a menos de esta distancia
+    let puntosCrudos = {};                // vehículo -> [{ lat, lon, t }] de hoy, en orden
+    let choferDeVeh = {};
+    let paradasDeVeh = {};
+    let clientesMapa = null, clientesMapaT = 0;
+    const capaClientes = L.layerGroup();
+
+    const clavePersona = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).sort().join(' ');
+    function distM(a, b) {
+        const R = 6371000, rad = x => x * Math.PI / 180;
+        const dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon);
+        const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+        return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    // Resumen abajo a la izquierda del mapa: clientes visitados y paradas del camión elegido
+    const ResumenMapa = L.Control.extend({
+        options: { position: 'bottomleft' },
+        onAdd: function () {
+            this._div = L.DomUtil.create('div', 'mapa-resumen');
+            this._div.style.display = 'none';
+            L.DomEvent.disableClickPropagation(this._div);
+            return this._div;
+        },
+        poner: function (html) {
+            this._div.style.display = html ? 'block' : 'none';
+            this._div.innerHTML = html || '';
+        }
+    });
+    const resumenMapa = new ResumenMapa().addTo(map);
+
+    // Paradas: el camión estuvo 5 min o más dentro de un radio de 40 m
+    function paradasDe(pts) {
+        const out = [];
+        let i = 0;
+        while (i < pts.length) {
+            let j = i;
+            while (j + 1 < pts.length && distM(pts[i], pts[j + 1]) <= RADIO_PARADA_M && pts[j + 1].t - pts[j].t <= MIN_HUECO_MS) j++;
+            if (pts[j].t - pts[i].t >= MIN_PARADA_MS) {
+                const grupo = pts.slice(i, j + 1);
+                out.push({
+                    lat: grupo.reduce((a, p) => a + p.lat, 0) / grupo.length,
+                    lon: grupo.reduce((a, p) => a + p.lon, 0) / grupo.length,
+                    desde: pts[i].t, hasta: pts[j].t
+                });
+            }
+            i = j + 1;
+        }
+        return out;
+    }
+
+    // Dibuja el trazo del camión: línea continua, punteada donde no hubo señal, y círculos en las paradas
+    function armarTrazo(grupo, veh) {
+        grupo.clearLayers();
+        const pts = puntosCrudos[veh] || [];
+        const tramos = [];
+        let actual = [], prev = null;
+        pts.forEach(p => {
+            if (prev && p.t - prev.t > MIN_HUECO_MS) {
+                if (actual.length) tramos.push(actual);
+                actual = [];
+                L.polyline([[prev.lat, prev.lon], [p.lat, p.lon]], { color: '#94a3b8', weight: 2, opacity: 0.85, dashArray: '6 8' })
+                    .bindTooltip('Sin señal GPS · ' + Math.round((p.t - prev.t) / 60000) + ' min (' + formatoHora(new Date(prev.t).toISOString()) + ' a ' + formatoHora(new Date(p.t).toISOString()) + ')')
+                    .addTo(grupo);
+            }
+            const ult = actual[actual.length - 1];
+            if (!ult || ult[0] !== p.lat || ult[1] !== p.lon) actual.push([p.lat, p.lon]);
+            prev = p;
+        });
+        if (actual.length) tramos.push(actual);
+        L.polyline(tramos, { color: '#38bdf8', weight: 4, opacity: 0.9 }).addTo(grupo);
+
+        const paradas = paradasDe(pts);
+        paradasDeVeh[veh] = paradas.length;
+        paradas.forEach(pa => {
+            L.circleMarker([pa.lat, pa.lon], { radius: 16, color: '#f472b6', weight: 2, fillColor: '#f472b6', fillOpacity: 0.25 })
+                .bindTooltip('Parada de ' + Math.round((pa.hasta - pa.desde) / 60000) + ' min · ' + formatoHora(new Date(pa.desde).toISOString()) + ' a ' + formatoHora(new Date(pa.hasta).toISOString()))
+                .addTo(grupo);
+        });
+    }
+
+    // Clientes del reparto del chofer en el mapa: visitado (verde, lleno) o pendiente (aro blanco)
+    async function pintarClientes(veh) {
+        capaClientes.clearLayers();
+        if (!veh) { resumenMapa.poner(''); return; }
+        try {
+            if (!clientesMapa || Date.now() - clientesMapaT > 5 * 60 * 1000) {
+                const r = await adminFetch('/api/admin/mapa-clientes');
+                clientesMapa = r.ok ? await r.json() : (clientesMapa || []);
+                clientesMapaT = Date.now();
+            }
+        } catch (e) { clientesMapa = clientesMapa || []; }
+        if (vehSel !== veh) return; // se tocó otro camión mientras cargaba
+        capaClientes.clearLayers();
+        const clave = clavePersona(choferDeVeh[veh]);
+        const lista = (clientesMapa || []).filter(c => clavePersona(c.chofer) === clave);
+        const pts = puntosCrudos[veh] || [];
+        let visitados = 0;
+        lista.forEach(c => {
+            const vis = pts.some(p => distM(p, { lat: c.lat, lon: c.lon }) <= RADIO_VISITA_M);
+            if (vis) visitados++;
+            L.circleMarker([c.lat, c.lon], vis
+                ? { radius: 7, color: '#16a34a', weight: 2, fillColor: '#22c55e', fillOpacity: 1 }
+                : { radius: 7, color: '#f8fafc', weight: 2, fillColor: '#f8fafc', fillOpacity: 0.15 })
+                .bindTooltip(escapeHtml(c.nombre) + ' · ' + (vis ? 'Visitado' : 'Pendiente'))
+                .addTo(capaClientes);
+        });
+        const par = paradasDeVeh[veh] || 0;
+        resumenMapa.poner('<b>' + escapeHtml(veh) + '</b><br>' +
+            (lista.length ? visitados + ' de ' + lista.length + ' clientes visitados' : 'Sin clientes con ubicación hoy') +
+            '<br>' + par + (par === 1 ? ' parada' : ' paradas'));
+    }
 
     function mostrarSoloTrazo(nombre) {
         vehSel = nombre;
@@ -1388,6 +1527,8 @@
             if (k === nombre) { if (!map.hasLayer(linea)) linea.addTo(map); }
             else if (map.hasLayer(linea)) map.removeLayer(linea);
         });
+        if (nombre) { if (!map.hasLayer(capaClientes)) capaClientes.addTo(map); }
+        pintarClientes(nombre);
     }
 
     const iconoVehiculo = L.divIcon({
@@ -1428,15 +1569,13 @@
 
             // El trazo se reconstruye completo en cada actualización (antes se duplicaban los puntos en cada ciclo)
             const vehiculosUnicos = {};
-            const historicoPuntos = {};
+            const puntosNuevos = {};
             ubicaciones.forEach(u => {
                 vehiculosUnicos[u.vehiculo] = u;
-                if (!historicoPuntos[u.vehiculo]) historicoPuntos[u.vehiculo] = [];
-                const ult = historicoPuntos[u.vehiculo][historicoPuntos[u.vehiculo].length - 1];
-                if (!ult || ult[0] !== u.latitud || ult[1] !== u.longitud) {
-                    historicoPuntos[u.vehiculo].push([u.latitud, u.longitud]);
-                }
+                (puntosNuevos[u.vehiculo] = puntosNuevos[u.vehiculo] || []).push({ lat: Number(u.latitud), lon: Number(u.longitud), t: new Date(u.fecha_hora).getTime() });
+                choferDeVeh[u.vehiculo] = u.chofer_id;
             });
+            puntosCrudos = puntosNuevos;
 
             const listaVehiculos = Object.values(vehiculosUnicos);
             let kmTotales = 0;
@@ -1465,14 +1604,11 @@
                         marcadores[nombreVeh].on('popupclose', () => { if (vehSel === nombreVeh) mostrarSoloTrazo(null); });
                     }
 
-                    if (lineasRecorrido[v.vehiculo]) {
-                        lineasRecorrido[v.vehiculo].setLatLngs(historicoPuntos[v.vehiculo]);
-                    } else {
-                        lineasRecorrido[v.vehiculo] = L.polyline(historicoPuntos[v.vehiculo], {
-                            color: '#38bdf8', weight: 4, opacity: 0.9
-                        });
+                    if (!lineasRecorrido[v.vehiculo]) {
+                        lineasRecorrido[v.vehiculo] = L.layerGroup();
                         if (vehSel === v.vehiculo) lineasRecorrido[v.vehiculo].addTo(map);
                     }
+                    armarTrazo(lineasRecorrido[v.vehiculo], v.vehiculo);
 
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
@@ -1487,6 +1623,7 @@
                     tablaKmBody.appendChild(tr);
                 });
 
+                if (vehSel) pintarClientes(vehSel); // se actualizan los visitados del camión elegido
                 // Primer encuadre: mostrar todos los vehículos en el mapa
                 if (primerEncuadre) {
                     primerEncuadre = false;
