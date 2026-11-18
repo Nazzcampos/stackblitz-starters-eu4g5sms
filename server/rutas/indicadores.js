@@ -9,6 +9,7 @@ app.get('/api/diagnostico-indicadores', async (req, res) => {
     if (!tokenAdmin || req.query.token !== tokenAdmin) return res.status(404).json({ error: 'No encontrado' });
     const dias = Math.min(Math.max(parseInt(req.query.dias, 10) || 30, 1), 120);
     if (req.query.paso === '2') return diagnosticoPaso2(req, res);
+    if (req.query.paso === '3') return diagnosticoPaso3(req, res);
     const salida = { dias };
     const paso = async (clave, fn) => {
         try { salida[clave] = await fn(); } catch (err) { salida[clave] = { error: err.message }; }
@@ -149,6 +150,59 @@ async function diagnosticoPaso2(req, res) {
             FROM venta v JOIN venta_item vi ON vi.venta_id = v.id AND vi.tenant_id = v.tenant_id
             WHERE v.fecha_entrega::date BETWEEN $1::date AND $2::date AND ${FAC}
               AND COALESCE(v.empleado_chofer_nombre, '') <> ''
+            GROUP BY 1 ORDER BY 1`, [desde, hasta]);
+        return r.rows;
+    });
+
+    res.json(salida);
+}
+
+// Paso 3: cómo se vincula una nota de crédito con su factura y cuántas facturas se rechazaron completas
+// /api/diagnostico-indicadores?token=...&paso=3&desde=2026-11-01&hasta=2026-11-15
+async function diagnosticoPaso3(req, res) {
+    const fechaOk = f => /^\d{4}-\d{2}-\d{2}$/.test(String(f || ''));
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+    const hasta = fechaOk(req.query.hasta) ? req.query.hasta : hoy;
+    const desde = fechaOk(req.query.desde) ? req.query.desde : hoy.slice(0, 7) + '-01';
+    const salida = { desde, hasta };
+    const paso = async (clave, fn) => {
+        try { salida[clave] = await fn(); } catch (err) { salida[clave] = { error: err.message }; }
+    };
+
+    // Columnas de la venta que pueden vincular una nota de crédito con su factura de origen
+    await paso('columnas_vinculo', async () => {
+        const r = await pool.query(`/*DIAGIND11*/ SELECT column_name, data_type FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'venta'
+              AND (column_name ILIKE '%orig%' OR column_name ILIKE '%relac%' OR column_name ILIKE '%referen%' OR column_name ILIKE '%padre%'
+                   OR column_name ILIKE '%asoc%' OR column_name ILIKE '%anul%' OR column_name ILIKE '%comprobante%' OR column_name ILIKE '%pedido%')
+            ORDER BY column_name`);
+        return r.rows;
+    });
+
+    // Algunas notas de crédito de rechazo, sin datos personales (solo columnas que no son nombres, direcciones ni documentos)
+    await paso('muestra_ncr', async () => {
+        const r = await pool.query(`/*DIAGIND12*/ SELECT to_jsonb(v) AS fila FROM venta v
+            WHERE v.tipo_comprobante_codigo ILIKE 'NCR%' AND COALESCE(v.motivo_rechazo_codigo, '') <> ''
+              AND v.fecha_entrega::date BETWEEN $1::date AND $2::date ORDER BY v.id DESC LIMIT 4`, [desde, hasta]);
+        const oculto = /razon|nombre|cuit|cuil|direccion|mail|telefono|domicilio|contacto|observ|json|dni|documento_n|alias|cliente_desc|empleado/i;
+        return r.rows.map(f => Object.fromEntries(Object.entries(f.fila).filter(([k, v]) => !oculto.test(k) && v !== null).map(([k, v]) => [k, String(v).slice(0, 60)])));
+    });
+
+    // Por chofer: facturas con nota de crédito del mismo cliente y día, total (98% o más del importe) o parcial
+    await paso('rechazo_total_por_chofer', async () => {
+        const r = await pool.query(`/*DIAGIND13*/ WITH f AS (
+                SELECT v.id, trim(v.empleado_chofer_nombre) AS chofer, v.cliente_id, v.fecha_entrega::date AS dia, v.importe_total AS imp
+                FROM venta v WHERE v.tipo_comprobante_codigo ILIKE 'FAC%' AND v.fecha_entrega::date BETWEEN $1::date AND $2::date
+                  AND COALESCE(v.empleado_chofer_nombre, '') <> ''),
+            n AS (
+                SELECT v.cliente_id, v.fecha_entrega::date AS dia, SUM(ABS(v.importe_total)) AS imp
+                FROM venta v WHERE v.tipo_comprobante_codigo ILIKE 'NCR%' AND v.fecha_entrega::date BETWEEN $1::date AND $2::date
+                  AND COALESCE(v.motivo_rechazo_codigo, '') <> ''
+                GROUP BY 1, 2)
+            SELECT f.chofer, COUNT(*)::int AS facturas,
+                   COUNT(*) FILTER (WHERE n.imp >= 0.98 * f.imp AND f.imp > 0)::int AS rechazo_total,
+                   COUNT(*) FILTER (WHERE n.imp > 0 AND n.imp < 0.98 * f.imp)::int AS rechazo_parcial
+            FROM f LEFT JOIN n ON n.cliente_id = f.cliente_id AND n.dia = f.dia
             GROUP BY 1 ORDER BY 1`, [desde, hasta]);
         return r.rows;
     });
