@@ -753,6 +753,10 @@ function leerListaCombos() {
     return listaCombos;
 }
 let cacheCombos = { t: 0, data: null };
+// Gescom no siempre guarda el nombre del combo en la venta: se completa con los nombres del reporte de bajada de combos
+function nombresCombos() {
+    try { return JSON.parse(_fsCombos.readFileSync(_pathCombos.join(__dirname, '..', 'datos', 'combos-nombres.json'), 'utf8')); } catch (e) { return {}; }
+}
 
 async function obtenerCombos(forzar) {
     if (!forzar && cacheCombos.data && Date.now() - cacheCombos.t < 5 * 60 * 1000) return cacheCombos.data;
@@ -783,6 +787,7 @@ async function obtenerCombos(forzar) {
         actualizado: new Date().toISOString(),
         desde,
         porDefecto: String(process.env.COMBOS_SEGUIMIENTO || '450010021,450010016').split(',').map(x => x.trim()).filter(Boolean),
+        nombres: nombresCombos(),
         vendedores: Object.fromEntries(nom.rows.map(f => [f.cod, f.nombre || ''])),
         clientes: lista,
         compras: r.rows.map(f => ({

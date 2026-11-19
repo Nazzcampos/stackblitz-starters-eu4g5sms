@@ -1126,7 +1126,7 @@ async function cargarCombos(refresh){
 
 function descCombo(k){
   const x = COMB.compras.find(c => c.k === k && c.kd);
-  return x ? x.kd : k;
+  return x ? x.kd : ((COMB.nombres && COMB.nombres[k]) || k);
 }
 
 function renderCombos(){
