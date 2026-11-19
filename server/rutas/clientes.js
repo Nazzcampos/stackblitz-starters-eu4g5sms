@@ -370,21 +370,31 @@ async function descubrirStock() {
     if (!stock.length) throw new Error('Gescom no tiene la tabla stock en esta conexión.');
     if (!item.length) throw new Error('Gescom no tiene la tabla item en esta conexión.');
     const sNombres = stock.map(c => c.column_name), iNombres = item.map(c => c.column_name);
-    if (!sNombres.includes('item_id')) throw new Error('La tabla stock no tiene la columna item_id (columnas: ' + sNombres.join(', ') + ').');
+    // El stock de Gescom enlaza el artículo por item_id o, si no existe, por item_codigo (lo que usa esta base)
+    const enlace = sNombres.includes('item_id') && iNombres.includes('id') ? { s: 'item_id', i: 'id' }
+        : (sNombres.includes('item_codigo') && iNombres.includes('codigo') ? { s: 'item_codigo', i: 'codigo' } : null);
+    if (!enlace) throw new Error('No se puede enlazar stock con item (columnas de stock: ' + sNombres.join(', ') + ').');
 
     // Cantidades del stock: cada columna numérica que no es un id. Se reconoce si es cantidad, disponible o reserva, en bultos o en unidades
-    const cantidades = stock.filter(c => NUMERICOS.test(c.data_type) && !/(^|_)id$|tenant|^orden$|factor|sede|sector/i.test(c.column_name)).map(c => {
+    const cantidades = stock.filter(c => NUMERICOS.test(c.data_type) && !/(^|_)id$|tenant|^orden$|factor|sede|sector|codigo/i.test(c.column_name)).map(c => {
         const n = c.column_name;
         return { nombre: n, rol: /disponible/i.test(n) ? 'disp' : /reserv/i.test(n) ? 'reserva' : 'cant', tipo: /bulto/i.test(n) ? 'bultos' : /unidad/i.test(n) ? 'unidades' : 'unica' };
     });
+    // Gescom guarda "cantidad" (bultos) y "unidades" (sueltas) como dos columnas
+    if (cantidades.some(c => c.nombre === 'cantidad') && cantidades.some(c => c.nombre === 'unidades')) {
+        cantidades.find(c => c.nombre === 'cantidad').tipo = 'bultos';
+        cantidades.find(c => c.nombre === 'unidades').tipo = 'unidades';
+    }
     // Clasificaciones del artículo (rubro, subrubro, marca...): texto, sin ids ni códigos
     const clasif = item.filter(c => TEXTOS.test(c.data_type) && /rubro|marca|familia|categoria|linea|clasific|grupo|segmento/i.test(c.column_name)
-        && !/(_id|_codigo|codigo_)$/i.test(c.column_name)).map(c => c.column_name);
+        && !/(_id|_codigo|_cod|codigo_)$/i.test(c.column_name)).map(c => c.column_name)
+        .sort((x, y) => (/_desc$/i.test(y) ? 1 : 0) - (/_desc$/i.test(x) ? 1 : 0)).filter((c, _, todas) => !todas.some(o => /_desc$/i.test(o)) || /_desc$/i.test(c));
     const textoDep = stock.filter(c => /deposito/i.test(c.column_name) && TEXTOS.test(c.data_type));
     const unidadStock = stock.find(c => TEXTOS.test(c.data_type) && /unidad|presentacion/i.test(c.column_name) && !/(_id|_codigo)$/i.test(c.column_name));
     const unidadItem = item.find(c => TEXTOS.test(c.data_type) && /unidad|presentacion/i.test(c.column_name) && !/(_id|_codigo)$/i.test(c.column_name));
     metaStock = {
-        sNombres, iNombres, cantidades, clasif,
+        sNombres, iNombres, cantidades, clasif, enlace,
+        descStock: sNombres.includes('item_descripcion') ? 'item_descripcion' : null,
         dep: (textoDep.find(c => /desc|nombre/i.test(c.column_name)) || textoDep[0] || {}).column_name || null,
         unidad: unidadStock ? { tabla: 's', col: unidadStock.column_name } : (unidadItem ? { tabla: 'i', col: unidadItem.column_name } : null),
         fecha: stock.find(c => /^fecha/i.test(c.column_name) && /date|timestamp/.test(c.data_type)) || null,
@@ -404,19 +414,20 @@ async function obtenerStock(forzar) {
         try {
             const m = await descubrirStock();
             if (!m.cantidades.length) throw new Error('La tabla stock no tiene columnas de cantidad (columnas: ' + m.sNombres.join(', ') + ').');
-            const sel = [m.codigo ? `i.${qi(m.codigo)}::text AS codigo` : `i.id::text AS codigo`,
-                         m.descripcion ? `i.${qi(m.descripcion)} AS descripcion` : `i.id::text AS descripcion`,
+            const sel = [m.enlace.s === 'item_codigo' ? `s.item_codigo::text AS codigo` : (m.codigo ? `i.${qi(m.codigo)}::text AS codigo` : `i.id::text AS codigo`),
+                         m.descStock ? `s.${qi(m.descStock)} AS descripcion` : (m.descripcion ? `i.${qi(m.descripcion)} AS descripcion` : `i.id::text AS descripcion`),
                          m.dep ? `s.${qi(m.dep)} AS deposito` : `'Todos'::text AS deposito`,
                          m.unidad ? `${m.unidad.tabla === 's' ? 's' : 'i'}.${qi(m.unidad.col)} AS unidad` : `NULL::text AS unidad`];
             m.clasif.forEach((c, k) => sel.push(`i.${qi(c)} AS ${qi('c' + k)}`));
             m.cantidades.forEach((c, k) => sel.push(`COALESCE(s.${qi(c.nombre)}, 0)::float8 AS ${qi('n' + k)}`));
             const where = [];
             const params = [];
-            if (m.tenantItem) { params.push(TENANT); where.push(`i.tenant_id = $${params.length}`); }
+            if (m.tenantStock) { params.push(TENANT); where.push(`s.tenant_id = $${params.length}`); }
+            else if (m.tenantItem) { params.push(TENANT); where.push(`i.tenant_id = $${params.length}`); }
             if (m.actual) where.push(`s.${qi('actual')} = true`);
             else if (m.fecha) where.push(`s.${qi(m.fecha.column_name)} = (SELECT MAX(x.${qi(m.fecha.column_name)}) FROM stock x${m.tenantStock && m.tenantItem ? ' WHERE x.tenant_id = $1' : ''})`);
             if (m.activoItem) where.push(`COALESCE(i.activo::int, 1) = 1`);
-            const sql = `/*STOCK*/ SELECT ${sel.join(', ')} FROM item i JOIN stock s ON s.item_id = i.id${m.tenantStock && m.tenantItem ? ' AND s.tenant_id = i.tenant_id' : ''}
+            const sql = `/*STOCK*/ SELECT ${sel.join(', ')} FROM stock s LEFT JOIN item i ON i.${qi(m.enlace.i)} = s.${qi(m.enlace.s)}${m.tenantStock && m.tenantItem ? ' AND s.tenant_id = i.tenant_id' : ''}
                 ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY 2, 3 LIMIT 30000`;
             const { rows } = await pool.query(sql, params);
             const datos = {
