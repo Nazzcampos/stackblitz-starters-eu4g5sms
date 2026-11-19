@@ -23,6 +23,7 @@
 const path = require('path');
 const { app, pool } = require('../core.js');
 const { db } = require('../base.js');
+const { ESTILO, crearXlsx, enviarXlsx } = require('../xlsx.js');
 
 const TENANT = Number(process.env.GESCOM_TENANT || 116);
 const CACHE_MS = 10 * 60 * 1000; // 10 minutos, para no cargar a Gescom en cada visita
@@ -39,13 +40,33 @@ const SUBMARCAS = [
 ];
 
 // El PIN se lee en cada pedido y sin espacios (por si quedó un espacio al cargarlo en Render)
-const leerPin = () => String(process.env.CLIENTES_PIN || '').trim();
+//  Tres niveles de acceso:
+//   1) PIN de entrada a la web (CLIENTES_PIN, por defecto 5940)
+//   2) Supervisor: código SUPERVISOR_PIN (por defecto 1234) -> seguimiento de altas, cobertura, stock y ruteo
+//   3) Vendedor: su código de vendedor de Gescom (VENDEDORES_CODIGOS, separados por coma) -> solo su ruta
+const leerPin = () => String(process.env.CLIENTES_PIN || '5940').trim();
+const leerPinSupervisor = () => String(process.env.SUPERVISOR_PIN || '1234').trim();
+const codigosVendedores = () => String(process.env.VENDEDORES_CODIGOS || '21,22,23,24,25,27,31,32,33,34')
+    .split(',').map(c => c.trim()).filter(Boolean);
+const sinCeros = c => String(c == null ? '' : c).trim().replace(/^0+(?=\d)/, '');
 
 function controlPin(req, res, next) {
-    const PIN = leerPin();
-    if (!PIN) return res.status(500).json({ error: 'Falta configurar CLIENTES_PIN en Render.' });
-    if (String(req.get('x-pin') || '').trim() !== PIN) return res.status(401).json({ error: 'PIN incorrecto' });
+    if (String(req.get('x-pin') || '').trim() !== leerPin()) return res.status(401).json({ error: 'PIN incorrecto' });
     next();
+}
+function controlSupervisor(req, res, next) {
+    controlPin(req, res, () => {
+        if (String(req.get('x-sup') || '').trim() !== leerPinSupervisor()) return res.status(403).json({ error: 'Código de supervisor incorrecto' });
+        next();
+    });
+}
+function controlVendedor(req, res, next) {
+    controlPin(req, res, () => {
+        const cod = sinCeros(req.get('x-vendedor'));
+        if (!cod || !codigosVendedores().some(c => sinCeros(c) === cod)) return res.status(403).json({ error: 'Código de vendedor incorrecto' });
+        req.vendedor = cod;
+        next();
+    });
 }
 
 const hoyAR = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' }); // YYYY-MM-DD
@@ -281,7 +302,7 @@ app.get('/clientes', (req, res) => {
     res.sendFile(path.join(__dirname, '..', '..', 'clientes.html'));
 });
 
-app.get('/api/seguimiento-clientes/datos', controlPin, async (req, res) => {
+app.get('/api/seguimiento-clientes/datos', controlSupervisor, async (req, res) => {
     try {
         const filas = await obtenerClientes(req.query.refresh === '1');
         res.json({ actualizado: new Date(cacheClientes.t).toISOString(), filas });
@@ -291,7 +312,7 @@ app.get('/api/seguimiento-clientes/datos', controlPin, async (req, res) => {
     }
 });
 
-app.get('/api/seguimiento-clientes/marcas', controlPin, async (req, res) => {
+app.get('/api/seguimiento-clientes/marcas', controlSupervisor, async (req, res) => {
     const mes = mesValido(req.query.mes) ? req.query.mes : hoyAR().slice(0, 7);
     const fecha = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.fecha || '')) ? req.query.fecha : null;
     try {
@@ -309,7 +330,7 @@ app.get('/api/seguimiento-clientes/marcas', controlPin, async (req, res) => {
     }
 });
 
-app.get('/api/seguimiento-clientes/objetivos', controlPin, async (req, res) => {
+app.get('/api/seguimiento-clientes/objetivos', controlSupervisor, async (req, res) => {
     const mes = mesValido(req.query.mes) ? req.query.mes : hoyAR().slice(0, 7);
     try {
         await asegurarTablaObjetivos();
@@ -322,7 +343,7 @@ app.get('/api/seguimiento-clientes/objetivos', controlPin, async (req, res) => {
     }
 });
 
-app.post('/api/seguimiento-clientes/objetivos', controlPin, async (req, res) => {
+app.post('/api/seguimiento-clientes/objetivos', controlSupervisor, async (req, res) => {
     const { mes, objetivos } = req.body || {};
     if (!mesValido(mes) || !objetivos || typeof objetivos !== 'object') {
         return res.status(400).json({ error: 'Datos inválidos' });
@@ -451,7 +472,7 @@ async function obtenerStock(forzar) {
     return cacheStock.pendiente;
 }
 
-app.get('/api/seguimiento-clientes/stock', controlPin, async (req, res) => {
+app.get('/api/seguimiento-clientes/stock', controlSupervisor, async (req, res) => {
     try {
         if (req.query.diagnostico === '1') {
             const m = await descubrirStock();
@@ -462,6 +483,221 @@ app.get('/api/seguimiento-clientes/stock', controlPin, async (req, res) => {
     } catch (err) {
         console.error('❌ [clientes] Error en consulta de stock:', err.message);
         res.status(500).json({ error: err.message });
+    }
+});
+
+
+// =====================================================================
+//  ACCESO: la página pregunta qué perfil sos y este pedido valida el código
+// =====================================================================
+app.get('/api/acceso/verificar', controlPin, async (req, res) => {
+    const rol = String(req.query.rol || '');
+    if (rol === 'supervisor') {
+        if (String(req.get('x-sup') || '').trim() !== leerPinSupervisor()) return res.status(403).json({ error: 'Código de supervisor incorrecto' });
+        return res.json({ ok: true, rol });
+    }
+    if (rol === 'vendedor') {
+        const cod = sinCeros(req.get('x-vendedor'));
+        if (!cod || !codigosVendedores().some(c => sinCeros(c) === cod)) return res.status(403).json({ error: 'Ese código de vendedor no existe' });
+        let nombre = '';
+        try { nombre = (await nombreVendedor(cod)) || ''; } catch (e) { /* solo informativo */ }
+        return res.json({ ok: true, rol, codigo: cod, nombre });
+    }
+    res.json({ ok: true });
+});
+
+// =====================================================================
+//  RUTEO DEL VENDEDOR: ordena su recorrido (arrastrar y soltar). Queda guardado en Supabase y se baja a Excel.
+//  Gescom NO se toca: el Excel sirve para cargar el orden allá.
+// =====================================================================
+const DIAS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+const DIA_ETIQ = { lunes: 'Lunes', martes: 'Martes', miercoles: 'Miércoles', jueves: 'Jueves', viernes: 'Viernes', sabado: 'Sábado', domingo: 'Domingo' };
+const MAX_RUTA = 1500;
+
+let tablaRutaLista = false;
+async function asegurarTablaRuta() {
+    if (!db) throw new Error('La base propia (Supabase) no está configurada.');
+    if (tablaRutaLista) return;
+    await db.query(`CREATE TABLE IF NOT EXISTS clientes_orden_vendedor (
+        vendedor text NOT NULL,
+        dia text NOT NULL,
+        cliente_id text NOT NULL,
+        cliente_codigo text,
+        orden int NOT NULL,
+        actualizado timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (vendedor, dia, cliente_id)
+    )`);
+    tablaRutaLista = true;
+}
+
+async function nombreVendedor(cod) {
+    const r = await pool.query(`SELECT MAX(vendedor_nombre) AS n FROM cliente_ruta_hist
+        WHERE actual = true AND tenant_id = $1 AND ltrim(vendedor_codigo::text, '0') = $2`, [TENANT, sinCeros(cod)]);
+    return r.rows[0] && r.rows[0].n;
+}
+
+// Clientes del vendedor (opcionalmente solo de un día), con el orden que tienen hoy en Gescom
+async function clientesDelVendedor(cod, dia) {
+    const filtro = dia ? ` AND rh.${dia} = 1` : '';
+    const r = await pool.query(`
+        SELECT DISTINCT ON (rh.cliente_id) rh.cliente_id::text AS id, c.codigo::text AS codigo,
+               COALESCE(NULLIF(c.nombre, ''), c.razon_social) AS nombre, c.direccion, c.localidad, rh.orden::int AS orden,
+               ${DIAS.map(d => `COALESCE(rh.${d}, 0)::int AS ${d}`).join(', ')}
+        FROM cliente_ruta_hist rh
+        JOIN cliente_hist c ON c.id = rh.cliente_id AND c.actual = true AND COALESCE(c.activo, true) = true
+        WHERE rh.actual = true AND rh.tenant_id = $1 AND ltrim(rh.vendedor_codigo::text, '0') = $2${filtro}
+        ORDER BY rh.cliente_id, (rh.fuerza_venta = 'Principal') DESC NULLS LAST
+        LIMIT ${MAX_RUTA}`, [TENANT, sinCeros(cod)]);
+    return r.rows.map(f => ({
+        id: f.id, codigo: f.codigo || '', nombre: f.nombre || '', direccion: f.direccion || '', localidad: f.localidad || '',
+        orden: f.orden == null || f.orden <= 0 ? null : f.orden,
+        dias: DIAS.filter(d => f[d] === 1)
+    }));
+}
+
+// Orden de Gescom: primero los que tienen número (de menor a mayor), después los que no tienen
+const ordenGescom = (a, b) => ((a.orden == null) - (b.orden == null)) || ((a.orden || 0) - (b.orden || 0)) || a.nombre.localeCompare(b.nombre, 'es');
+
+// Aplica el orden guardado por el vendedor (si hay) sobre los clientes de un día
+async function rutaDelDia(cod, dia, todos) {
+    const lista = (todos || await clientesDelVendedor(cod, dia)).filter(c => c.dias.includes(dia)).sort(ordenGescom);
+    lista.forEach((c, i) => { c.posGescom = i + 1; });
+    let guardado = null;
+    try {
+        await asegurarTablaRuta();
+        const g = await db.query(`SELECT cliente_id, orden, actualizado FROM clientes_orden_vendedor WHERE vendedor = $1 AND dia = $2`, [sinCeros(cod), dia]);
+        if (g.rows.length) {
+            const pos = new Map(g.rows.map(f => [f.cliente_id, f.orden]));
+            guardado = g.rows.reduce((m, f) => (!m || f.actualizado > m ? f.actualizado : m), null);
+            lista.forEach(c => { c.nuevo = !pos.has(c.id); });
+            lista.sort((a, b) => ((a.nuevo ? 1 : 0) - (b.nuevo ? 1 : 0)) || ((pos.get(a.id) || 0) - (pos.get(b.id) || 0)) || ordenGescom(a, b));
+        }
+    } catch (e) { console.error('⚠️ [clientes] Leyendo orden guardado:', e.message); }
+    return { lista, guardado };
+}
+
+app.get('/api/vendedor/ruta', controlVendedor, async (req, res) => {
+    try {
+        const cod = req.vendedor;
+        const todos = await clientesDelVendedor(cod);
+        const dias = DIAS.map(d => ({ dia: d, etiqueta: DIA_ETIQ[d], clientes: todos.filter(c => c.dias.includes(d)).length }));
+        let dia = String(req.query.dia || '').toLowerCase();
+        if (!DIAS.includes(dia)) {
+            const hoy = { Monday: 'lunes', Tuesday: 'martes', Wednesday: 'miercoles', Thursday: 'jueves', Friday: 'viernes', Saturday: 'sabado', Sunday: 'domingo' }[
+                new Date().toLocaleDateString('en-US', { timeZone: 'America/Argentina/Buenos_Aires', weekday: 'long' })];
+            dia = ((dias.find(d => d.dia === hoy && d.clientes > 0)) || dias.find(d => d.clientes > 0) || dias[0]).dia;
+        }
+        const { lista, guardado } = await rutaDelDia(cod, dia, todos);
+        res.json({ vendedor: { codigo: cod, nombre: (await nombreVendedor(cod)) || '' }, dias, dia, guardado, clientes: lista });
+    } catch (err) {
+        console.error('❌ [clientes] Ruta del vendedor:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/vendedor/ruta', controlVendedor, async (req, res) => {
+    let cli;
+    try {
+        const dia = String((req.body || {}).dia || '').toLowerCase();
+        const ids = Array.isArray((req.body || {}).ids) ? req.body.ids.map(String) : [];
+        if (!DIAS.includes(dia) || !ids.length || ids.length > MAX_RUTA) return res.status(400).json({ error: 'Datos inválidos' });
+        // Solo se aceptan clientes que de verdad están en la ruta de ese vendedor ese día
+        const validos = new Map((await clientesDelVendedor(req.vendedor, dia)).map(c => [c.id, c]));
+        const filtrados = [...new Set(ids)].filter(id => validos.has(id));
+        if (!filtrados.length) return res.status(400).json({ error: 'Ningún cliente válido' });
+        await asegurarTablaRuta();
+        cli = await db.connect();
+        await cli.query('BEGIN');
+        await cli.query(`DELETE FROM clientes_orden_vendedor WHERE vendedor = $1 AND dia = $2`, [sinCeros(req.vendedor), dia]);
+        await cli.query(`INSERT INTO clientes_orden_vendedor (vendedor, dia, cliente_id, cliente_codigo, orden)
+            SELECT $1, $2, x.id, x.cod, x.ord FROM unnest($3::text[], $4::text[], $5::int[]) AS x(id, cod, ord)`,
+            [sinCeros(req.vendedor), dia, filtrados, filtrados.map(id => validos.get(id).codigo), filtrados.map((_, i) => i + 1)]);
+        await cli.query('COMMIT');
+        res.json({ exito: true, guardados: filtrados.length });
+    } catch (err) {
+        if (cli) { try { await cli.query('ROLLBACK'); } catch (e) { /* ya cerrada */ } }
+        console.error('❌ [clientes] Guardando ruta del vendedor:', err.message);
+        res.status(500).json({ error: err.message });
+    } finally {
+        if (cli) cli.release();
+    }
+});
+
+app.delete('/api/vendedor/ruta', controlVendedor, async (req, res) => {
+    try {
+        const dia = String(req.query.dia || '').toLowerCase();
+        if (!DIAS.includes(dia)) return res.status(400).json({ error: 'Día inválido' });
+        await asegurarTablaRuta();
+        await db.query(`DELETE FROM clientes_orden_vendedor WHERE vendedor = $1 AND dia = $2`, [sinCeros(req.vendedor), dia]);
+        res.json({ exito: true });
+    } catch (err) {
+        console.error('❌ [clientes] Restaurando ruta del vendedor:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Excel con la ruta de uno o varios vendedores (todos los días, con el orden guardado o, si no hay, el de Gescom)
+async function excelRuteo(codigos) {
+    const cabecera = ['Cód. vendedor', 'Vendedor', 'Día', 'Orden nuevo', 'Orden en Gescom', 'Cód. cliente', 'Cliente', 'Dirección', 'Localidad', 'Cambió de lugar'];
+    const filas = [cabecera];
+    const cambios = [cabecera];
+    for (const cod of codigos) {
+        const nombre = (await nombreVendedor(cod)) || '';
+        const todos = await clientesDelVendedor(cod);
+        for (const dia of DIAS) {
+            if (!todos.some(c => c.dias.includes(dia))) continue;
+            const { lista } = await rutaDelDia(cod, dia, todos.map(c => ({ ...c })));
+            lista.forEach((c, i) => {
+                const cambio = c.posGescom !== i + 1;
+                const fila = [sinCeros(cod), nombre, DIA_ETIQ[dia], i + 1, c.posGescom, c.codigo, c.nombre, c.direccion, c.localidad, cambio ? 'Sí' : 'No'];
+                filas.push(fila);
+                if (cambio) cambios.push(fila);
+            });
+        }
+    }
+    const anchos = [12, 24, 12, 11, 14, 12, 36, 30, 18, 12];
+    return crearXlsx([{ nombre: 'Ruta completa', filas, anchos }, { nombre: 'Solo lo que cambió', filas: cambios, anchos }]);
+}
+
+app.get('/api/vendedor/excel', controlVendedor, async (req, res) => {
+    try {
+        enviarXlsx(res, `ruta_vendedor_${req.vendedor}_${hoyAR()}.xlsx`, await excelRuteo([req.vendedor]));
+    } catch (err) {
+        console.error('❌ [clientes] Excel de ruta:', err.message);
+        res.status(500).json({ error: 'No se pudo generar el Excel' });
+    }
+});
+
+// Supervisor: quién ya ordenó su ruta y descarga del Excel (de uno o de todos)
+app.get('/api/seguimiento-clientes/ruteo/resumen', controlSupervisor, async (req, res) => {
+    try {
+        await asegurarTablaRuta();
+        const g = await db.query(`SELECT vendedor, COUNT(DISTINCT dia)::int AS dias, COUNT(*)::int AS clientes, MAX(actualizado) AS ultima FROM clientes_orden_vendedor GROUP BY vendedor`);
+        const guardado = new Map(g.rows.map(f => [f.vendedor, f]));
+        const filas = [];
+        for (const cod of codigosVendedores()) {
+            const todos = await clientesDelVendedor(cod);
+            const x = guardado.get(sinCeros(cod)) || {};
+            filas.push({ codigo: cod, nombre: (await nombreVendedor(cod)) || '', clientes: todos.length,
+                diasConRuta: DIAS.filter(d => todos.some(c => c.dias.includes(d))).length,
+                diasOrdenados: x.dias || 0, ultima: x.ultima || null });
+        }
+        res.json({ filas });
+    } catch (err) {
+        console.error('❌ [clientes] Resumen de ruteo:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/seguimiento-clientes/ruteo/excel', controlSupervisor, async (req, res) => {
+    try {
+        const v = String(req.query.vendedor || 'todos');
+        const lista = v === 'todos' ? codigosVendedores() : codigosVendedores().filter(c => sinCeros(c) === sinCeros(v));
+        if (!lista.length) return res.status(400).json({ error: 'Vendedor inválido' });
+        enviarXlsx(res, `ruteo_${v === 'todos' ? 'vendedores' : 'vendedor_' + sinCeros(v)}_${hoyAR()}.xlsx`, await excelRuteo(lista));
+    } catch (err) {
+        console.error('❌ [clientes] Excel de ruteo:', err.message);
+        res.status(500).json({ error: 'No se pudo generar el Excel' });
     }
 });
 
