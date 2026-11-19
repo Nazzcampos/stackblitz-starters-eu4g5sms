@@ -735,6 +735,74 @@ app.get('/api/seguimiento-clientes/ruteo/excel', controlSupervisor, async (req, 
     }
 });
 
+
+// =====================================================================
+//  COMBOS PEHUAMAR: seguimiento de los clientes elegidos por Pepsico (lista en server/datos/combos-clientes.json)
+//  Se leen de Gescom las ventas con combo (venta_item.combo_codigo / combo_desc / combo_cantidad) SOLO de esos clientes.
+//  Un combo vendido = un combo por comprobante (la cantidad del combo se repite en cada línea de ese comprobante).
+//  Cuentan facturas (FAC) y pedidos todavía sin facturar (VEN), igual que el reporte de bajada de combos de Gescom.
+//   COMBOS_DESDE        fecha desde la que se mira (por defecto 2026-09-01)
+//   COMBOS_SEGUIMIENTO  combos que se marcan por defecto en la pantalla (por defecto 450010021,450010016)
+// =====================================================================
+const _fsCombos = require('fs');
+const _pathCombos = require('path');
+const { filtroAnuladas } = require('./deposito.js');
+let listaCombos = null;
+function leerListaCombos() {
+    if (!listaCombos) listaCombos = JSON.parse(_fsCombos.readFileSync(_pathCombos.join(__dirname, '..', 'datos', 'combos-clientes.json'), 'utf8'));
+    return listaCombos;
+}
+let cacheCombos = { t: 0, data: null };
+
+async function obtenerCombos(forzar) {
+    if (!forzar && cacheCombos.data && Date.now() - cacheCombos.t < 5 * 60 * 1000) return cacheCombos.data;
+    const lista = leerListaCombos();
+    const desde = /^\d{4}-\d{2}-\d{2}$/.test(process.env.COMBOS_DESDE || '') ? process.env.COMBOS_DESDE : '2026-09-01';
+    const filtro = await filtroAnuladas();
+    const r = await pool.query(`
+        SELECT c.codigo::text AS cliente,
+               to_char(COALESCE(v.fecha_comprobante, v.fecha_entrega), 'YYYY-MM-DD') AS fecha,
+               vi.combo_codigo::text AS combo, MAX(vi.combo_desc) AS combo_desc,
+               COALESCE(MAX(vi.combo_cantidad), 1) AS cantidad,
+               v.tipo_comprobante_codigo AS tipo, v.punto_venta_codigo::text AS pv, v.numero_comprobante::text AS numero
+        FROM venta v
+        JOIN venta_item vi ON vi.venta_id = v.id AND vi.tenant_id = v.tenant_id
+        JOIN cliente_hist c ON c.id = v.cliente_id AND c.tenant_id = v.tenant_id AND c.actual = true
+        WHERE v.tenant_id = $1
+          AND COALESCE(vi.combo_codigo, '') <> ''
+          AND (v.tipo_comprobante_codigo ILIKE 'FAC%' OR v.tipo_comprobante_codigo = 'VEN')
+          AND COALESCE(v.fecha_comprobante, v.fecha_entrega)::date >= $2::date
+          AND c.codigo::text = ANY($3::text[])${filtro}
+        GROUP BY v.id, c.codigo, COALESCE(v.fecha_comprobante, v.fecha_entrega), vi.combo_codigo,
+                 v.tipo_comprobante_codigo, v.punto_venta_codigo, v.numero_comprobante
+        ORDER BY 2, 1`, [TENANT, desde, lista.map(x => x.c)]);
+    const nom = await pool.query(`SELECT ltrim(vendedor_codigo::text, '0') AS cod, MAX(vendedor_nombre) AS nombre
+        FROM cliente_ruta_hist WHERE actual = true AND tenant_id = $1 AND ltrim(vendedor_codigo::text, '0') = ANY($2::text[]) GROUP BY 1`,
+        [TENANT, [...new Set(lista.map(x => sinCeros(x.v)))]]);
+    const data = {
+        actualizado: new Date().toISOString(),
+        desde,
+        porDefecto: String(process.env.COMBOS_SEGUIMIENTO || '450010021,450010016').split(',').map(x => x.trim()).filter(Boolean),
+        vendedores: Object.fromEntries(nom.rows.map(f => [f.cod, f.nombre || ''])),
+        clientes: lista,
+        compras: r.rows.map(f => ({
+            c: f.cliente, f: f.fecha, k: f.combo, kd: f.combo_desc || '', n: Number(f.cantidad) || 1,
+            cp: [f.tipo, f.pv, f.numero].filter(Boolean).join(' ')
+        }))
+    };
+    cacheCombos = { t: Date.now(), data };
+    return data;
+}
+
+app.get('/api/seguimiento-clientes/combos', controlSupervisor, async (req, res) => {
+    try {
+        res.json(await obtenerCombos(req.query.refresh === '1'));
+    } catch (err) {
+        console.error('❌ [clientes] Combos:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 console.log('📊 Módulo provisorio de seguimiento de clientes y cobertura de marcas activo en /clientes');
 
 module.exports = {};

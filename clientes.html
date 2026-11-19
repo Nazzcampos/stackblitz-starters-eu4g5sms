@@ -114,6 +114,7 @@
     <button class="tab on" data-vista="vClientes">Clientes y altas</button>
     <button class="tab" data-vista="vMarcas">Cobertura de marcas</button>
     <button class="tab" data-vista="vStock">Stock</button>
+    <button class="tab" data-vista="vCombos">Combos Pehuamar</button>
     <button class="tab" data-vista="vRuteo">Ruteo vendedores</button>
   </div>
 </header>
@@ -264,6 +265,52 @@
         <button class="sec" onclick="exportar('stock','stock_disponible')">Descargar Excel</button>
       </div>
       <div class="tw" id="tStock"></div>
+    </div>
+  </section>
+
+
+  <!-- ======================= COMBOS PEHUAMAR ======================= -->
+  <section class="vista" id="vCombos">
+    <div class="filtros">
+      <label>Desde <input type="date" id="cDesde"></label>
+      <label>Hasta <input type="date" id="cHasta"></label>
+      <label>Vendedor <select id="cVend"></select></label>
+      <label>Estado
+        <select id="cEstado"><option value="">Todos</option><option value="si">Compraron</option><option value="no">Sin comprar</option></select>
+      </label>
+      <label>Buscar cliente <input type="search" id="cBuscar" placeholder="Nombre o código" autocomplete="off"></label>
+      <button class="sec" onclick="cargarCombos(true)">Actualizar</button>
+      <div style="flex-basis:100%;font-size:12px;color:var(--gris)">Período (tocá un mes o poné las fechas):
+        <div class="chips" id="cPeriodos"></div>
+      </div>
+      <div style="flex-basis:100%;font-size:12px;color:var(--gris)">Combos que se cuentan (tocá para sumar o quitar):
+        <div class="chips" id="cCombos"></div>
+      </div>
+    </div>
+    <div class="nota" id="cNota"></div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="v" id="cKCli">–</div><div class="l">Clientes del listado</div></div>
+      <div class="kpi"><div class="v" id="cKSi">–</div><div class="l">Compraron el combo</div></div>
+      <div class="kpi"><div class="v" id="cKNo">–</div><div class="l">Sin comprar</div></div>
+      <div class="kpi"><div class="v" id="cKPct">–</div><div class="l">% de clientes con compra</div></div>
+      <div class="kpi"><div class="v" id="cKCombos">–</div><div class="l">Combos vendidos</div></div>
+    </div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2>Por vendedor</h2><div class="sub">Clientes del listado de Pepsico que compraron, y combos vendidos por mes</div></div>
+        <button class="sec" onclick="exportar('cVend','combos_por_vendedor')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tCVend"></div>
+    </div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2>Clientes del listado</h2><div class="sub" id="cSub"></div></div>
+        <button class="sec" onclick="exportar('cCli','combos_clientes')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tCCli"></div>
     </div>
   </section>
 
@@ -467,6 +514,7 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
   vistaActual = b.dataset.vista;
   if (vistaActual === 'vMarcas' && !MARCAS) cargarMarcas(false);
   if (vistaActual === 'vStock' && !STOCK) cargarStock(false);
+  if (vistaActual === 'vCombos' && !COMB) cargarCombos(false);
   if (vistaActual === 'vRuteo') cargarRuteo();
 }));
 
@@ -475,6 +523,7 @@ function actualizar(){
   cargar(true);
   if (vistaActual === 'vMarcas') cargarMarcas(true);
   if (vistaActual === 'vStock') cargarStock(true);
+  if (vistaActual === 'vCombos') cargarCombos(true);
   if (vistaActual === 'vRuteo') cargarRuteo();
 }
 
@@ -1045,6 +1094,125 @@ function renderStock(){
   $('#tStock').innerHTML = html;
 }
 
+
+// ------------------------------------------------ COMBOS PEHUAMAR
+let COMB = null;
+let COMB_SEL = new Set();
+const vkey = v => String(v == null ? '' : v).trim().replace(/^0+(?=\d)/, '');
+const fFecha = s => s ? s.split('-').reverse().join('/') : '';
+
+async function cargarCombos(refresh){
+  if (!getPin()) { mostrarLogin(); return; }
+  $('#cNota').textContent = 'Cargando combos desde Gescom…';
+  try { COMB = await api('/api/seguimiento-clientes/combos' + (refresh ? '?refresh=1' : '')); }
+  catch(e) { if (e.message !== 'sin PIN') { COMB = null; $('#cNota').textContent = 'No se pudo leer: ' + e.message; } return; }
+  const hoy = hoyAR();
+  if (!$('#cDesde').value) $('#cDesde').value = COMB.desde;
+  // Vendedores del listado
+  const vs = [...new Set(COMB.clientes.map(c => vkey(c.v)))].sort((a, b) => Number(a) - Number(b));
+  const vSel = $('#cVend').value;
+  $('#cVend').innerHTML = '<option value="">Todos</option>' + vs.map(v => `<option value="${esc(v)}">${esc(v)}${COMB.vendedores[v] ? ' · ' + esc(COMB.vendedores[v]) : ''}</option>`).join('');
+  $('#cVend').value = vs.includes(vSel) ? vSel : '';
+  // Combos elegidos: lo último que marcaste, o los combos de seguimiento
+  const todos = new Set([...COMB.compras.map(x => x.k), ...COMB.porDefecto]);
+  let guardada = [];
+  try { guardada = JSON.parse(localStorage.getItem('clientesCombosSel') || '[]'); } catch(e) {}
+  guardada = guardada.filter(k => todos.has(k));
+  COMB_SEL = new Set(guardada.length ? guardada : COMB.porDefecto);
+  $('#cNota').textContent = 'Datos de Gescom al ' + new Date(COMB.actualizado).toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' }) +
+    ' · solo los ' + COMB.clientes.length + ' clientes elegidos por Pepsico · se cuenta un combo por comprobante (facturas y pedidos sin facturar, como el reporte de Gescom) · desde ' + fFecha(COMB.desde);
+  renderCombos();
+}
+
+function descCombo(k){
+  const x = COMB.compras.find(c => c.k === k && c.kd);
+  return x ? x.kd : k;
+}
+
+function renderCombos(){
+  if (!COMB) return;
+  const hoy = hoyAR();
+  const d = $('#cDesde').value || '0000-00-00', h = $('#cHasta').value || '9999-99-99';
+  const enPeriodo = COMB.compras.filter(x => x.f >= d && x.f <= h);
+
+  // Períodos por mes
+  const meses = mesesEntre(COMB.desde.slice(0, 7), hoy.slice(0, 7));
+  const limites = ym => { const [y, m] = ym.split('-').map(Number); const ult = new Date(y, m, 0).getDate(); return [ym + '-01', ym + '-' + String(ult).padStart(2, '0')]; };
+  $('#cPeriodos').innerHTML =
+    `<span class="chip ${$('#cDesde').value === COMB.desde && !$('#cHasta').value ? 'on' : ''}" onclick="periodoCombos('todo')">Todo</span>` +
+    meses.map(ym => { const [a, b] = limites(ym); return `<span class="chip ${$('#cDesde').value === a && $('#cHasta').value === b ? 'on' : ''}" onclick="periodoCombos('${ym}')">${mesLabel(ym)}</span>`; }).join('');
+
+  // Chips de combos (con cuántos se vendieron en el período)
+  const cuenta = {};
+  enPeriodo.forEach(x => { cuenta[x.k] = (cuenta[x.k] || 0) + x.n; });
+  const codigos = [...new Set([...COMB.compras.map(x => x.k), ...COMB.porDefecto])].sort((a, b) => (COMB_SEL.has(b) - COMB_SEL.has(a)) || ((cuenta[b] || 0) - (cuenta[a] || 0)));
+  $('#cCombos').innerHTML = codigos.map(k => `<span class="chip ${COMB_SEL.has(k) ? 'on' : ''}" onclick="alternarCombo('${esc(k)}')" title="Código ${esc(k)}">${esc(descCombo(k))} (${fmtN(cuenta[k] || 0)})</span>`).join('');
+
+  const compras = enPeriodo.filter(x => COMB_SEL.has(x.k));
+  const porCli = new Map();
+  compras.forEach(x => {
+    let a = porCli.get(x.c);
+    if (!a) { a = { n: 0, pri: x.f, ult: x.f, det: {} }; porCli.set(x.c, a); }
+    a.n += x.n; if (x.f < a.pri) a.pri = x.f; if (x.f > a.ult) a.ult = x.f;
+    a.det[x.k] = (a.det[x.k] || 0) + x.n;
+  });
+
+  const vsel = $('#cVend').value, est = $('#cEstado').value, q = norm($('#cBuscar').value);
+  const delVend = COMB.clientes.filter(c => !vsel || vkey(c.v) === vsel);
+  const nSi = delVend.filter(c => porCli.has(c.c)).length;
+  const totalCombos = delVend.reduce((s, c) => s + (porCli.get(c.c) ? porCli.get(c.c).n : 0), 0);
+  $('#cKCli').textContent = fmtN(delVend.length);
+  $('#cKSi').textContent = fmtN(nSi);
+  $('#cKNo').textContent = fmtN(delVend.length - nSi);
+  $('#cKPct').textContent = delVend.length ? (Math.round(nSi / delVend.length * 1000) / 10).toLocaleString('es-AR') + '%' : '–';
+  $('#cKCombos').textContent = fmtN(totalCombos);
+
+  // Por vendedor, con columnas por mes
+  const mesesCol = mesesEntre((d === '0000-00-00' ? COMB.desde : d).slice(0, 7), (h === '9999-99-99' ? [hoy, ...COMB.compras.map(x => x.f)].sort().pop() : h).slice(0, 7));
+  const vendDe = new Map(COMB.clientes.map(c => [c.c, vkey(c.v)]));
+  const vendedores = [...new Set(delVend.map(c => vkey(c.v)))].sort((a, b) => Number(a) - Number(b));
+  const r1 = n => Math.round(n * 10) / 10;
+  const filasV = vendedores.map(v => {
+    const cl = delVend.filter(c => vkey(c.v) === v);
+    const si = cl.filter(c => porCli.has(c.c)).length;
+    const porMes = mesesCol.map(m => compras.filter(x => vendDe.get(x.c) === v && x.f.slice(0, 7) === m).reduce((s, x) => s + x.n, 0));
+    return [v + (COMB.vendedores[v] ? ' · ' + COMB.vendedores[v] : ''), cl.length, si, cl.length - si, cl.length ? r1(si / cl.length * 100) : 0,
+            cl.reduce((s, c) => s + (porCli.get(c.c) ? porCli.get(c.c).n : 0), 0), ...porMes];
+  });
+  if (filasV.length > 1) {
+    const sumaCol = i => filasV.reduce((s, f) => s + f[i], 0);
+    const tc = sumaCol(1), ts = sumaCol(2);
+    filasV.push(['Total', tc, ts, tc - ts, tc ? r1(ts / tc * 100) : 0, sumaCol(5), ...mesesCol.map((_, i) => sumaCol(6 + i))]);
+  }
+  $('#tCVend').innerHTML = tabla('cVend', ['Vendedor', 'Clientes del listado', 'Compraron', 'Sin comprar', '% con compra', 'Combos vendidos', ...mesesCol.map(mesLabel)], filasV,
+    { txtCols: [0], totalUltima: filasV.length > 1 });
+
+  // Clientes
+  const lista = delVend.filter(c => (!q || norm(c.c + ' ' + c.n).includes(q)) && (!est || (est === 'si') === porCli.has(c.c)))
+    .map(c => ({ c, a: porCli.get(c.c) }))
+    .sort((x, y) => ((x.a ? 1 : 0) - (y.a ? 1 : 0)) || (Number(vkey(x.c.v)) - Number(vkey(y.c.v))) || x.c.n.localeCompare(y.c.n, 'es'));
+  $('#cSub').textContent = lista.length + ' clientes · primero los que todavía no compraron';
+  const filasC = lista.map(({ c, a }) => [c.c, c.n, vkey(c.v) + (COMB.vendedores[vkey(c.v)] ? ' · ' + COMB.vendedores[vkey(c.v)] : ''), c.d, c.t || '',
+    a ? 'Compró' : 'No compró', a ? a.n : 0, a ? fFecha(a.pri) : '', a ? fFecha(a.ult) : '',
+    a ? Object.entries(a.det).map(([k, n]) => descCombo(k) + ' ×' + n).join(' · ') : '', c.x]);
+  $('#tCCli').innerHTML = tabla('cCli', ['Código', 'Cliente', 'Vendedor', 'Día', 'Taxonomía', 'Estado', 'Combos', 'Primera compra', 'Última compra', 'Detalle', 'Marcado en tu Excel'], filasC,
+    { txtCols: [0, 1, 2, 3, 4, 5, 7, 8, 9, 10],
+      estilo: (i, v) => i === 5 ? (v === 'Compró' ? 'color:var(--ok);font-weight:600' : 'color:var(--mal);font-weight:600') : '' });
+}
+
+function periodoCombos(p){
+  const hoy = hoyAR();
+  if (p === 'todo') { $('#cDesde').value = COMB.desde; $('#cHasta').value = ''; }
+  else { const [y, m] = p.split('-').map(Number); $('#cDesde').value = p + '-01'; $('#cHasta').value = p + '-' + String(new Date(y, m, 0).getDate()).padStart(2, '0'); }
+  renderCombos();
+}
+function alternarCombo(k){
+  COMB_SEL.has(k) ? COMB_SEL.delete(k) : COMB_SEL.add(k);
+  try { localStorage.setItem('clientesCombosSel', JSON.stringify([...COMB_SEL])); } catch(e) {}
+  renderCombos();
+}
+['#cDesde', '#cHasta', '#cVend', '#cEstado'].forEach(s => $(s).addEventListener('change', renderCombos));
+$('#cBuscar').addEventListener('input', renderCombos);
 
 // ------------------------------------------------ RUTEO (supervisor)
 async function cargarRuteo(){
