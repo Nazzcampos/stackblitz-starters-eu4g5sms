@@ -521,12 +521,21 @@ async function asegurarTablaRuta() {
     await db.query(`CREATE TABLE IF NOT EXISTS clientes_orden_vendedor (
         vendedor text NOT NULL,
         dia text NOT NULL,
+        ruta text NOT NULL DEFAULT '',
         cliente_id text NOT NULL,
         cliente_codigo text,
         orden int NOT NULL,
         actualizado timestamptz NOT NULL DEFAULT now(),
-        PRIMARY KEY (vendedor, dia, cliente_id)
+        PRIMARY KEY (vendedor, dia, ruta, cliente_id)
     )`);
+    // Versión anterior (sin zona): se agrega la columna y la clave nueva. Lo guardado antes era de prueba y se descarta.
+    const col = await db.query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'clientes_orden_vendedor' AND column_name = 'ruta'`);
+    if (!col.rows.length) {
+        await db.query(`DELETE FROM clientes_orden_vendedor`);
+        await db.query(`ALTER TABLE clientes_orden_vendedor ADD COLUMN ruta text NOT NULL DEFAULT ''`);
+        await db.query(`ALTER TABLE clientes_orden_vendedor DROP CONSTRAINT IF EXISTS clientes_orden_vendedor_pkey`);
+        await db.query(`ALTER TABLE clientes_orden_vendedor ADD PRIMARY KEY (vendedor, dia, ruta, cliente_id)`);
+    }
     tablaRutaLista = true;
 }
 
@@ -536,11 +545,24 @@ async function nombreVendedor(cod) {
     return r.rows[0] && r.rows[0].n;
 }
 
-// Clientes del vendedor (opcionalmente solo de un día), con el orden que tienen hoy en Gescom
+// Nombre de la zona, si cliente_ruta_hist lo trae (ruta_descripcion, ruta_nombre...)
+let colNombreRuta;
+async function columnaNombreRuta() {
+    if (colNombreRuta !== undefined) return colNombreRuta;
+    try {
+        const r = await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'cliente_ruta_hist' AND column_name ~ '^ruta_(desc|nombre)' ORDER BY column_name LIMIT 1`);
+        colNombreRuta = r.rows[0] ? r.rows[0].column_name : null;
+    } catch (e) { colNombreRuta = null; }
+    return colNombreRuta;
+}
+
+// Clientes del vendedor (opcionalmente solo de un día), con su zona y el orden que tienen hoy en Gescom
 async function clientesDelVendedor(cod, dia) {
     const filtro = dia ? ` AND rh.${dia} = 1` : '';
+    const cn = await columnaNombreRuta();
     const r = await pool.query(`
         SELECT DISTINCT ON (rh.cliente_id) rh.cliente_id::text AS id, c.codigo::text AS codigo,
+               COALESCE(rh.ruta_codigo::text, '') AS ruta, ${cn ? `rh.${cn}::text` : `NULL::text`} AS ruta_nombre,
                COALESCE(NULLIF(c.nombre, ''), c.razon_social) AS nombre, c.direccion, c.localidad, rh.orden::int AS orden,
                ${DIAS.map(d => `COALESCE(rh.${d}, 0)::int AS ${d}`).join(', ')}
         FROM cliente_ruta_hist rh
@@ -549,7 +571,7 @@ async function clientesDelVendedor(cod, dia) {
         ORDER BY rh.cliente_id, (rh.fuerza_venta = 'Principal') DESC NULLS LAST
         LIMIT ${MAX_RUTA}`, [TENANT, sinCeros(cod)]);
     return r.rows.map(f => ({
-        id: f.id, codigo: f.codigo || '', nombre: f.nombre || '', direccion: f.direccion || '', localidad: f.localidad || '',
+        id: f.id, ruta: f.ruta || '', ruta_nombre: f.ruta_nombre || '', codigo: f.codigo || '', nombre: f.nombre || '', direccion: f.direccion || '', localidad: f.localidad || '',
         orden: f.orden == null || f.orden <= 0 ? null : f.orden,
         dias: DIAS.filter(d => f[d] === 1)
     }));
@@ -559,13 +581,13 @@ async function clientesDelVendedor(cod, dia) {
 const ordenGescom = (a, b) => ((a.orden == null) - (b.orden == null)) || ((a.orden || 0) - (b.orden || 0)) || a.nombre.localeCompare(b.nombre, 'es');
 
 // Aplica el orden guardado por el vendedor (si hay) sobre los clientes de un día
-async function rutaDelDia(cod, dia, todos) {
-    const lista = (todos || await clientesDelVendedor(cod, dia)).filter(c => c.dias.includes(dia)).sort(ordenGescom);
+async function rutaDelDia(cod, dia, ruta, todos) {
+    const lista = (todos || await clientesDelVendedor(cod, dia)).filter(c => c.dias.includes(dia) && c.ruta === ruta).sort(ordenGescom);
     lista.forEach((c, i) => { c.posGescom = i + 1; });
     let guardado = null;
     try {
         await asegurarTablaRuta();
-        const g = await db.query(`SELECT cliente_id, orden, actualizado FROM clientes_orden_vendedor WHERE vendedor = $1 AND dia = $2`, [sinCeros(cod), dia]);
+        const g = await db.query(`SELECT cliente_id, orden, actualizado FROM clientes_orden_vendedor WHERE vendedor = $1 AND dia = $2 AND ruta = $3`, [sinCeros(cod), dia, ruta]);
         if (g.rows.length) {
             const pos = new Map(g.rows.map(f => [f.cliente_id, f.orden]));
             guardado = g.rows.reduce((m, f) => (!m || f.actualizado > m ? f.actualizado : m), null);
@@ -587,8 +609,17 @@ app.get('/api/vendedor/ruta', controlVendedor, async (req, res) => {
                 new Date().toLocaleDateString('en-US', { timeZone: 'America/Argentina/Buenos_Aires', weekday: 'long' })];
             dia = ((dias.find(d => d.dia === hoy && d.clientes > 0)) || dias.find(d => d.clientes > 0) || dias[0]).dia;
         }
-        const { lista, guardado } = await rutaDelDia(cod, dia, todos);
-        res.json({ vendedor: { codigo: cod, nombre: (await nombreVendedor(cod)) || '' }, dias, dia, guardado, clientes: lista });
+        // Zonas de ese día (un día puede tener más de una, por ejemplo zonas quincenales que se alternan)
+        const mapaZ = new Map();
+        todos.filter(c => c.dias.includes(dia)).forEach(c => {
+            const z = mapaZ.get(c.ruta) || { ruta: c.ruta, nombre: c.ruta_nombre, clientes: 0 };
+            z.clientes++; if (!z.nombre && c.ruta_nombre) z.nombre = c.ruta_nombre; mapaZ.set(c.ruta, z);
+        });
+        const zonas = [...mapaZ.values()].sort((a, b) => String(a.ruta).localeCompare(String(b.ruta), 'es', { numeric: true }));
+        let ruta = req.query.ruta == null ? null : String(req.query.ruta);
+        if (ruta === null || !mapaZ.has(ruta)) ruta = zonas.length ? zonas[0].ruta : '';
+        const { lista, guardado } = await rutaDelDia(cod, dia, ruta, todos);
+        res.json({ vendedor: { codigo: cod, nombre: (await nombreVendedor(cod)) || '' }, dias, dia, zonas, ruta, guardado, clientes: lista });
     } catch (err) {
         console.error('❌ [clientes] Ruta del vendedor:', err.message);
         res.status(500).json({ error: err.message });
@@ -599,19 +630,20 @@ app.post('/api/vendedor/ruta', controlVendedor, async (req, res) => {
     let cli;
     try {
         const dia = String((req.body || {}).dia || '').toLowerCase();
+        const ruta = String((req.body || {}).ruta == null ? '' : req.body.ruta);
         const ids = Array.isArray((req.body || {}).ids) ? req.body.ids.map(String) : [];
         if (!DIAS.includes(dia) || !ids.length || ids.length > MAX_RUTA) return res.status(400).json({ error: 'Datos inválidos' });
         // Solo se aceptan clientes que de verdad están en la ruta de ese vendedor ese día
-        const validos = new Map((await clientesDelVendedor(req.vendedor, dia)).map(c => [c.id, c]));
+        const validos = new Map((await clientesDelVendedor(req.vendedor, dia)).filter(c => c.ruta === ruta).map(c => [c.id, c]));
         const filtrados = [...new Set(ids)].filter(id => validos.has(id));
         if (!filtrados.length) return res.status(400).json({ error: 'Ningún cliente válido' });
         await asegurarTablaRuta();
         cli = await db.connect();
         await cli.query('BEGIN');
-        await cli.query(`DELETE FROM clientes_orden_vendedor WHERE vendedor = $1 AND dia = $2`, [sinCeros(req.vendedor), dia]);
-        await cli.query(`INSERT INTO clientes_orden_vendedor (vendedor, dia, cliente_id, cliente_codigo, orden)
-            SELECT $1, $2, x.id, x.cod, x.ord FROM unnest($3::text[], $4::text[], $5::int[]) AS x(id, cod, ord)`,
-            [sinCeros(req.vendedor), dia, filtrados, filtrados.map(id => validos.get(id).codigo), filtrados.map((_, i) => i + 1)]);
+        await cli.query(`DELETE FROM clientes_orden_vendedor WHERE vendedor = $1 AND dia = $2 AND ruta = $3`, [sinCeros(req.vendedor), dia, ruta]);
+        await cli.query(`INSERT INTO clientes_orden_vendedor (vendedor, dia, ruta, cliente_id, cliente_codigo, orden)
+            SELECT $1, $2, $3, x.id, x.cod, x.ord FROM unnest($4::text[], $5::text[], $6::int[]) AS x(id, cod, ord)`,
+            [sinCeros(req.vendedor), dia, ruta, filtrados, filtrados.map(id => validos.get(id).codigo), filtrados.map((_, i) => i + 1)]);
         await cli.query('COMMIT');
         res.json({ exito: true, guardados: filtrados.length });
     } catch (err) {
@@ -628,7 +660,7 @@ app.delete('/api/vendedor/ruta', controlVendedor, async (req, res) => {
         const dia = String(req.query.dia || '').toLowerCase();
         if (!DIAS.includes(dia)) return res.status(400).json({ error: 'Día inválido' });
         await asegurarTablaRuta();
-        await db.query(`DELETE FROM clientes_orden_vendedor WHERE vendedor = $1 AND dia = $2`, [sinCeros(req.vendedor), dia]);
+        await db.query(`DELETE FROM clientes_orden_vendedor WHERE vendedor = $1 AND dia = $2 AND ruta = $3`, [sinCeros(req.vendedor), dia, String(req.query.ruta || '')]);
         res.json({ exito: true });
     } catch (err) {
         console.error('❌ [clientes] Restaurando ruta del vendedor:', err.message);
@@ -638,24 +670,26 @@ app.delete('/api/vendedor/ruta', controlVendedor, async (req, res) => {
 
 // Excel con la ruta de uno o varios vendedores (todos los días, con el orden guardado o, si no hay, el de Gescom)
 async function excelRuteo(codigos) {
-    const cabecera = ['Cód. vendedor', 'Vendedor', 'Día', 'Orden nuevo', 'Orden en Gescom', 'Cód. cliente', 'Cliente', 'Dirección', 'Localidad', 'Cambió de lugar'];
+    const cabecera = ['Cód. vendedor', 'Vendedor', 'Día', 'Zona', 'Orden nuevo', 'Orden en Gescom', 'Cód. cliente', 'Cliente', 'Dirección', 'Localidad', 'Cambió de lugar'];
     const filas = [cabecera];
     const cambios = [cabecera];
     for (const cod of codigos) {
         const nombre = (await nombreVendedor(cod)) || '';
         const todos = await clientesDelVendedor(cod);
         for (const dia of DIAS) {
-            if (!todos.some(c => c.dias.includes(dia))) continue;
-            const { lista } = await rutaDelDia(cod, dia, todos.map(c => ({ ...c })));
-            lista.forEach((c, i) => {
+            const zonas = [...new Set(todos.filter(c => c.dias.includes(dia)).map(c => c.ruta))].sort((a, b) => String(a).localeCompare(String(b), 'es', { numeric: true }));
+            for (const zona of zonas) {
+              const { lista } = await rutaDelDia(cod, dia, zona, todos.map(c => ({ ...c })));
+              lista.forEach((c, i) => {
                 const cambio = c.posGescom !== i + 1;
-                const fila = [sinCeros(cod), nombre, DIA_ETIQ[dia], i + 1, c.posGescom, c.codigo, c.nombre, c.direccion, c.localidad, cambio ? 'Sí' : 'No'];
+                const fila = [sinCeros(cod), nombre, DIA_ETIQ[dia], (c.ruta_nombre ? c.ruta + ' - ' + c.ruta_nombre : c.ruta), i + 1, c.posGescom, c.codigo, c.nombre, c.direccion, c.localidad, cambio ? 'Sí' : 'No'];
                 filas.push(fila);
                 if (cambio) cambios.push(fila);
-            });
+              });
+            }
         }
     }
-    const anchos = [12, 24, 12, 11, 14, 12, 36, 30, 18, 12];
+    const anchos = [12, 24, 12, 18, 11, 14, 12, 36, 30, 18, 12];
     return crearXlsx([{ nombre: 'Ruta completa', filas, anchos }, { nombre: 'Solo lo que cambió', filas: cambios, anchos }]);
 }
 
@@ -672,14 +706,14 @@ app.get('/api/vendedor/excel', controlVendedor, async (req, res) => {
 app.get('/api/seguimiento-clientes/ruteo/resumen', controlSupervisor, async (req, res) => {
     try {
         await asegurarTablaRuta();
-        const g = await db.query(`SELECT vendedor, COUNT(DISTINCT dia)::int AS dias, COUNT(*)::int AS clientes, MAX(actualizado) AS ultima FROM clientes_orden_vendedor GROUP BY vendedor`);
+        const g = await db.query(`SELECT vendedor, COUNT(DISTINCT dia || '|' || ruta)::int AS dias, COUNT(*)::int AS clientes, MAX(actualizado) AS ultima FROM clientes_orden_vendedor GROUP BY vendedor`);
         const guardado = new Map(g.rows.map(f => [f.vendedor, f]));
         const filas = [];
         for (const cod of codigosVendedores()) {
             const todos = await clientesDelVendedor(cod);
             const x = guardado.get(sinCeros(cod)) || {};
             filas.push({ codigo: cod, nombre: (await nombreVendedor(cod)) || '', clientes: todos.length,
-                diasConRuta: DIAS.filter(d => todos.some(c => c.dias.includes(d))).length,
+                diasConRuta: new Set(todos.flatMap(c => c.dias.map(d => d + '|' + c.ruta))).size,
                 diasOrdenados: x.dias || 0, ultima: x.ultima || null });
         }
         res.json({ filas });

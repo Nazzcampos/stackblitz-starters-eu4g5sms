@@ -282,6 +282,7 @@
   <!-- ======================= MI RUTA (vendedor) ======================= -->
   <section class="vista" id="vVend">
     <div class="rv-dias" id="rvDias"></div>
+    <div class="rv-dias" id="rvZonas" style="display:none"></div>
     <div class="rv-barra">
       <div class="rv-estado" id="rvEstado"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -470,7 +471,7 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
 }));
 
 function actualizar(){
-  if (getRol() === 'vend') { cargarRutaVend(RV && RV.dia); return; }
+  if (getRol() === 'vend') { cargarRutaVend(RV && RV.dia, RV && RV.ruta); return; }
   cargar(true);
   if (vistaActual === 'vMarcas') cargarMarcas(true);
   if (vistaActual === 'vStock') cargarStock(true);
@@ -1053,7 +1054,7 @@ async function cargarRuteo(){
   catch(e) { if (e.message !== 'sin PIN') $('#rtNota').textContent = 'Error: ' + e.message; return; }
   $('#rtNota').textContent = 'El Excel trae la ruta completa de cada vendedor (con el orden que armó, o el de Gescom si no tocó nada) y una hoja con solo lo que cambió de lugar.';
   const fecha = u => u ? new Date(u).toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' }) : '—';
-  $('#tRuteo').innerHTML = '<table><thead><tr><th>Cód.</th><th class="txt">Vendedor</th><th>Clientes</th><th>Días con ruta</th><th>Días ordenados por él</th><th class="txt">Última modificación</th><th></th></tr></thead><tbody>' +
+  $('#tRuteo').innerHTML = '<table><thead><tr><th>Cód.</th><th class="txt">Vendedor</th><th>Clientes</th><th>Recorridos (día y zona)</th><th>Recorridos que ordenó</th><th class="txt">Última modificación</th><th></th></tr></thead><tbody>' +
     j.filas.map(f => `<tr><td>${esc(f.codigo)}</td><td class="txt">${esc(f.nombre || '—')}</td><td>${f.clientes}</td><td>${f.diasConRuta}</td>` +
       `<td class="${f.diasOrdenados ? 'pos' : 'cero'}">${f.diasOrdenados}</td><td class="txt">${fecha(f.ultima)}</td>` +
       `<td><button class="sec" onclick="bajarRuteo('${esc(f.codigo)}')">Excel</button></td></tr>`).join('') + '</tbody></table>';
@@ -1063,21 +1064,27 @@ const bajarRuteo = v => bajarArchivo('/api/seguimiento-clientes/ruteo/excel?vend
 // ------------------------------------------------ MI RUTA (vendedor): ordenar con arrastrar y soltar
 let RV = null, rvTimer = null, rvPendiente = false;
 
-async function cargarRutaVend(dia){
+async function cargarRutaVend(dia, ruta){
   await rvGuardarYa();
   $('#rvNota').textContent = 'Cargando tu ruta…';
-  try { RV = await api('/api/vendedor/ruta' + (dia ? '?dia=' + encodeURIComponent(dia) : '')); }
+  const q = [dia ? 'dia=' + encodeURIComponent(dia) : '', dia && ruta != null ? 'ruta=' + encodeURIComponent(ruta) : ''].filter(Boolean).join('&');
+  try { RV = await api('/api/vendedor/ruta' + (q ? '?' + q : '')); }
   catch(e) { if (e.message !== 'sin PIN') $('#rvNota').textContent = 'No se pudo cargar: ' + e.message; return; }
   if (RV.vendedor.nombre) { ses.set('clientesNombre', RV.vendedor.nombre); $('#hSub').textContent = 'BIDO S.R.L. · vendedor ' + RV.vendedor.codigo + ' · ' + RV.vendedor.nombre; }
   $('#rvNota').textContent = '';
   rvPintar();
-  rvEstado(RV.guardado ? 'Orden propio guardado el ' + new Date(RV.guardado).toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' }) : 'Todavía no tocaste el orden de este día (se muestra el de Gescom).', '');
+  rvEstado(RV.guardado ? 'Orden propio guardado el ' + new Date(RV.guardado).toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' }) : 'Todavía no tocaste el orden de este recorrido (se muestra el de Gescom).', '');
 }
 function rvEstado(t, cls){ const e = $('#rvEstado'); e.textContent = t; e.className = 'rv-estado ' + (cls || ''); }
 
 function rvPintar(){
   $('#rvDias').innerHTML = RV.dias.filter(d => d.clientes > 0 || d.dia === RV.dia).map(d =>
     `<span class="chip ${d.dia === RV.dia ? 'on' : ''}" onclick="cargarRutaVend('${d.dia}')">${esc(d.etiqueta)} (${d.clientes})</span>`).join('');
+  // Si ese día hay más de una zona (por ejemplo quincenales), se elige cuál ordenar
+  const z = $('#rvZonas');
+  z.style.display = RV.zonas.length > 1 ? 'flex' : 'none';
+  z.innerHTML = RV.zonas.length > 1 ? '<span style="align-self:center;font-size:13px;color:var(--gris)">Zona:</span>' + RV.zonas.map(x =>
+    `<span class="chip ${x.ruta === RV.ruta ? 'on' : ''}" onclick="cargarRutaVend('${RV.dia}', '${esc(x.ruta).replace(/'/g, '')}')">Zona ${esc(x.ruta || '—')}${x.nombre ? ' · ' + esc(x.nombre) : ''} (${x.clientes})</span>`).join('') : '';
   const cont = $('#rvLista');
   if (!RV.clientes.length) { cont.innerHTML = '<div class="vacio">No tenés clientes asignados este día.</div>'; return; }
   cont.innerHTML = RV.clientes.map((c, i) => {
@@ -1169,7 +1176,7 @@ async function rvGuardarYa(){
   if (!rvPendiente || !RV || getRol() !== 'vend') return;
   rvPendiente = false;
   try {
-    await api('/api/vendedor/ruta', { method: 'POST', body: JSON.stringify({ dia: RV.dia, ids: RV.clientes.map(c => c.id) }) });
+    await api('/api/vendedor/ruta', { method: 'POST', body: JSON.stringify({ dia: RV.dia, ruta: RV.ruta, ids: RV.clientes.map(c => c.id) }) });
     rvEstado('Guardado ✓ ' + new Date().toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' }), 'ok');
   } catch(e) {
     rvPendiente = true;
@@ -1177,12 +1184,12 @@ async function rvGuardarYa(){
   }
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden && rvPendiente && RV) {
-  try { fetch('/api/vendedor/ruta', { method: 'POST', keepalive: true, headers: headersAcceso(), body: JSON.stringify({ dia: RV.dia, ids: RV.clientes.map(c => c.id) }) }); rvPendiente = false; } catch(e) {} } });
+  try { fetch('/api/vendedor/ruta', { method: 'POST', keepalive: true, headers: headersAcceso(), body: JSON.stringify({ dia: RV.dia, ruta: RV.ruta, ids: RV.clientes.map(c => c.id) }) }); rvPendiente = false; } catch(e) {} } });
 
 async function rvVolverGescom(){
-  if (!RV || !confirm('¿Volver al orden que tiene Gescom para este día? Se pierde el orden que armaste.')) return;
+  if (!RV || !confirm('¿Volver al orden que tiene Gescom para este día y zona? Se pierde el orden que armaste.')) return;
   clearTimeout(rvTimer); rvPendiente = false;
-  try { await api('/api/vendedor/ruta?dia=' + encodeURIComponent(RV.dia), { method: 'DELETE' }); cargarRutaVend(RV.dia); }
+  try { await api('/api/vendedor/ruta?dia=' + encodeURIComponent(RV.dia) + '&ruta=' + encodeURIComponent(RV.ruta), { method: 'DELETE' }); cargarRutaVend(RV.dia, RV.ruta); }
   catch(e) { if (e.message !== 'sin PIN') alert('No se pudo restaurar: ' + e.message); }
 }
 async function rvExcel(){ await rvGuardarYa(); bajarArchivo('/api/vendedor/excel', 'mi_ruta.xlsx'); }
