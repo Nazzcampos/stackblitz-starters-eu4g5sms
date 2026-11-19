@@ -1120,7 +1120,8 @@ async function cargarCombos(refresh){
   guardada = guardada.filter(k => todos.has(k));
   COMB_SEL = new Set(guardada.length ? guardada : COMB.porDefecto);
   $('#cNota').textContent = 'Datos de Gescom al ' + new Date(COMB.actualizado).toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' }) +
-    ' · solo los ' + COMB.clientes.length + ' clientes elegidos por Pepsico · se cuenta un combo por comprobante (facturas y pedidos sin facturar, como el reporte de Gescom) · desde ' + fFecha(COMB.desde);
+    ' · solo los ' + COMB.clientes.length + ' clientes elegidos por Pepsico · se cuenta un combo por comprobante (facturas y pedidos sin facturar, como el reporte de Gescom) · desde ' + fFecha(COMB.desde) +
+    (COMB.corte ? ' · antes del ' + fFecha(COMB.corte) + ' los combos salen del reporte de Gescom cargado en la app; desde esa fecha se leen en vivo' : '');
   renderCombos();
 }
 

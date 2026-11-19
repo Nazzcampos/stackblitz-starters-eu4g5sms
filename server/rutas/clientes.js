@@ -780,6 +780,17 @@ async function obtenerCombos(forzar) {
         GROUP BY v.id, c.codigo, COALESCE(v.fecha_comprobante, v.fecha_entrega), vi.combo_codigo,
                  v.tipo_comprobante_codigo, v.punto_venta_codigo, v.numero_comprobante
         ORDER BY 2, 1`, [TENANT, desde, lista.map(x => x.c)]);
+    // Gescom guarda el combo en la venta recién desde cierta fecha (fines de octubre). Antes de esa fecha los combos salen del
+    // reporte de bajada de combos de Gescom cargado en server/datos/combos-historico.json (solo comprobantes de los clientes del listado).
+    const mn = await pool.query(`SELECT to_char(MIN(COALESCE(v.fecha_comprobante, v.fecha_entrega)), 'YYYY-MM-DD') AS corte
+        FROM venta v JOIN venta_item vi ON vi.venta_id = v.id AND vi.tenant_id = v.tenant_id
+        WHERE v.tenant_id = $1 AND COALESCE(vi.combo_codigo, '') <> '' AND COALESCE(v.fecha_comprobante, v.fecha_entrega)::date >= $2::date`, [TENANT, desde]);
+    const corte = (mn.rows[0] && mn.rows[0].corte) || null;
+    let historico = [];
+    try {
+        historico = JSON.parse(_fsCombos.readFileSync(_pathCombos.join(__dirname, '..', 'datos', 'combos-historico.json'), 'utf8'))
+            .filter(x => x.f >= desde && (!corte || x.f < corte));
+    } catch (e) { console.error('⚠️ [clientes] Histórico de combos:', e.message); }
     const nom = await pool.query(`SELECT ltrim(vendedor_codigo::text, '0') AS cod, MAX(vendedor_nombre) AS nombre
         FROM cliente_ruta_hist WHERE actual = true AND tenant_id = $1 AND ltrim(vendedor_codigo::text, '0') = ANY($2::text[]) GROUP BY 1`,
         [TENANT, [...new Set(lista.map(x => sinCeros(x.v)))]]);
@@ -790,10 +801,11 @@ async function obtenerCombos(forzar) {
         nombres: nombresCombos(),
         vendedores: Object.fromEntries(nom.rows.map(f => [f.cod, f.nombre || ''])),
         clientes: lista,
-        compras: r.rows.map(f => ({
+        corte,
+        compras: [...historico.map(x => ({ c: x.c, f: x.f, k: x.k, kd: '', n: x.n, cp: x.cp })), ...r.rows.map(f => ({
             c: f.cliente, f: f.fecha, k: f.combo, kd: f.combo_desc || '', n: Number(f.cantidad) || 1,
             cp: [f.tipo, f.pv, f.numero].filter(Boolean).join(' ')
-        }))
+        }))]
     };
     cacheCombos = { t: Date.now(), data };
     return data;
