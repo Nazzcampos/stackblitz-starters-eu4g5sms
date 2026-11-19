@@ -82,6 +82,7 @@
   <div class="tabs">
     <button class="tab on" data-vista="vClientes">Clientes y altas</button>
     <button class="tab" data-vista="vMarcas">Cobertura de marcas</button>
+    <button class="tab" data-vista="vStock">Stock</button>
   </div>
 </header>
 
@@ -202,6 +203,33 @@
       <div class="tw" id="tmDias"></div>
     </div>
   </section>
+
+  <!-- ======================= STOCK EN VIVO ======================= -->
+  <section class="vista" id="vStock">
+    <div class="filtros">
+      <label>Buscar artículo
+        <input type="search" id="sBuscar" placeholder="Nombre o código" autocomplete="off">
+      </label>
+      <span id="sFiltros" style="display:contents"></span>
+      <label class="chk"><input type="checkbox" id="sSoloStock" checked> Solo con stock disponible</label>
+      <button class="sec" onclick="cargarStock(true)">Actualizar stock</button>
+    </div>
+    <div class="nota" id="sNota"></div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="v" id="sKArt">–</div><div class="l">Artículos (con los filtros)</div></div>
+      <div class="kpi"><div class="v" id="sKUni">–</div><div class="l">Unidades disponibles</div></div>
+      <div class="kpi"><div class="v" id="sKCero">–</div><div class="l">Artículos sin stock</div></div>
+    </div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2>Stock disponible para la venta</h2><div class="sub" id="sSub"></div></div>
+        <button class="sec" onclick="exportar('stock','stock_disponible')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tStock"></div>
+    </div>
+  </section>
 </main>
 
 <div id="login">
@@ -279,11 +307,13 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
   document.querySelectorAll('.vista').forEach(v => v.classList.toggle('on', v.id === b.dataset.vista));
   vistaActual = b.dataset.vista;
   if (vistaActual === 'vMarcas' && !MARCAS) cargarMarcas(false);
+  if (vistaActual === 'vStock' && !STOCK) cargarStock(false);
 }));
 
 function actualizar(){
   cargar(true);
   if (vistaActual === 'vMarcas') cargarMarcas(true);
+  if (vistaActual === 'vStock') cargarStock(true);
 }
 
 // El "Incluir Deposito" es el mismo en las dos pestañas
@@ -715,6 +745,67 @@ function exportar(key, nombre){
   a.download = `${nombre}_${hoyAR()}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+
+// ------------------------------------------------ STOCK EN VIVO
+let STOCK = null;
+async function cargarStock(refresh){
+  if (!getPin()) { mostrarLogin(); return; }
+  $('#sNota').textContent = 'Cargando stock…';
+  try {
+    STOCK = await api('/api/seguimiento-clientes/stock' + (refresh ? '?refresh=1' : ''));
+    const d = new Date(STOCK.actualizado);
+    $('#sNota').textContent = 'Stock tomado de Gescom el ' + d.toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' }) +
+      ' · disponible = ' + STOCK.dispOrigen + ' · se actualiza cada vez que tocás "Actualizar stock"';
+    armarFiltrosStock();
+    renderStock();
+  } catch(e) {
+    if (e.message !== 'sin PIN') { STOCK = null; $('#sNota').textContent = 'No se pudo leer el stock: ' + e.message; $('#tStock').innerHTML = ''; }
+  }
+}
+
+// Un desplegable por cada clasificación del artículo (rubro, marca…), con las opciones que existen
+function armarFiltrosStock(){
+  const cont = $('#sFiltros');
+  const previos = {};
+  cont.querySelectorAll('select').forEach(sel => { previos[sel.dataset.clave] = sel.value; });
+  cont.innerHTML = STOCK.clasif.map(c => `<label>${esc(c.etiqueta)}<select data-clave="${c.clave}"></select></label>`).join('');
+  STOCK.clasif.forEach(c => {
+    const sel = cont.querySelector(`select[data-clave="${c.clave}"]`);
+    const vals = [...new Set(STOCK.filas.map(f => f[c.clave]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    sel.innerHTML = '<option value="">Todos</option>' + vals.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    sel.value = vals.includes(previos[c.clave]) ? previos[c.clave] : '';
+    sel.addEventListener('change', renderStock);
+  });
+}
+$('#sBuscar').addEventListener('input', () => renderStock());
+$('#sSoloStock').addEventListener('change', () => renderStock());
+
+function renderStock(){
+  if (!STOCK) return;
+  const q = norm($('#sBuscar').value);
+  const filtros = [...$('#sFiltros').querySelectorAll('select')].filter(s => s.value).map(s => [s.dataset.clave, s.value]);
+  const solo = $('#sSoloStock').checked;
+  const filas = STOCK.filas.filter(f =>
+    (!solo || f.disp > 0) &&
+    filtros.every(([k, v]) => f[k] === v) &&
+    (!q || norm(f.codigo + ' ' + f.descripcion).includes(q)));
+  const base = STOCK.filas.filter(f => filtros.every(([k, v]) => f[k] === v) && (!q || norm(f.codigo + ' ' + f.descripcion).includes(q)));
+  $('#sKArt').textContent = fmtN(filas.length);
+  $('#sKUni').textContent = fmtN(Math.round(filas.reduce((s, f) => s + Math.max(0, f.disp), 0)));
+  $('#sKCero').textContent = fmtN(base.filter(f => !(f.disp > 0)).length);
+  $('#sSub').textContent = filas.length + ' artículos' + (solo ? ' con stock disponible' : '');
+
+  const extras = STOCK.cantidades.filter(c => c.etiqueta.toLowerCase() !== STOCK.dispOrigen.toLowerCase());
+  const headers = ['Código', 'Artículo', ...STOCK.clasif.map(c => c.etiqueta), 'Disponible', ...extras.map(c => c.etiqueta)];
+  const txt = headers.map((_, i) => i < 2 + STOCK.clasif.length ? i : -1).filter(i => i >= 0);
+  const tabla_ = filas.map(f => [f.codigo, f.descripcion, ...STOCK.clasif.map(c => f[c.clave]), Math.round(f.disp * 100) / 100, ...extras.map(c => Math.round(f[c.clave] * 100) / 100)]);
+  const limite = 600;
+  const pintadas = tabla_.slice(0, limite);
+  let html = tabla('stock', headers, pintadas, { txtCols: txt, exportFilas: tabla_ });
+  if (tabla_.length > limite) html += `<div class="vacio">Se muestran los primeros ${limite} de ${tabla_.length}. Filtrá por rubro o buscá por nombre para verlos todos; el Excel baja la lista completa.</div>`;
+  $('#tStock').innerHTML = html;
 }
 
 ['#fVendedor','#fRamo','#fDesde','#fHasta'].forEach(s => $(s).addEventListener('change', render));

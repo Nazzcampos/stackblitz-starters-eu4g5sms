@@ -26,7 +26,7 @@ server/
     venta-por-camion.js    Venta por camión + costo logístico (combustible, km GPS) + Excel
     planificacion.js       Acompañantes (usuarios y PIN), planificación diaria de repartos, vista del acompañante
     indicadores.js         Indicadores del chofer para Pepsico (por ahora solo el diagnóstico de datos)
-    clientes.js            Seguimiento de clientes y cobertura de marcas (/clientes, PIN propio CLIENTES_PIN)
+    clientes.js            Seguimiento de clientes, cobertura de marcas y stock en vivo (/clientes, PIN propio CLIENTES_PIN)
     ruta-sugerida.js       Ruta sugerida, resumen del reparto, diagnóstico
     comprobantes.js        Comprobantes en PDF
 ```

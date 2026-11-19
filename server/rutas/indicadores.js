@@ -11,6 +11,7 @@ app.get('/api/diagnostico-indicadores', async (req, res) => {
     if (req.query.paso === '2') return diagnosticoPaso2(req, res);
     if (req.query.paso === '3') return diagnosticoPaso3(req, res);
     if (req.query.paso === '4') return diagnosticoPaso4(req, res);
+    if (req.query.paso === '5') return diagnosticoPaso5(req, res);
     const salida = { dias };
     const paso = async (clave, fn) => {
         try { salida[clave] = await fn(); } catch (err) { salida[clave] = { error: err.message }; }
@@ -259,6 +260,36 @@ async function diagnosticoPaso4(req, res) {
                COUNT(*) FILTER (WHERE n.imp >= 0.98 * f.imp AND f.imp > 0)::int AS rechazo_total,
                COUNT(*) FILTER (WHERE n.imp > 0 AND n.imp < 0.98 * f.imp)::int AS rechazo_parcial
         FROM f LEFT JOIN n ON n.cliente_id = f.cliente_id AND n.dia = f.dia GROUP BY 1, 2 ORDER BY 1, 2`, [desde, hasta])).rows);
+
+    res.json(salida);
+}
+
+// Paso 5: búsqueda amplia en Gescom de dónde están las cajas que salen/vuelven y el resultado de cada visita
+// /api/diagnostico-indicadores?token=...&paso=5
+async function diagnosticoPaso5(req, res) {
+    const salida = {};
+    const paso = async (clave, fn) => {
+        try { salida[clave] = await fn(); } catch (err) { salida[clave] = { error: err.message }; }
+    };
+    const oculto = /razon|nombre|cuit|cuil|direccion|mail|telefono|domicilio|contacto|observ|json|dni|documento_n|alias|empleado|chofer|vendedor|cliente_desc/i;
+    const limpiar = fila => Object.fromEntries(Object.entries(fila).filter(([k, v]) => !oculto.test(k) && v !== null).map(([k, v]) => [k, String(v).slice(0, 50)]));
+
+    await paso('tablas', async () => (await pool.query(`/*DIAGIND18*/ SELECT table_name FROM information_schema.tables
+        WHERE table_schema = 'public' ORDER BY 1`)).rows.map(f => f.table_name));
+
+    await paso('columnas_en_todo_gescom', async () => (await pool.query(`/*DIAGIND19*/ SELECT table_name, column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND (column_name ILIKE '%carton%' OR column_name ILIKE '%caja%' OR column_name ILIKE '%bulto%' OR column_name ILIKE '%envase%'
+            OR column_name ILIKE '%efectiv%' OR column_name ILIKE '%rechaz%' OR column_name ILIKE '%resultado%' OR column_name ILIKE '%visit%')
+        ORDER BY 1, 2 LIMIT 250`)).rows);
+
+    await paso('columnas_reparto', async () => (await pool.query(`/*DIAGIND20*/ SELECT column_name, data_type FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'reparto' ORDER BY ordinal_position`)).rows);
+    await paso('columnas_visita', async () => (await pool.query(`/*DIAGIND21*/ SELECT column_name, data_type FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'visita' ORDER BY ordinal_position`)).rows);
+
+    await paso('muestra_reparto', async () => (await pool.query(`/*DIAGIND22*/ SELECT to_jsonb(r) AS fila FROM reparto r
+        ORDER BY r.fecha_entrega DESC NULLS LAST LIMIT 4`)).rows.map(f => limpiar(f.fila)));
+    await paso('muestra_visita', async () => (await pool.query(`/*DIAGIND23*/ SELECT to_jsonb(x) AS fila FROM visita x LIMIT 4`)).rows.map(f => limpiar(f.fila)));
 
     res.json(salida);
 }

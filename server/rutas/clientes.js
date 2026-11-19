@@ -346,6 +346,114 @@ app.post('/api/seguimiento-clientes/objetivos', controlPin, async (req, res) => 
     }
 });
 
+// =====================================================================
+//  STOCK EN VIVO (pestaña "Stock"): artículos de Gescom con su stock, filtrables por rubro y demás
+//  Las columnas de las tablas item y stock se descubren solas (information_schema), así que sirve
+//  aunque Gescom las llame distinto. Con ?diagnostico=1 devuelve las columnas y unas filas de muestra.
+// =====================================================================
+const CACHE_STOCK_MS = 60 * 1000;
+let metaStock = null;
+let cacheStock = { t: 0, data: null, pendiente: null };
+
+const qi = id => '"' + String(id).replace(/"/g, '""') + '"'; // el nombre sale de information_schema, no del usuario
+const etiquetaCol = c => { const t = String(c).replace(/_/g, ' ').trim(); return t.charAt(0).toUpperCase() + t.slice(1); };
+const NUMERICOS = /^(integer|bigint|smallint|numeric|double precision|real)$/;
+const TEXTOS = /^(character varying|text|character)$/;
+
+async function descubrirStock() {
+    if (metaStock) return metaStock;
+    const { rows } = await pool.query(`SELECT table_name, column_name, data_type FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name IN ('stock', 'item') ORDER BY table_name, ordinal_position`);
+    const stock = rows.filter(r => r.table_name === 'stock');
+    const item = rows.filter(r => r.table_name === 'item');
+    if (!stock.length) throw new Error('Gescom no tiene la tabla stock en esta conexión.');
+    if (!item.length) throw new Error('Gescom no tiene la tabla item en esta conexión.');
+    const sNombres = stock.map(c => c.column_name), iNombres = item.map(c => c.column_name);
+    if (!sNombres.includes('item_id')) throw new Error('La tabla stock no tiene la columna item_id (columnas: ' + sNombres.join(', ') + ').');
+
+    // Cantidades: columnas numéricas del stock que no son ids
+    const cantidades = stock.filter(c => NUMERICOS.test(c.data_type) && !/(^|_)id$|tenant|^orden$|factor/i.test(c.column_name)).map(c => c.column_name);
+    const disp = cantidades.find(c => /disponible/i.test(c));
+    const total = cantidades.find(c => /^(cantidad|stock|existencia|saldo)/i.test(c)) || cantidades[0];
+    const reserv = cantidades.find(c => /reserv|comprometid|pendiente/i.test(c));
+    // Clasificaciones del artículo (rubro, subrubro, marca...): texto, sin ids ni códigos
+    const clasif = item.filter(c => TEXTOS.test(c.data_type) && /rubro|marca|familia|categoria|linea|clasific|grupo|segmento/i.test(c.column_name)
+        && !/(_id|_codigo|codigo_)$/i.test(c.column_name)).map(c => c.column_name);
+    metaStock = {
+        sNombres, iNombres, cantidades, disp, total, reserv, clasif,
+        dep: stock.find(c => /deposito/i.test(c.column_name) && TEXTOS.test(c.data_type)) || null,
+        fecha: stock.find(c => /^fecha/i.test(c.column_name) && /date|timestamp/.test(c.data_type)) || null,
+        actual: stock.find(c => c.column_name === 'actual') || null,
+        activoItem: item.find(c => c.column_name === 'activo') || null,
+        tenantStock: sNombres.includes('tenant_id'), tenantItem: iNombres.includes('tenant_id'),
+        codigo: iNombres.includes('codigo') ? 'codigo' : null,
+        descripcion: iNombres.includes('descripcion') ? 'descripcion' : (iNombres.find(c => /desc|nombre/i.test(c)) || null)
+    };
+    return metaStock;
+}
+
+async function obtenerStock(forzar) {
+    if (!forzar && cacheStock.data && Date.now() - cacheStock.t < CACHE_STOCK_MS) return cacheStock.data;
+    if (cacheStock.pendiente) return cacheStock.pendiente;
+    cacheStock.pendiente = (async () => {
+        try {
+            const m = await descubrirStock();
+            if (!m.cantidades.length) throw new Error('La tabla stock no tiene columnas de cantidad (columnas: ' + m.sNombres.join(', ') + ').');
+            const sel = [m.codigo ? `i.${qi(m.codigo)}::text AS codigo` : `i.id::text AS codigo`,
+                         m.descripcion ? `i.${qi(m.descripcion)} AS descripcion` : `i.id::text AS descripcion`];
+            m.clasif.forEach((c, k) => sel.push(`i.${qi(c)} AS ${qi('c' + k)}`));
+            m.cantidades.forEach((c, k) => sel.push(`COALESCE(SUM(s.${qi(c)}), 0)::float8 AS ${qi('n' + k)}`));
+            const grupo = ['i.id', m.codigo ? `i.${qi(m.codigo)}` : null, m.descripcion ? `i.${qi(m.descripcion)}` : null,
+                           ...m.clasif.map(c => `i.${qi(c)}`)].filter(Boolean).join(', ');
+            const where = [];
+            const params = [];
+            if (m.tenantItem) { params.push(TENANT); where.push(`i.tenant_id = $${params.length}`); }
+            if (m.actual) where.push(`s.${qi('actual')} = true`);
+            else if (m.fecha) where.push(`s.${qi(m.fecha.column_name)} = (SELECT MAX(x.${qi(m.fecha.column_name)}) FROM stock x${m.tenantStock && m.tenantItem ? ' WHERE x.tenant_id = $1' : ''})`);
+            if (m.activoItem) where.push(`COALESCE(i.activo::int, 1) = 1`);
+            const sql = `/*STOCK*/ SELECT ${sel.join(', ')} FROM item i JOIN stock s ON s.item_id = i.id${m.tenantStock && m.tenantItem ? ' AND s.tenant_id = i.tenant_id' : ''}
+                ${where.length ? 'WHERE ' + where.join(' AND ') : ''} GROUP BY ${grupo} ORDER BY 2 LIMIT 20000`;
+            const { rows } = await pool.query(sql, params);
+            // Disponible: la columna "disponible" si existe; si no, stock menos reservado; si no, el stock tal cual
+            const iDisp = m.disp ? m.cantidades.indexOf(m.disp) : -1, iTot = m.cantidades.indexOf(m.total), iRes = m.reserv ? m.cantidades.indexOf(m.reserv) : -1;
+            const datos = {
+                actualizado: new Date().toISOString(),
+                clasif: m.clasif.map((c, k) => ({ clave: 'c' + k, etiqueta: etiquetaCol(c.replace(/_desc(ripcion)?$/i, '')) })),
+                cantidades: m.cantidades.map((c, k) => ({ clave: 'n' + k, etiqueta: etiquetaCol(c) })),
+                dispClave: 'disp',
+                dispOrigen: iDisp >= 0 ? m.disp : (iRes >= 0 ? m.total + ' - ' + m.reserv : m.total),
+                filas: rows.map(r => {
+                    const f = { codigo: r.codigo, descripcion: r.descripcion };
+                    m.clasif.forEach((c, k) => { f['c' + k] = r['c' + k] == null ? '' : String(r['c' + k]).trim(); });
+                    m.cantidades.forEach((c, k) => { f['n' + k] = r['n' + k]; });
+                    f.disp = iDisp >= 0 ? r['n' + iDisp] : (iRes >= 0 ? r['n' + iTot] - r['n' + iRes] : r['n' + iTot]);
+                    return f;
+                })
+            };
+            cacheStock.data = datos;
+            cacheStock.t = Date.now();
+            return datos;
+        } finally {
+            cacheStock.pendiente = null;
+        }
+    })();
+    return cacheStock.pendiente;
+}
+
+app.get('/api/seguimiento-clientes/stock', controlPin, async (req, res) => {
+    try {
+        if (req.query.diagnostico === '1') {
+            const m = await descubrirStock();
+            const muestra = await pool.query(`SELECT * FROM stock LIMIT 3`);
+            return res.json({ meta: m, muestra_stock: muestra.rows });
+        }
+        res.json(await obtenerStock(req.query.refresh === '1'));
+    } catch (err) {
+        console.error('❌ [clientes] Error en consulta de stock:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 console.log('📊 Módulo provisorio de seguimiento de clientes y cobertura de marcas activo en /clientes');
 
 module.exports = {};
