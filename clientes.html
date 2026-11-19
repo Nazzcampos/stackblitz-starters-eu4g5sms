@@ -213,12 +213,16 @@
       <span id="sFiltros" style="display:contents"></span>
       <label class="chk"><input type="checkbox" id="sSoloStock" checked> Solo con stock disponible</label>
       <button class="sec" onclick="cargarStock(true)">Actualizar stock</button>
+      <div style="flex-basis:100%;font-size:12px;color:var(--gris)">Depósitos que se suman (tocá para sumar o quitar; por defecto Picking y Almacenamiento):
+        <div class="chips" id="sDeps"></div>
+      </div>
     </div>
     <div class="nota" id="sNota"></div>
+    <details style="margin:-6px 0 14px;font-size:12px;color:var(--gris)"><summary onclick="verDiagnosticoStock()" style="cursor:pointer">Ver columnas de Gescom (para soporte)</summary><pre id="sDiag" style="white-space:pre-wrap;max-height:300px;overflow:auto;background:#fff;border:1px solid var(--borde);border-radius:8px;padding:10px"></pre></details>
 
     <div class="kpis">
       <div class="kpi"><div class="v" id="sKArt">–</div><div class="l">Artículos (con los filtros)</div></div>
-      <div class="kpi"><div class="v" id="sKUni">–</div><div class="l">Unidades disponibles</div></div>
+      <div class="kpi"><div class="v" id="sKUni">–</div><div class="l" id="sKUniL">Unidades disponibles</div></div>
       <div class="kpi"><div class="v" id="sKCero">–</div><div class="l">Artículos sin stock</div></div>
     </div>
 
@@ -750,6 +754,8 @@ function exportar(key, nombre){
 
 // ------------------------------------------------ STOCK EN VIVO
 let STOCK = null;
+const DEP_VENTA = /^(picking|almacenamiento)$/i; // depósitos donde hay mercadería para vender (Vencidos, Roturas, Faltantes y Externo quedan afuera salvo que se sumen)
+
 async function cargarStock(refresh){
   if (!getPin()) { mostrarLogin(); return; }
   $('#sNota').textContent = 'Cargando stock…';
@@ -757,7 +763,8 @@ async function cargarStock(refresh){
     STOCK = await api('/api/seguimiento-clientes/stock' + (refresh ? '?refresh=1' : ''));
     const d = new Date(STOCK.actualizado);
     $('#sNota').textContent = 'Stock tomado de Gescom el ' + d.toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' }) +
-      ' · disponible = ' + STOCK.dispOrigen + ' · se actualiza cada vez que tocás "Actualizar stock"';
+      ' · es la "Cantidad disponible" de Gescom, sumando los depósitos que estén marcados · se actualiza con "Actualizar stock"';
+    armarChipsDepositos();
     armarFiltrosStock();
     renderStock();
   } catch(e) {
@@ -765,15 +772,42 @@ async function cargarStock(refresh){
   }
 }
 
-// Un desplegable por cada clasificación del artículo (rubro, marca…), con las opciones que existen
+async function verDiagnosticoStock(){
+  $('#sDiag').textContent = 'Cargando…';
+  try { $('#sDiag').textContent = JSON.stringify(await api('/api/seguimiento-clientes/stock?diagnostico=1'), null, 1); }
+  catch(e) { $('#sDiag').textContent = 'Error: ' + e.message; }
+}
+
+function depositosStock(){ return [...new Set(STOCK.filas.map(f => f.deposito))].sort((a, b) => a.localeCompare(b)); }
+function depositosElegidos(){
+  const todos = depositosStock();
+  let sel = leerLocal('clientesStockDeps', null);
+  if (!Array.isArray(sel)) { sel = todos.filter(d => DEP_VENTA.test(d)); if (!sel.length) sel = todos; }
+  return todos.filter(d => sel.includes(d));
+}
+function armarChipsDepositos(){
+  const todos = depositosStock(), sel = depositosElegidos();
+  $('#sDeps').innerHTML = todos.map(d =>
+    `<label class="chip ${sel.includes(d) ? 'on' : ''}"><input type="checkbox" value="${esc(d)}" ${sel.includes(d) ? 'checked' : ''}>${esc(d || 'Sin depósito')}</label>`).join('');
+  $('#sDeps').querySelectorAll('input').forEach(c => c.addEventListener('change', () => {
+    c.parentElement.classList.toggle('on', c.checked);
+    guardarLocal('clientesStockDeps', [...$('#sDeps').querySelectorAll('input:checked')].map(x => x.value));
+    armarFiltrosStock();
+    renderStock();
+  }));
+}
+
+// Un desplegable por cada clasificación del artículo (rubro, marca…), con las opciones que existen en los depósitos elegidos
 function armarFiltrosStock(){
   const cont = $('#sFiltros');
   const previos = {};
   cont.querySelectorAll('select').forEach(sel => { previos[sel.dataset.clave] = sel.value; });
   cont.innerHTML = STOCK.clasif.map(c => `<label>${esc(c.etiqueta)}<select data-clave="${c.clave}"></select></label>`).join('');
+  const deps = depositosElegidos();
+  const visibles = STOCK.filas.filter(f => deps.includes(f.deposito));
   STOCK.clasif.forEach(c => {
     const sel = cont.querySelector(`select[data-clave="${c.clave}"]`);
-    const vals = [...new Set(STOCK.filas.map(f => f[c.clave]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const vals = [...new Set(visibles.map(f => f[c.clave]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     sel.innerHTML = '<option value="">Todos</option>' + vals.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
     sel.value = vals.includes(previos[c.clave]) ? previos[c.clave] : '';
     sel.addEventListener('change', renderStock);
@@ -782,29 +816,74 @@ function armarFiltrosStock(){
 $('#sBuscar').addEventListener('input', () => renderStock());
 $('#sSoloStock').addEventListener('change', () => renderStock());
 
+// "Disponible" de una columna de cantidades: la de Gescom si existe; si no, cantidad menos reserva
+function colsDisp(){
+  const por = {};
+  STOCK.cantidades.forEach(c => { (por[c.tipo] = por[c.tipo] || {})[c.rol] = c.clave; });
+  return por;
+}
+const dispDe = (por, tipo, ag) => { const t = por[tipo]; if (!t) return null;
+  if (t.disp) return ag[t.disp] || 0;
+  return (t.cant ? ag[t.cant] || 0 : 0) - (t.reserva ? ag[t.reserva] || 0 : 0); };
+// "Pack x 18" -> 18 unidades por bulto; "Unidad" -> 1
+const factorDe = u => { const m = /x\s*(\d+)/i.exec(u || ''); return m ? Number(m[1]) : (/^unidad$/i.test((u || '').trim()) ? 1 : null); };
+
 function renderStock(){
   if (!STOCK) return;
+  const por = colsDisp();
+  const hayB = !!por.bultos, hayU = !!por.unidades, hayUnica = !!por.unica;
+  const deps = depositosElegidos();
   const q = norm($('#sBuscar').value);
   const filtros = [...$('#sFiltros').querySelectorAll('select')].filter(s => s.value).map(s => [s.dataset.clave, s.value]);
   const solo = $('#sSoloStock').checked;
-  const filas = STOCK.filas.filter(f =>
-    (!solo || f.disp > 0) &&
-    filtros.every(([k, v]) => f[k] === v) &&
-    (!q || norm(f.codigo + ' ' + f.descripcion).includes(q)));
-  const base = STOCK.filas.filter(f => filtros.every(([k, v]) => f[k] === v) && (!q || norm(f.codigo + ' ' + f.descripcion).includes(q)));
-  $('#sKArt').textContent = fmtN(filas.length);
-  $('#sKUni').textContent = fmtN(Math.round(filas.reduce((s, f) => s + Math.max(0, f.disp), 0)));
-  $('#sKCero').textContent = fmtN(base.filter(f => !(f.disp > 0)).length);
-  $('#sSub').textContent = filas.length + ' artículos' + (solo ? ' con stock disponible' : '');
 
-  const extras = STOCK.cantidades.filter(c => c.etiqueta.toLowerCase() !== STOCK.dispOrigen.toLowerCase());
-  const headers = ['Código', 'Artículo', ...STOCK.clasif.map(c => c.etiqueta), 'Disponible', ...extras.map(c => c.etiqueta)];
-  const txt = headers.map((_, i) => i < 2 + STOCK.clasif.length ? i : -1).filter(i => i >= 0);
-  const tabla_ = filas.map(f => [f.codigo, f.descripcion, ...STOCK.clasif.map(c => f[c.clave]), Math.round(f.disp * 100) / 100, ...extras.map(c => Math.round(f[c.clave] * 100) / 100)]);
+  // Un renglón por artículo, sumando los depósitos elegidos
+  const arts = new Map();
+  STOCK.filas.forEach(f => {
+    if (!deps.includes(f.deposito)) return;
+    const k = f.codigo + '|' + f.descripcion;
+    let a = arts.get(k);
+    if (!a) { a = { f, ag: {} }; arts.set(k, a); }
+    STOCK.cantidades.forEach(c => { a.ag[c.clave] = (a.ag[c.clave] || 0) + f[c.clave]; });
+    if (!a.f.unidad && f.unidad) a.f = { ...a.f, unidad: f.unidad };
+  });
+  let lista = [...arts.values()].map(({ f, ag }) => {
+    const b = hayB ? dispDe(por, 'bultos', ag) : null, u = hayU ? dispDe(por, 'unidades', ag) : null, x = hayUnica ? dispDe(por, 'unica', ag) : null;
+    const fac = factorDe(f.unidad);
+    const total = (hayB && hayU && fac) ? b * fac + u : (hayUnica && !hayB && !hayU ? x : null);
+    const hay = (b || 0) > 0 || (u || 0) > 0 || (x || 0) > 0;
+    return { f, b, u, x, total, hay };
+  }).filter(a =>
+    filtros.every(([k, v]) => a.f[k] === v) &&
+    (!q || norm(a.f.codigo + ' ' + a.f.descripcion).includes(q)));
+  const sinStock = lista.filter(a => !a.hay).length;
+  if (solo) lista = lista.filter(a => a.hay);
+
+  const totalU = lista.reduce((s, a) => s + Math.max(0, a.total != null ? a.total : 0), 0);
+  $('#sKArt').textContent = fmtN(lista.length);
+  $('#sKUni').textContent = lista.some(a => a.total != null) ? fmtN(Math.round(totalU)) : '–';
+  $('#sKUniL').textContent = (hayB && hayU) ? 'Unidades disponibles (bultos × unidades por bulto + sueltas)' : 'Unidades disponibles';
+  $('#sKCero').textContent = fmtN(sinStock);
+  $('#sSub').textContent = lista.length + ' artículos' + (solo ? ' con stock disponible' : '') + ' · depósitos: ' + (deps.join(', ') || 'ninguno');
+
+  const headers = ['Código', 'Artículo', ...STOCK.clasif.map(c => c.etiqueta), 'Unidad'];
+  if (hayB) headers.push('Disp. bultos');
+  if (hayU) headers.push('Disp. unidades');
+  if (hayUnica) headers.push('Disponible');
+  if (hayB && hayU) headers.push('Total en unidades');
+  const txt = headers.map((_, i) => i < 3 + STOCK.clasif.length ? i : -1).filter(i => i >= 0);
+  const r2 = n => Math.round(n * 100) / 100;
+  const filas = lista.map(a => {
+    const fila = [a.f.codigo, a.f.descripcion, ...STOCK.clasif.map(c => a.f[c.clave]), a.f.unidad];
+    if (hayB) fila.push(r2(a.b));
+    if (hayU) fila.push(r2(a.u));
+    if (hayUnica) fila.push(r2(a.x));
+    if (hayB && hayU) fila.push(a.total != null ? r2(a.total) : '');
+    return fila;
+  });
   const limite = 600;
-  const pintadas = tabla_.slice(0, limite);
-  let html = tabla('stock', headers, pintadas, { txtCols: txt, exportFilas: tabla_ });
-  if (tabla_.length > limite) html += `<div class="vacio">Se muestran los primeros ${limite} de ${tabla_.length}. Filtrá por rubro o buscá por nombre para verlos todos; el Excel baja la lista completa.</div>`;
+  let html = tabla('stock', headers, filas.slice(0, limite), { txtCols: txt, exportFilas: filas });
+  if (filas.length > limite) html += `<div class="vacio">Se muestran los primeros ${limite} de ${filas.length}. Filtrá por rubro o buscá por nombre para verlos todos; el Excel baja la lista completa.</div>`;
   $('#tStock').innerHTML = html;
 }
 
