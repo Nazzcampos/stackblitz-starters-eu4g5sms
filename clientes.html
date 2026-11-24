@@ -59,6 +59,13 @@
   .chip input{display:none}
   input.obj{width:72px;text-align:right;padding:3px 6px}
   td.heat{font-weight:600}
+  .cart .c-titulo{background:#d9d9d9;text-align:center;font-weight:700;font-size:20px;padding:8px;letter-spacing:.3px;color:#000}
+  .cart th{background:#d9d9d9;color:#000;text-align:center;font-weight:600;border:1px solid #bfbfbf;position:static}
+  .cart th.nar{background:#ffc000}
+  .cart td{text-align:center;border:1px solid #e3e3e3}
+  .cart td.txt,.cart th.txt{text-align:left}
+  .cart tr.tot td{font-weight:700;background:#f2f2f2}
+  .cart td.prem{font-weight:700;background:#fff4d6}
   .nota{font-size:12px;color:var(--gris);margin:-6px 0 14px}
   #login{position:fixed;inset:0;background:rgba(11,46,89,.85);display:none;align-items:center;justify-content:center;z-index:10}
   #login .box{background:#fff;border-radius:12px;padding:24px;width:300px;text-align:center}
@@ -115,7 +122,6 @@
     <button class="tab" data-vista="vMarcas">Cobertura de marcas</button>
     <button class="tab" data-vista="vStock">Stock</button>
     <button class="tab" data-vista="vCombos">Combos Pehuamar</button>
-    <button class="tab" data-vista="vDeposito">Depósito</button>
     <button class="tab" data-vista="vRuteo">Ruteo vendedores</button>
   </div>
 </header>
@@ -315,8 +321,8 @@
     </div>
   </section>
 
-  <!-- ======================= DEPÓSITO (supervisor) ======================= -->
-  <section class="vista" id="vDeposito">
+  <!-- ======================= DEPÓSITO (encargado) ======================= -->
+  <section class="vista cart" id="vDeposito">
     <div class="filtros">
       <label>Mes <input type="month" id="dMes"></label>
       <label id="dLblDia">Día <input type="date" id="dDia"></label>
@@ -331,23 +337,41 @@
     <div class="nota" id="dNota"></div>
 
     <div class="card">
-      <div class="top">
-        <div><h2>Indicadores del depósito</h2><div class="sub" id="dSub"></div></div>
+      <div class="c-titulo">PRODUCTIVIDAD Y EFICIENCIA BODEGUISTAS</div>
+      <div class="top" style="margin-top:8px">
+        <div class="sub" id="dSub"></div>
         <button class="sec" onclick="exportar('dRes','deposito_indicadores')">Descargar Excel</button>
       </div>
       <div class="tw" id="tDRes"></div>
     </div>
 
     <div class="card" id="dCardGrid" style="display:none">
-      <div class="top">
-        <div><h2>Cartelera de la semana</h2><div class="sub">Lunes a viernes, total semanal y acumulado del mes</div></div>
+      <div class="c-titulo">CARTELERA DE LA SEMANA</div>
+      <div class="top" style="margin-top:8px">
+        <div class="sub">Lunes a viernes, total semanal y acumulado del mes</div>
         <button class="sec" onclick="exportar('dGrid','deposito_cartelera_semana')">Descargar Excel</button>
       </div>
       <div class="tw" id="tDGrid"></div>
     </div>
 
+    <div class="card" id="dCardInc">
+      <div class="c-titulo">INCENTIVO BODEGUISTAS</div>
+      <div class="top" style="margin-top:8px">
+        <div class="sub" id="dIncSub"></div>
+        <button class="sec" onclick="exportar('dInc','deposito_incentivo')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tDInc"></div>
+      <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--gris)">Ver escalas de alcance</summary>
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:8px">
+          <div class="tw" id="tDEscU" style="flex:1;min-width:220px"></div>
+          <div class="tw" id="tDEscE" style="flex:1;min-width:220px"></div>
+        </div>
+      </details>
+    </div>
+
     <div class="card">
-      <div class="top"><div><h2>Ranking de bodeguistas</h2><div class="sub">Del período elegido · productividad (más alto, mejor) y errores (más bajo, mejor)</div></div></div>
+      <div class="c-titulo">RANKING DE BODEGUISTAS</div>
+      <div class="sub" style="margin:8px 0">Del período elegido · productividad (más alto, mejor) y errores (más bajo, mejor)</div>
       <div style="display:flex;gap:18px;flex-wrap:wrap">
         <div class="tw" id="tDRkP" style="flex:1;min-width:260px"></div>
         <div class="tw" id="tDRkE" style="flex:1;min-width:260px"></div>
@@ -355,15 +379,17 @@
     </div>
 
     <div class="card">
-      <div class="top">
-        <div><h2>Errores de armado</h2><div class="sub" id="dErrSub"></div></div>
+      <div class="c-titulo">ERRORES DE ARMADO</div>
+      <div class="top" style="margin-top:8px">
+        <div class="sub" id="dErrSub"></div>
         <button class="sec" onclick="exportar('dErr','deposito_errores')">Descargar Excel</button>
       </div>
       <div class="tw" id="tDErr"></div>
     </div>
 
     <div class="card">
-      <div class="top"><div><h2>Minutos de armado</h2><div class="sub">Cargá las tandas de cada bodeguista (inicio y corte). Los minutos se calculan solos y podés escribirlos a mano. Con el descuento restás pausas.</div></div></div>
+      <div class="c-titulo">MINUTOS DE ARMADO</div>
+      <div class="sub" style="margin:8px 0">Se toman del tiempo de picking de Gescom. Si Gescom los calculó mal, escribí los minutos correctos del día y se usan esos; dejalo vacío para volver al de Gescom.</div>
       <div class="filtros" style="margin-bottom:8px"><label>Día <input type="date" id="dMinDia"></label></div>
       <div class="tw" id="tDMin"></div>
       <div style="margin-top:10px"><button onclick="guardarMinutos()">Guardar minutos del día</button> <span id="dMinEstado" class="sub"></span></div>
@@ -412,6 +438,7 @@
       <div class="rol">
         <button onclick="elegirRol('supervisor')">Supervisor</button>
         <button class="sec" onclick="elegirRol('vendedor')">Vendedor</button>
+        <button class="sec" onclick="elegirRol('encargado')">Encargado depósito</button>
       </div>
       <a onclick="salirTodo()">Salir</a>
     </div>
@@ -462,7 +489,7 @@ const ses = {
 };
 const getPin = () => ses.get('clientesPin');
 const setPin = p => ses.set('clientesPin', p);
-const getRol = () => ses.get('clientesRol');          // 'sup' | 'vend'
+const getRol = () => ses.get('clientesRol');          // 'sup' | 'vend' | 'enc'
 const getCod = () => ses.get('clientesCod');          // código del supervisor o del vendedor
 const setRol = (r, c) => { ses.set('clientesRol', r); ses.set('clientesCod', c); };
 let ROL_ELEGIDO = '';
@@ -473,7 +500,7 @@ function mostrarLogin(msg, paso){
   $('#lgPin').style.display = paso === 'pin' ? '' : 'none';
   $('#lgRol').style.display = paso === 'rol' ? '' : 'none';
   $('#lgCod').style.display = paso === 'cod' ? '' : 'none';
-  $('#lgTitulo').textContent = paso === 'pin' ? 'Seguimiento de clientes' : paso === 'rol' ? '¿Quién sos?' : (ROL_ELEGIDO === 'supervisor' ? 'Código de supervisor' : 'Tu código de vendedor');
+  $('#lgTitulo').textContent = paso === 'pin' ? 'Seguimiento de clientes' : paso === 'rol' ? '¿Quién sos?' : (ROL_ELEGIDO === 'supervisor' ? 'Código de supervisor' : ROL_ELEGIDO === 'encargado' ? 'Código de encargado de depósito' : 'Tu código de vendedor');
   $('#pinErr').textContent = msg || '';
   $('#pinInput').value = ''; $('#codInput').value = '';
   setTimeout(() => (paso === 'pin' ? $('#pinInput') : $('#codInput')).focus(), 50);
@@ -482,12 +509,14 @@ function headersAcceso(extra){
   const h = { 'x-pin': getPin(), 'Content-Type': 'application/json', ...(extra || {}) };
   if (getRol() === 'sup') h['x-sup'] = getCod();
   if (getRol() === 'vend') h['x-vendedor'] = getCod();
+  if (getRol() === 'enc') h['x-enc'] = getCod();
   return h;
 }
 async function verificar(rol, cod){
   const h = { 'x-pin': getPin() };
   if (rol === 'supervisor') h['x-sup'] = cod;
   if (rol === 'vendedor') h['x-vendedor'] = cod;
+  if (rol === 'encargado') h['x-enc'] = cod;
   const r = await fetch('/api/acceso/verificar?rol=' + (rol || ''), { headers: h });
   let j = {}; try { j = await r.json(); } catch(e) {}
   return { ok: r.ok, status: r.status, j };
@@ -508,7 +537,7 @@ async function entrarCodigo(){
   const v = await verificar(ROL_ELEGIDO, c).catch(() => ({ ok: false, status: 0, j: { error: 'Sin conexión' } }));
   if (v.status === 401) { setPin(''); return mostrarLogin('Código de entrada incorrecto', 'pin'); }
   if (!v.ok) return mostrarLogin(v.j.error || 'Código incorrecto', 'cod');
-  setRol(ROL_ELEGIDO === 'supervisor' ? 'sup' : 'vend', c);
+  setRol(ROL_ELEGIDO === 'supervisor' ? 'sup' : ROL_ELEGIDO === 'encargado' ? 'enc' : 'vend', c);
   if (v.j.nombre) ses.set('clientesNombre', v.j.nombre);
   iniciar();
 }
@@ -544,18 +573,22 @@ async function bajarArchivo(url, nombreDef){
 // Arranque según el perfil
 function iniciar(){
   $('#login').style.display = 'none';
-  const sup = getRol() === 'sup';
+  const rol = getRol(), sup = rol === 'sup', enc = rol === 'enc';
   document.querySelector('.tabs').style.display = sup ? 'flex' : 'none';
   document.querySelectorAll('.vista').forEach(v => v.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
-  $('#hTitulo').textContent = sup ? 'Seguimiento de clientes' : 'Mi ruta de ventas';
-  $('#hSub').textContent = sup ? 'BIDO S.R.L. · datos de Gescom' : 'BIDO S.R.L. · vendedor ' + getCod() + (ses.get('clientesNombre') ? ' · ' + ses.get('clientesNombre') : '');
+  $('#hTitulo').textContent = sup ? 'Seguimiento de clientes' : enc ? 'Indicadores de depósito' : 'Mi ruta de ventas';
+  $('#hSub').textContent = sup ? 'BIDO S.R.L. · datos de Gescom' : enc ? 'BIDO S.R.L. · encargado de depósito' : 'BIDO S.R.L. · vendedor ' + getCod() + (ses.get('clientesNombre') ? ' · ' + ses.get('clientesNombre') : '');
   $('#estado').textContent = '—';
   if (sup) {
     document.querySelector('.tab[data-vista="vClientes"]').classList.add('on');
     $('#vClientes').classList.add('on');
     vistaActual = 'vClientes';
     cargar(false);
+  } else if (enc) {
+    $('#vDeposito').classList.add('on');
+    vistaActual = 'vDeposito';
+    cargarDeposito(false);
   } else {
     $('#vVend').classList.add('on');
     vistaActual = 'vVend';
@@ -571,12 +604,12 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
   if (vistaActual === 'vMarcas' && !MARCAS) cargarMarcas(false);
   if (vistaActual === 'vStock' && !STOCK) cargarStock(false);
   if (vistaActual === 'vCombos' && !COMB) cargarCombos(false);
-  if (vistaActual === 'vDeposito' && !CART) cargarDeposito(false);
-  if (vistaActual === 'vRuteo') cargarRuteo();
+    if (vistaActual === 'vRuteo') cargarRuteo();
 }));
 
 function actualizar(){
   if (getRol() === 'vend') { cargarRutaVend(RV && RV.dia, RV && RV.ruta); return; }
+  if (getRol() === 'enc') { cargarDeposito(true); return; }
   cargar(true);
   if (vistaActual === 'vMarcas') cargarMarcas(true);
   if (vistaActual === 'vStock') cargarStock(true);
@@ -1291,7 +1324,9 @@ const bajarRuteo = v => bajarArchivo('/api/seguimiento-clientes/ruteo/excel?vend
 // ------------------------------------------------ DEPÓSITO: cartelera de indicadores
 let CART = null, depModo = 'mes';
 const depN = (n, d = 1) => (n == null || !isFinite(n)) ? '—' : Number(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
-const nomBod = b => b.charAt(0) + b.slice(1).toLowerCase();
+const depPct = (n, d = 2) => (n == null || !isFinite(n)) ? '—' : depN(n, d) + '%';
+const depPeso = n => (n == null || !isFinite(n)) ? '—' : '$ ' + Math.round(n).toLocaleString('es-AR');
+const nomBod = b => b === 'BIDO' ? 'BIDO' : b.charAt(0) + b.slice(1).toLowerCase();
 const diaCorto = f => f.slice(8,10) + '/' + f.slice(5,7);
 const DIAS_CORTO = ['Lun','Mar','Mié','Jue','Vie'];
 
@@ -1304,10 +1339,17 @@ function depSemanas(mes){
   }
   return out;
 }
+// minutos de cada día y bodeguista: lo corregido a mano pisa lo de Gescom
+function depMinutosMapa(){
+  const m = new Map();
+  (CART.gescom || []).forEach(r => m.set(r.f + '|' + r.b, r.min));
+  CART.minutos.forEach(r => m.set(r.f + '|' + r.b, r.minutos));
+  return m;
+}
 function depAgg(b, pred){
-  let unid = 0, ped = 0, min = 0, err = 0;
+  let unid = 0, ped = 0, min = 0, err = 0, hayMin = false;
   CART.dias.forEach(r => { if ((!b || r.b === b) && pred(r.f)) { unid += r.unid; ped += r.ped; } });
-  CART.minutos.forEach(r => { if ((!b || r.b === b) && pred(r.f)) min += r.minutos; });
+  depMinutosMapa().forEach((v, k) => { const [f, bb] = k.split('|'); if ((!b || bb === b) && pred(f)) { min += Number(v) || 0; hayMin = true; } });
   CART.errores.forEach(r => { if ((!b || r.b === b) && pred(r.f)) err += r.cant; });
   return { unid, ped, min, err, uxh: min > 0 ? unid / (min / 60) : null, pe: unid > 0 ? err * 100 / unid : null };
 }
@@ -1316,7 +1358,8 @@ function depPred(){
   if (depModo === 'sem') { const w = depSemanas(CART.mes)[+$('#dSem').value] || []; return f => w.includes(f); }
   return () => true;
 }
-const depColor = (ok) => ok == null ? '' : 'color:' + (ok ? 'var(--ok)' : 'var(--mal)') + ';font-weight:600';
+const depColor = ok => ok == null ? '' : 'color:' + (ok ? 'var(--ok)' : 'var(--mal)') + ';font-weight:600';
+const buscar = (tabla, x) => { let r = tabla[0][1]; for (const [k, v] of tabla) { if (x >= k) r = v; else break; } return r; };
 
 async function cargarDeposito(refresh){
   const mes = $('#dMes').value || hoyAR().slice(0, 7);
@@ -1329,8 +1372,8 @@ async function cargarDeposito(refresh){
   const sems = depSemanas(mes);
   const prev = $('#dSem').value;
   $('#dSem').innerHTML = sems.map((w, i) => `<option value="${i}">${i + 1}º SEM (${diaCorto(w[0])} al ${diaCorto(w[4])})</option>`).join('');
-  const hoy = hoyAR();
   const conDatos = [...new Set(j.dias.map(r => r.f))].sort();
+  const hoy = hoyAR();
   const ultimo = conDatos[conDatos.length - 1] || (hoy.slice(0, 7) === mes ? hoy : mes + '-01');
   if (!$('#dDia').value || $('#dDia').value.slice(0, 7) !== mes) $('#dDia').value = ultimo;
   if (!$('#dMinDia').value || $('#dMinDia').value.slice(0, 7) !== mes) $('#dMinDia').value = ultimo;
@@ -1340,6 +1383,7 @@ async function cargarDeposito(refresh){
   $('#dSem').value = (prev !== '' && refresh && +prev < sems.length) ? prev : String(Math.max(iSem, 0));
   const hora = new Date(j.actualizado).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
   $('#dNota').textContent = `Unidades y pedidos: armados del proveedor ${j.proveedor} (PEPSICO) desde Gescom. Errores: notas de crédito con motivo de error de armado, asignadas al día de armado y al preparador del pedido. Actualizado ${hora}.` +
+    (j.gescom.length ? '' : ' Los minutos de Gescom todavía no están conectados: por ahora se cargan a mano abajo.') +
     (j.avisoMin ? ' ⚠️ Minutos: ' + j.avisoMin : '') + (j.otros.length ? ' · Otros preparadores no incluidos: ' + j.otros.join(', ') : '');
   renderDeposito();
   renderMinutos();
@@ -1348,34 +1392,38 @@ async function cargarDeposito(refresh){
 function renderDeposito(){
   if (!CART) return;
   const pred = depPred();
-  const bods = CART.bodeguistas;
+  const bods = CART.bodeguistas, O = CART.objetivos;
   const sems = depSemanas(CART.mes);
   $('#dLblDia').style.display = depModo === 'dia' ? '' : 'none';
   $('#dLblSem').style.display = depModo === 'sem' ? '' : 'none';
   document.querySelectorAll('#dModos .chip').forEach(c => c.classList.toggle('on', c.dataset.m === depModo));
   const etiqueta = depModo === 'dia' ? fechaLabel($('#dDia').value)
     : depModo === 'sem' ? ($('#dSem').selectedOptions[0] || {}).text || '' : 'Acumulado de ' + mesLabel(CART.mes);
-  $('#dSub').textContent = etiqueta + ' · objetivo: ' + fmtN(CART.objetivos.uxh) + ' unid/hr y ' + CART.objetivos.err + '% de errores';
+  $('#dSub').textContent = etiqueta + ' · objetivo: ' + fmtN(O.uxh) + ' unid x hr · ' + String(O.err).replace('.', ',') + '% de errores';
 
   // Resumen
   const aggs = bods.map(b => ({ b, ...depAgg(b, pred) }));
   const tot = { b: 'BIDO', ...depAgg(null, pred) };
   const todos = [...aggs, tot];
-  const efic = a => (a.pe != null && a.pe > 0) ? CART.objetivos.err / a.pe * 100 : null;
-  const filas = todos.map(a => [a.b === 'BIDO' ? 'BIDO (total)' : nomBod(a.b), fmtN(a.unid), fmtN(a.ped), fmtN(a.min),
-    depN(a.uxh, 0), depN(a.uxh == null ? null : a.uxh / CART.objetivos.uxh * 100, 0) + (a.uxh == null ? '' : '%'),
-    fmtN(a.err), depN(a.pe, 2) + (a.pe == null ? '' : '%'), depN(efic(a), 0) + (efic(a) == null ? '' : '%')]);
-  $('#tDRes').innerHTML = tabla('dRes', ['Bodeguista','Unidades','Pedidos','Minutos','Unid/Hr','% Prod.','Error unid.','% Errores','% Eficiencia'], filas, {
+  const efic = a => (a.pe != null && a.pe > 0) ? O.err / a.pe * 100 : null;
+  const filas = todos.map(a => [nomBod(a.b).toUpperCase(), fmtN(a.unid), fmtN(a.ped), fmtN(a.min), depN(a.uxh, 0),
+    depPct(a.uxh == null ? null : a.uxh / O.uxh * 100), fmtN(a.err), depPct(a.pe), depPct(efic(a), 0)]);
+  $('#tDRes').innerHTML = tabla('dRes', ['BODEGUISTA','Unidades','Pedidos','Minutos','Unid x HR (' + fmtN(O.uxh) + ')','% Prod','Errores Unid','% Errores (' + String(O.err).replace('.', ',') + ')','% Eficiencia'], filas, {
     txtCols: [0], totalUltima: true,
-    estilo: (i, v, f, idx) => i === 4 ? depColor(todos[idx].uxh == null ? null : todos[idx].uxh >= CART.objetivos.uxh)
-                           : i === 7 ? depColor(todos[idx].pe == null ? null : todos[idx].pe <= CART.objetivos.err) : ''
+    clsCol: i => (i === 5 || i === 7) ? 'nar' : '',
+    estilo: (i, v, f, idx) => i === 4 ? depColor(todos[idx].uxh == null ? null : todos[idx].uxh >= O.uxh)
+                           : i === 7 ? depColor(todos[idx].pe == null ? null : todos[idx].pe <= O.err) : ''
   });
 
   // Ranking
   const rkP = aggs.filter(a => a.uxh != null).sort((x, y) => y.uxh - x.uxh);
   const rkE = aggs.filter(a => a.pe != null).sort((x, y) => x.pe - y.pe);
-  $('#tDRkP').innerHTML = tabla('dRkP', ['Puesto','Bodeguista','Unid/Hr'], rkP.map((a, i) => [i + 1, nomBod(a.b), depN(a.uxh, 0)]), { txtCols: [1] });
-  $('#tDRkE').innerHTML = tabla('dRkE', ['Puesto','Bodeguista','% Errores'], rkE.map((a, i) => [i + 1, nomBod(a.b), depN(a.pe, 2) + '%']), { txtCols: [1] });
+  $('#tDRkP').innerHTML = tabla('dRkP', ['RANKING','BODEGUISTA','UxH','% PROD'], rkP.map((a, i) => [i + 1, nomBod(a.b).toUpperCase(), depN(a.uxh, 0), depPct(a.uxh / O.uxh * 100)]), { txtCols: [1] });
+  $('#tDRkE').innerHTML = tabla('dRkE', ['RANKING','BODEGUISTA','ERRORES','% ERRORES (' + String(O.err).replace('.', ',') + ')'], rkE.map((a, i) => [i + 1, nomBod(a.b).toUpperCase(), fmtN(a.err), depPct(a.pe)]), { txtCols: [1], clsCol: i => i === 3 ? 'nar' : '' });
+
+  // Incentivo (siempre sobre el acumulado del mes, como en la planilla)
+  $('#dCardInc').style.display = depModo === 'mes' ? '' : 'none';
+  if (depModo === 'mes') renderIncentivo();
 
   // Cartelera semanal
   $('#dCardGrid').style.display = depModo === 'sem' ? '' : 'none';
@@ -1385,20 +1433,20 @@ function renderDeposito(){
     const calc = (b, f) => depAgg(b, x => x === f);
     const indic = [
       ['UNIDADES', a => a.unid, v => fmtN(v)], ['PEDIDOS', a => a.ped, v => fmtN(v)], ['MINUTOS', a => a.min, v => fmtN(v)],
-      ['UNID/HR', a => a.uxh, v => depN(v, 0)], ['ERROR UNID', a => a.err, v => fmtN(v)], ['% ERRORES', a => a.pe, v => depN(v, 2)]
+      ['UNIDXHR', a => a.uxh, v => depN(v, 0)], ['ERROR UNID', a => a.err, v => fmtN(v)], ['% ERRORES', a => a.pe, v => depN(v, 2)]
     ];
-    const objetivo = { 'UNID/HR': fmtN(CART.objetivos.uxh), '% ERRORES': String(CART.objetivos.err).replace('.', ',') };
+    const objetivo = { 'UNIDXHR': fmtN(O.uxh), '% ERRORES': String(O.err).replace('.', ',') };
     const sinDatos = f => !CART.dias.some(r => r.f === f);
     const rows = [];
     todosGrid.forEach(b => {
       const mes = depAgg(b, () => true), sem = depAgg(b, x => dias.includes(x));
       const porDia = dias.map(f => calc(b, f));
       indic.forEach(([nom, fn, fmt], k) => {
-        rows.push([k === 0 ? (b ? nomBod(b) : 'BIDO') : '', nom, objetivo[nom] || '', fmt(fn(mes)),
+        rows.push([k === 0 ? (b ? b : 'BIDO') : '', nom, objetivo[nom] || '', fmt(fn(mes)),
           ...porDia.map((a, i) => sinDatos(dias[i]) ? '' : fmt(fn(a))), fmt(fn(sem))]);
       });
     });
-    const hdr = ['Pickeador','Indicador','Objetivo','Acum. mes', ...dias.map((f, i) => DIAS_CORTO[i] + ' ' + diaCorto(f)), 'Semanal'];
+    const hdr = ['PICKEADOR','INDICADOR','OBJETIVO','ACUM. MES', ...dias.map((f, i) => DIAS_CORTO[i].toUpperCase() + ' ' + diaCorto(f)), 'SEMANAL'];
     $('#tDGrid').innerHTML = tabla('dGrid', hdr, rows, { txtCols: [0, 1] });
   }
 
@@ -1411,38 +1459,52 @@ function renderDeposito(){
     errs.map(r => [fechaLabel(r.f), nomBod(r.b), r.nc, r.orig, r.cliente, r.articulo, r.cant, r.motivo, fechaLabel(r.fnc)]), { txtCols: [0,1,2,3,4,5,7,8] });
 }
 
-// Minutos (tandas)
+function renderIncentivo(){
+  const I = CART.incentivo, O = CART.objetivos;
+  const rows = CART.bodeguistas.map(b => {
+    const a = depAgg(b, () => true);
+    const ok = a.uxh != null && a.pe != null;
+    const dU = ok ? buscar(I.escalaUxh, Math.min(a.uxh, 1e9)) : null;
+    const dE = ok ? (a.pe >= I.maxErr ? 0 : buscar(I.escalaErr, a.pe)) : null;
+    const alc = ok ? dE * I.pesoErr + dU * I.pesoUxh : null;
+    const premio = ok ? ((a.uxh < I.minUxh || a.pe > I.maxErr) ? 0 : I.base * alc) : null;
+    return { b, uxh: a.uxh, pe: a.pe, dU, dE, alc, premio, dif: ok ? I.base - premio : null, ok };
+  });
+  const pozo = rows.reduce((t, r) => t + (r.dif || 0), 0);
+  const elig = rows.filter(r => r.ok && r.pe <= I.errExtra);
+  const extra = (pozo > 0 && elig.length) ? pozo / elig.length : 0;
+  rows.forEach(r => { r.extra = r.ok && r.pe <= I.errExtra ? extra : 0; r.total = r.ok ? r.premio + r.extra : null; });
+  const suma = k => rows.reduce((t, r) => t + (r[k] || 0), 0);
+  const filas = rows.map(r => [nomBod(r.b).toUpperCase(), depN(r.uxh, 0), depPct(r.dU == null ? null : r.dU * 100, 0), depPct(r.pe), depPct(r.dE == null ? null : r.dE * 100, 0),
+    depPct(r.alc == null ? null : r.alc * 100, 0), depPeso(r.premio), depPeso(r.dif), r.ok && r.pe <= I.errExtra ? depPeso(r.extra) : '—', depPeso(r.total)]);
+  filas.push(['BIDO', '', '', '', '', '', depPeso(suma('premio')), depPeso(pozo), depPeso(suma('extra')), depPeso(suma('total'))]);
+  $('#dIncSub').textContent = `Acumulado de ${mesLabel(CART.mes)} · premio base ${depPeso(I.base)} por bodeguista · cobra con al menos ${fmtN(I.minUxh)} unid/hr y hasta ${String(I.maxErr).replace('.', ',')}% de errores. ` +
+    `Alcance total = errores ${I.pesoErr * 100}% + productividad ${I.pesoUxh * 100}%. Lo que cada uno deja sin cobrar del 100% se junta (${depPeso(pozo)}) y se reparte en partes iguales entre quienes tienen ${String(I.errExtra).replace('.', ',')}% de errores o menos.`;
+  $('#tDInc').innerHTML = tabla('dInc', ['BODEGUISTA','Unid x HR','Alc S/Esc','% Errores','Alc S/Esc','Alc Total','Premio ' + depPeso(I.base),'Diferencia con 100%','<= ' + String(I.errExtra).replace('.', ',') + '% de errores','PREMIO TOTAL'], filas, {
+    txtCols: [0], totalUltima: true, clsCol: i => i === 9 ? 'nar' : '', clsCelda: (i, v, f, idx) => i === 9 ? 'prem' : ''
+  });
+  $('#tDEscU').innerHTML = tabla('dEscU', ['Unid x HR','Alcance'], I.escalaUxh.map(([k, v]) => [fmtN(k), depPct(v * 100, 0)]));
+  $('#tDEscE').innerHTML = tabla('dEscE', ['% Errores','Alcance'], I.escalaErr.map(([k, v]) => [String(k).replace('.', ','), depPct(v * 100, 0)]));
+}
+
+// Minutos del día: Gescom, con corrección manual
 function renderMinutos(){
   if (!CART) return;
   const f = $('#dMinDia').value;
-  const mapa = Object.fromEntries(CART.minutos.filter(r => r.f === f).map(r => [r.b, r]));
-  const inp = (b, c, tipo, v) => `<input type="${tipo}" data-b="${b}" data-c="${c}" value="${v == null ? '' : esc(v)}" style="width:${tipo === 'time' ? 96 : 70}px">`;
-  $('#tDMin').innerHTML = '<table><thead><tr><th class="txt">Bodeguista</th><th>Inicio 1ª tanda</th><th>Corte 1ª tanda</th><th>Inicio 2ª tanda</th><th>Corte 2ª tanda</th><th>Min. a descontar</th><th>Minutos</th></tr></thead><tbody>' +
-    CART.bodeguistas.map(b => { const r = mapa[b] || {};
-      return `<tr><td class="txt">${nomBod(b)}</td><td>${inp(b,'ini1','time',r.ini1)}</td><td>${inp(b,'fin1','time',r.fin1)}</td><td>${inp(b,'ini2','time',r.ini2)}</td><td>${inp(b,'fin2','time',r.fin2)}</td><td>${inp(b,'descuento','number',r.descuento || '')}</td><td>${inp(b,'minutos','number',r.minutos || '')}</td></tr>`;
-    }).join('') + '</tbody></table>';
+  const g = Object.fromEntries((CART.gescom || []).filter(r => r.f === f).map(r => [r.b, r.min]));
+  const c = Object.fromEntries(CART.minutos.filter(r => r.f === f).map(r => [r.b, r.minutos]));
+  $('#tDMin').innerHTML = '<table><thead><tr><th class="txt">Bodeguista</th><th>Minutos de Gescom</th><th>Minutos corregidos</th><th>Minutos que se usan</th></tr></thead><tbody>' +
+    CART.bodeguistas.map(b => `<tr><td class="txt">${nomBod(b)}</td><td>${g[b] != null ? fmtN(g[b]) : '—'}</td>` +
+      `<td><input type="number" min="0" max="1440" data-b="${b}" value="${c[b] != null ? c[b] : ''}" style="width:90px" placeholder="—"></td>` +
+      `<td><b>${c[b] != null ? fmtN(c[b]) : (g[b] != null ? fmtN(g[b]) : '—')}</b></td></tr>`).join('') + '</tbody></table>';
   $('#dMinEstado').textContent = '';
 }
-function recalcMinutos(b){
-  const g = c => document.querySelector(`#tDMin input[data-b="${b}"][data-c="${c}"]`);
-  const t = x => { const m = /^(\d{1,2}):(\d{2})$/.exec(x.value); return m ? (+m[1]) * 60 + (+m[2]) : null; };
-  let min = 0, hay = false;
-  [['ini1','fin1'],['ini2','fin2']].forEach(([a, c]) => { const i = t(g(a)), f = t(g(c)); if (i != null && f != null) { min += Math.max(f - i, 0); hay = true; } });
-  if (hay) g('minutos').value = Math.max(min - (+g('descuento').value || 0), 0);
-}
-document.addEventListener('input', e => {
-  const el = e.target;
-  if (el.matches && el.matches('#tDMin input') && el.dataset.c !== 'minutos') recalcMinutos(el.dataset.b);
-});
 async function guardarMinutos(){
   const fecha = $('#dMinDia').value;
-  const filas = CART.bodeguistas.map(b => {
-    const g = c => (document.querySelector(`#tDMin input[data-b="${b}"][data-c="${c}"]`) || {}).value || '';
-    return { bodeguista: b, ini1: g('ini1'), fin1: g('fin1'), ini2: g('ini2'), fin2: g('fin2'), descuento: g('descuento'), minutos: g('minutos') };
-  });
+  const filas = CART.bodeguistas.map(b => ({ bodeguista: b, minutos: (document.querySelector(`#tDMin input[data-b="${b}"]`) || {}).value || '' }));
   $('#dMinEstado').textContent = 'Guardando…';
   try {
-    await api('/api/seguimiento-clientes/deposito/minutos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha, filas }) });
+    await api('/api/seguimiento-clientes/deposito/minutos', { method: 'POST', body: JSON.stringify({ fecha, filas }) });
     await cargarDeposito(true);
     $('#dMinEstado').textContent = '✔ Guardado';
   } catch(e) { if (e.message !== 'sin PIN') $('#dMinEstado').textContent = 'Error: ' + e.message; }

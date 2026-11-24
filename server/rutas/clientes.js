@@ -46,6 +46,7 @@ const SUBMARCAS = [
 //   3) Vendedor: su código de vendedor de Gescom (VENDEDORES_CODIGOS, separados por coma) -> solo su ruta
 const leerPin = () => String(process.env.CLIENTES_PIN || '5940').trim();
 const leerPinSupervisor = () => String(process.env.SUPERVISOR_PIN || '1234').trim();
+const leerPinEncargado = () => String(process.env.ENCARGADO_PIN || '1234').trim();
 const codigosVendedores = () => String(process.env.VENDEDORES_CODIGOS || '21,22,23,24,25,27,31,32,33,34')
     .split(',').map(c => c.trim()).filter(Boolean);
 const sinCeros = c => String(c == null ? '' : c).trim().replace(/^0+(?=\d)/, '');
@@ -57,6 +58,12 @@ function controlPin(req, res, next) {
 function controlSupervisor(req, res, next) {
     controlPin(req, res, () => {
         if (String(req.get('x-sup') || '').trim() !== leerPinSupervisor()) return res.status(403).json({ error: 'Código de supervisor incorrecto' });
+        next();
+    });
+}
+function controlEncargado(req, res, next) {
+    controlPin(req, res, () => {
+        if (String(req.get('x-enc') || '').trim() !== leerPinEncargado()) return res.status(403).json({ error: 'Código de encargado incorrecto' });
         next();
     });
 }
@@ -496,6 +503,10 @@ app.get('/api/acceso/verificar', controlPin, async (req, res) => {
         if (String(req.get('x-sup') || '').trim() !== leerPinSupervisor()) return res.status(403).json({ error: 'Código de supervisor incorrecto' });
         return res.json({ ok: true, rol });
     }
+    if (rol === 'encargado') {
+        if (String(req.get('x-enc') || '').trim() !== leerPinEncargado()) return res.status(403).json({ error: 'Código de encargado incorrecto' });
+        return res.json({ ok: true, rol });
+    }
     if (rol === 'vendedor') {
         const cod = sinCeros(req.get('x-vendedor'));
         if (!cod || !codigosVendedores().some(c => sinCeros(c) === cod)) return res.status(403).json({ error: 'Ese código de vendedor no existe' });
@@ -839,6 +850,14 @@ const sinAcentos = t => String(t == null ? '' : t).normalize('NFD').replace(/[̀
 const DEP_MOTIVOS_N = new Set(DEP_MOTIVOS.map(sinAcentos));
 const claveBod = nombre => String(nombre || '').trim().split(/\s+/)[0].toUpperCase();
 const cacheDeposito = new Map();
+// Incentivo mensual (hoja Resumen del Excel): premio base por bodeguista y escalas de alcance
+const DEP_INCENTIVO = {
+    base: Number(process.env.DEPOSITO_PREMIO_BASE || 65832),
+    minUxh: 600, maxErr: 0.4, errExtra: 0.1, pesoErr: 0.6, pesoUxh: 0.4,
+    escalaUxh: [[0,0],[550,0.05],[600,0.15],[650,0.2],[700,0.3],[750,0.35],[800,0.45],[850,0.5],[900,0.75],[950,0.85],[1000,1]],
+    escalaErr: [[0,1.5],[0.02,1.45],[0.04,1.4],[0.06,1.35],[0.08,1.3],[0.1,1.25],[0.12,1.2],[0.14,1.15],[0.16,1.1],[0.18,1.05],[0.2,1],
+        [0.22,0.9],[0.24,0.8],[0.26,0.7],[0.28,0.6],[0.3,0.5],[0.32,0.4],[0.34,0.3],[0.36,0.2],[0.38,0.1],[0.4,0]]
+};
 
 async function asegurarTablaMinutos() {
     if (!db) throw new Error('Sin base propia (DATABASE_URL): no se pueden guardar los minutos');
@@ -907,7 +926,7 @@ async function obtenerDeposito(mes, forzar) {
     let minutos = [], avisoMin = '';
     try {
         await asegurarTablaMinutos();
-        const mm = await db.query(`SELECT to_char(fecha,'YYYY-MM-DD') AS f, bodeguista AS b, ini1, fin1, ini2, fin2, descuento, minutos
+        const mm = await db.query(`SELECT to_char(fecha,'YYYY-MM-DD') AS f, bodeguista AS b, minutos
             FROM deposito_minutos WHERE fecha >= $1::date AND fecha < $2::date`, [desde, hasta]);
         minutos = mm.rows;
     } catch (e) { avisoMin = e.message; }
@@ -916,14 +935,15 @@ async function obtenerDeposito(mes, forzar) {
         actualizado: new Date().toISOString(), mes, bodeguistas: DEP_BODEGUISTAS,
         proveedor: DEP_PROVEEDOR, motivosContados: DEP_MOTIVOS,
         motivosVistos: [...motivos].map(([m, n]) => ({ m, n, cuenta: DEP_MOTIVOS_N.has(sinAcentos(m)) })).sort((x, y) => y.n - x.n),
-        otros: [...otros], dias, errores, minutos, avisoMin,
-        objetivos: { uxh: 1000, err: 0.2 }
+        otros: [...otros], dias, errores, minutos, gescom: [], avisoMin,
+        objetivos: { uxh: 1000, err: 0.2 },
+        incentivo: DEP_INCENTIVO
     };
     cacheDeposito.set(mes, { t: Date.now(), data });
     return data;
 }
 
-app.get('/api/seguimiento-clientes/deposito', controlSupervisor, async (req, res) => {
+app.get('/api/seguimiento-clientes/deposito', controlEncargado, async (req, res) => {
     try {
         const mes = String(req.query.mes || hoyAR().slice(0, 7));
         if (!mesValido(mes)) return res.status(400).json({ error: 'Mes inválido' });
@@ -934,8 +954,7 @@ app.get('/api/seguimiento-clientes/deposito', controlSupervisor, async (req, res
     }
 });
 
-const horaValida = h => h == null || h === '' || /^([01]?\d|2[0-3]):[0-5]\d$/.test(String(h));
-app.post('/api/seguimiento-clientes/deposito/minutos', controlSupervisor, async (req, res) => {
+app.post('/api/seguimiento-clientes/deposito/minutos', controlEncargado, async (req, res) => {
     try {
         const fecha = String((req.body && req.body.fecha) || '');
         if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return res.status(400).json({ error: 'Fecha inválida' });
@@ -944,18 +963,14 @@ app.post('/api/seguimiento-clientes/deposito/minutos', controlSupervisor, async 
         for (const f of filas) {
             const b = String(f.bodeguista || '').toUpperCase();
             if (!DEP_BODEGUISTAS.includes(b)) continue;
-            const t = [f.ini1, f.fin1, f.ini2, f.fin2];
-            if (!t.every(horaValida)) return res.status(400).json({ error: 'Hora inválida en ' + b });
-            const min = Math.round(Number(f.minutos) || 0), desc = Math.round(Number(f.descuento) || 0);
-            if (min < 0 || min > 1440 || desc < 0) return res.status(400).json({ error: 'Minutos inválidos en ' + b });
-            if (!min && !t.some(Boolean)) {
+            if (f.minutos === '' || f.minutos == null) {   // vacío = vuelve a usar el tiempo de Gescom
                 await db.query(`DELETE FROM deposito_minutos WHERE fecha = $1 AND bodeguista = $2`, [fecha, b]);
                 continue;
             }
-            await db.query(`INSERT INTO deposito_minutos (fecha, bodeguista, ini1, fin1, ini2, fin2, descuento, minutos, actualizado)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now())
-                ON CONFLICT (fecha, bodeguista) DO UPDATE SET ini1=$3, fin1=$4, ini2=$5, fin2=$6, descuento=$7, minutos=$8, actualizado=now()`,
-                [fecha, b, ...t.map(x => x || null), desc, min]);
+            const min = Math.round(Number(f.minutos));
+            if (!(min >= 0 && min <= 1440)) return res.status(400).json({ error: 'Minutos inválidos en ' + b });
+            await db.query(`INSERT INTO deposito_minutos (fecha, bodeguista, minutos, actualizado) VALUES ($1,$2,$3, now())
+                ON CONFLICT (fecha, bodeguista) DO UPDATE SET minutos=$3, actualizado=now()`, [fecha, b, min]);
         }
         cacheDeposito.clear();
         res.json({ ok: true });
