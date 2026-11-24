@@ -46,3 +46,4 @@ Cartelera de indicadores por bodeguista (día, semana y mes), ranking, errores d
 - Minutos: el tiempo de picking NO está en la base de Gescom; se importa el Excel del reporte "Picking Bodeguista/Fecha" (botón en "Minutos de armado", tabla `deposito_gescom`). La corrección manual por día (`deposito_minutos`) pisa al valor de Gescom.
 - Incentivo: base 65.832 (DEPOSITO_PREMIO_BASE), escalas de la planilla; ver `DEP_INCENTIVO`.
 - Variables opcionales: DEPOSITO_PROVEEDOR, DEPOSITO_BODEGUISTAS, DEPOSITO_MOTIVOS (separados por |), ENCARGADO_PIN.
+- Ajuste de errores por el encargado: se puede quitar una línea de error (tabla `deposito_error_excluir`) o escribir un total por día y bodeguista (`deposito_errores_ajuste`, reemplaza al calculado).

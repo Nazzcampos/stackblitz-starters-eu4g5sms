@@ -876,6 +876,15 @@ async function asegurarTablaGescomMin() {
         importado timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (fecha, bodeguista))`);
 }
 
+async function asegurarTablasErrores() {
+    if (!db) throw new Error('Sin base propia (DATABASE_URL): no se pueden guardar los ajustes');
+    await db.query(`CREATE TABLE IF NOT EXISTS deposito_error_excluir (
+        linea text PRIMARY KEY, nc text, nota text, actualizado timestamptz NOT NULL DEFAULT now())`);
+    await db.query(`CREATE TABLE IF NOT EXISTS deposito_errores_ajuste (
+        fecha date NOT NULL, bodeguista text NOT NULL, errores integer NOT NULL DEFAULT 0,
+        actualizado timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (fecha, bodeguista))`);
+}
+
 async function obtenerDeposito(mes, forzar) {
     const c = cacheDeposito.get(mes);
     if (!forzar && c && Date.now() - c.t < 2 * 60 * 1000) return c.data;
@@ -901,7 +910,8 @@ async function obtenerDeposito(mes, forzar) {
                n.tipo_comprobante_codigo AS tipo, n.punto_venta_codigo::text AS pv, n.numero_comprobante::text AS numero,
                o.numero_comprobante::text AS orig, n.razon_social AS cliente,
                i.descripcion AS articulo, ABS(vi.cantidad)::float AS cant,
-               to_char(n.fecha_comprobante::date, 'YYYY-MM-DD') AS fnc, n.reparto_codigo::text AS reparto
+               to_char(n.fecha_comprobante::date, 'YYYY-MM-DD') AS fnc, n.reparto_codigo::text AS reparto,
+               (n.id::text || '|' || vi.item_codigo::text) AS linea
         FROM venta n
         JOIN venta o ON o.id = n.venta_referenciada_id AND o.tenant_id = n.tenant_id
         JOIN venta_item vi ON vi.venta_id = n.id AND vi.tenant_id = n.tenant_id
@@ -927,16 +937,21 @@ async function obtenerDeposito(mes, forzar) {
         const k = claveBod(r.prep);
         if (!seguir.has(k)) return;
         errores.push({ f: r.f, b: k, cant: r.cant, motivo: r.motivo, nc: [r.tipo, r.pv, r.numero].filter(Boolean).join(' '),
-            orig: r.orig, cliente: r.cliente || '', articulo: r.articulo || '', fnc: r.fnc, reparto: r.reparto || '' });
+            orig: r.orig, cliente: r.cliente || '', articulo: r.articulo || '', fnc: r.fnc, reparto: r.reparto || '', linea: r.linea });
     });
 
-    let minutos = [], gescom = [], avisoMin = '';
+    let minutos = [], gescom = [], ajustes = [], avisoMin = '';
+    const excluidas = new Map();
     try {
         await asegurarTablaMinutos();
         await asegurarTablaGescomMin();
         const gg = await db.query(`SELECT to_char(fecha,'YYYY-MM-DD') AS f, bodeguista AS b, minutos AS min
             FROM deposito_gescom WHERE fecha >= $1::date AND fecha < $2::date`, [desde, hasta]);
         gescom = gg.rows;
+        await asegurarTablasErrores();
+        (await db.query(`SELECT linea, nota FROM deposito_error_excluir`)).rows.forEach(r => excluidas.set(r.linea, r.nota || ''));
+        ajustes = (await db.query(`SELECT to_char(fecha,'YYYY-MM-DD') AS f, bodeguista AS b, errores FROM deposito_errores_ajuste
+            WHERE fecha >= $1::date AND fecha < $2::date`, [desde, hasta])).rows;
         const mm = await db.query(`SELECT to_char(fecha,'YYYY-MM-DD') AS f, bodeguista AS b, minutos
             FROM deposito_minutos WHERE fecha >= $1::date AND fecha < $2::date`, [desde, hasta]);
         minutos = mm.rows;
@@ -946,7 +961,7 @@ async function obtenerDeposito(mes, forzar) {
         actualizado: new Date().toISOString(), mes, bodeguistas: DEP_BODEGUISTAS,
         proveedor: DEP_PROVEEDOR, motivosContados: DEP_MOTIVOS,
         motivosVistos: [...motivos].map(([m, n]) => ({ m, n, cuenta: DEP_MOTIVOS_N.has(sinAcentos(m)) })).sort((x, y) => y.n - x.n),
-        otros: [...otros], dias, errores, minutos, gescom, avisoMin,
+        otros: [...otros], dias, errores: errores.map(e => ({ ...e, excl: excluidas.has(e.linea), nota: excluidas.get(e.linea) || '' })), minutos, gescom, ajustes, avisoMin,
         objetivos: { uxh: 1000, err: 0.2 },
         incentivo: DEP_INCENTIVO
     };
@@ -989,23 +1004,57 @@ app.post('/api/seguimiento-clientes/deposito/importar', controlEncargado, async 
     }
 });
 
+// El encargado saca (o devuelve) una línea de error: por ejemplo cuando no fue del bodeguista sino del camión.
+app.post('/api/seguimiento-clientes/deposito/error-excluir', controlEncargado, async (req, res) => {
+    try {
+        const linea = String((req.body && req.body.linea) || '').slice(0, 100);
+        if (!linea) return res.status(400).json({ error: 'Falta la línea' });
+        await asegurarTablasErrores();
+        if (req.body.excluir) {
+            await db.query(`INSERT INTO deposito_error_excluir (linea, nc, nota, actualizado) VALUES ($1,$2,$3, now())
+                ON CONFLICT (linea) DO UPDATE SET nota=$3, actualizado=now()`,
+                [linea, String(req.body.nc || '').slice(0, 60), String(req.body.nota || '').slice(0, 200)]);
+        } else {
+            await db.query(`DELETE FROM deposito_error_excluir WHERE linea = $1`, [linea]);
+        }
+        cacheDeposito.clear();
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('❌ [clientes] Excluir error depósito:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/api/seguimiento-clientes/deposito/minutos', controlEncargado, async (req, res) => {
     try {
         const fecha = String((req.body && req.body.fecha) || '');
         if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return res.status(400).json({ error: 'Fecha inválida' });
         const filas = Array.isArray(req.body.filas) ? req.body.filas : [];
         await asegurarTablaMinutos();
+        await asegurarTablasErrores();
         for (const f of filas) {
             const b = String(f.bodeguista || '').toUpperCase();
             if (!DEP_BODEGUISTAS.includes(b)) continue;
-            if (f.minutos === '' || f.minutos == null) {   // vacío = vuelve a usar el tiempo de Gescom
-                await db.query(`DELETE FROM deposito_minutos WHERE fecha = $1 AND bodeguista = $2`, [fecha, b]);
-                continue;
+            if ('minutos' in f) {
+                if (f.minutos === '' || f.minutos == null) {   // vacío = vuelve a usar el tiempo de Gescom
+                    await db.query(`DELETE FROM deposito_minutos WHERE fecha = $1 AND bodeguista = $2`, [fecha, b]);
+                } else {
+                    const min = Math.round(Number(f.minutos));
+                    if (!(min >= 0 && min <= 1440)) return res.status(400).json({ error: 'Minutos inválidos en ' + b });
+                    await db.query(`INSERT INTO deposito_minutos (fecha, bodeguista, minutos, actualizado) VALUES ($1,$2,$3, now())
+                        ON CONFLICT (fecha, bodeguista) DO UPDATE SET minutos=$3, actualizado=now()`, [fecha, b, min]);
+                }
             }
-            const min = Math.round(Number(f.minutos));
-            if (!(min >= 0 && min <= 1440)) return res.status(400).json({ error: 'Minutos inválidos en ' + b });
-            await db.query(`INSERT INTO deposito_minutos (fecha, bodeguista, minutos, actualizado) VALUES ($1,$2,$3, now())
-                ON CONFLICT (fecha, bodeguista) DO UPDATE SET minutos=$3, actualizado=now()`, [fecha, b, min]);
+            if ('errores' in f) {
+                if (f.errores === '' || f.errores == null) {   // vacío = vuelve al cálculo automático
+                    await db.query(`DELETE FROM deposito_errores_ajuste WHERE fecha = $1 AND bodeguista = $2`, [fecha, b]);
+                } else {
+                    const er = Math.round(Number(f.errores));
+                    if (!(er >= 0 && er <= 100000)) return res.status(400).json({ error: 'Errores inválidos en ' + b });
+                    await db.query(`INSERT INTO deposito_errores_ajuste (fecha, bodeguista, errores, actualizado) VALUES ($1,$2,$3, now())
+                        ON CONFLICT (fecha, bodeguista) DO UPDATE SET errores=$3, actualizado=now()`, [fecha, b, er]);
+                }
+            }
         }
         cacheDeposito.clear();
         res.json({ ok: true });

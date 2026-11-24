@@ -380,6 +380,7 @@
 
     <div class="card">
       <div class="c-titulo">ERRORES DE ARMADO</div>
+      <div class="sub" style="margin:8px 0 0">Si un error no fue del bodeguista (por ejemplo fue del camión), tocá <b>Quitar</b> y deja de sumarle. También podés escribir un total distinto por día en "Minutos y errores del día".</div>
       <div class="top" style="margin-top:8px">
         <div class="sub" id="dErrSub"></div>
         <button class="sec" onclick="exportar('dErr','deposito_errores')">Descargar Excel</button>
@@ -388,15 +389,15 @@
     </div>
 
     <div class="card">
-      <div class="c-titulo">MINUTOS DE ARMADO</div>
-      <div class="sub" style="margin:8px 0">Se toman del tiempo de picking de Gescom. Si Gescom los calculó mal, escribí los minutos correctos del día y se usan esos; dejalo vacío para volver al de Gescom.</div>
+      <div class="c-titulo">MINUTOS Y ERRORES DEL DÍA</div>
+      <div class="sub" style="margin:8px 0">Minutos: se toman del reporte de Gescom; si los calculó mal, escribí los correctos. Errores: si querés un total distinto para ese día, escribilo y reemplaza al calculado. En ambos casos, vacío = vuelve al automático.</div>
       <div class="filtros" style="margin-bottom:8px">
         <label>Día <input type="date" id="dMinDia"></label>
         <label>Importar reporte de Gescom (Excel de "Picking Bodeguista/Fecha")<input type="file" id="dArchivo" accept=".xlsx,.xls"></label>
         <span id="dImpEstado" class="sub"></span>
       </div>
       <div class="tw" id="tDMin"></div>
-      <div style="margin-top:10px"><button onclick="guardarMinutos()">Guardar minutos del día</button> <span id="dMinEstado" class="sub"></span></div>
+      <div style="margin-top:10px"><button onclick="guardarMinutos()">Guardar el día</button> <span id="dMinEstado" class="sub"></span></div>
     </div>
   </section>
 
@@ -1354,7 +1355,10 @@ function depAgg(b, pred){
   let unid = 0, ped = 0, min = 0, err = 0, hayMin = false;
   CART.dias.forEach(r => { if ((!b || r.b === b) && pred(r.f)) { unid += r.unid; ped += r.ped; } });
   depMinutosMapa().forEach((v, k) => { const [f, bb] = k.split('|'); if ((!b || bb === b) && pred(f)) { min += Number(v) || 0; hayMin = true; } });
-  CART.errores.forEach(r => { if ((!b || r.b === b) && pred(r.f)) err += r.cant; });
+  const aj = new Map((CART.ajustes || []).map(r => [r.f + '|' + r.b, r.errores]));
+  const conAj = new Set();
+  aj.forEach((v, k) => { const [f, bb] = k.split('|'); if ((!b || bb === b) && pred(f)) { err += v; conAj.add(k); } });
+  CART.errores.forEach(r => { if ((!b || r.b === b) && pred(r.f) && !r.excl && !conAj.has(r.f + '|' + r.b)) err += r.cant; });
   return { unid, ped, min, err, uxh: min > 0 ? unid / (min / 60) : null, pe: unid > 0 ? err * 100 / unid : null };
 }
 function depPred(){
@@ -1456,11 +1460,26 @@ function renderDeposito(){
 
   // Errores del período
   const errs = CART.errores.filter(r => pred(r.f));
-  const cant = errs.reduce((t, r) => t + r.cant, 0);
-  $('#dErrSub').textContent = `${fmtN(cant)} unidades en ${fmtN(errs.length)} líneas · motivos que cuentan: ${CART.motivosContados.join(' · ')}` +
+  const cuentan = errs.filter(r => !r.excl);
+  const cant = cuentan.reduce((t, r) => t + r.cant, 0), quit = errs.length - cuentan.length;
+  const ajP = (CART.ajustes || []).filter(r => pred(r.f));
+  $('#dErrSub').textContent = `${fmtN(cant)} unidades en ${fmtN(cuentan.length)} líneas` + (quit ? ` · ${quit} línea${quit > 1 ? 's quitadas' : ' quitada'} por el encargado` : '') +
+    (ajP.length ? ` · ${ajP.length} día${ajP.length > 1 ? 's' : ''} con total corregido a mano (el total corregido reemplaza al calculado)` : '') +
+    ` · motivos que cuentan: ${CART.motivosContados.join(' · ')}` +
     (CART.motivosVistos.some(m => !m.cuenta) ? ' · No cuentan: ' + CART.motivosVistos.filter(m => !m.cuenta).map(m => `${m.m} (${fmtN(m.n)})`).join(', ') : '');
-  $('#tDErr').innerHTML = tabla('dErr', ['Fecha armado','Bodeguista','Comprobante NC','Pedido','Cliente','Artículo','Cant.','Motivo','Fecha NC'],
-    errs.map(r => [fechaLabel(r.f), nomBod(r.b), r.nc, r.orig, r.cliente, r.articulo, r.cant, r.motivo, fechaLabel(r.fnc)]), { txtCols: [0,1,2,3,4,5,7,8] });
+  const filasE = errs.map(r => [fechaLabel(r.f), nomBod(r.b), r.nc, r.orig, r.cliente, r.articulo, r.cant, r.motivo, fechaLabel(r.fnc),
+    r.excl ? `<span class="tag">Quitado</span> <button class="sec" onclick="excluirError('${esc(r.linea)}','${esc(r.nc)}',false)">Devolver</button>`
+           : `<button class="sec" onclick="excluirError('${esc(r.linea)}','${esc(r.nc)}',true)">Quitar</button>`]);
+  $('#tDErr').innerHTML = tabla('dErr', ['Fecha armado','Bodeguista','Comprobante NC','Pedido','Cliente','Artículo','Cant.','Motivo','Fecha NC','Cuenta'], filasE,
+    { txtCols: [0,1,2,3,4,5,7,8], html: [9], exportFilas: errs.map(r => [fechaLabel(r.f), nomBod(r.b), r.nc, r.orig, r.cliente, r.articulo, r.cant, r.motivo, fechaLabel(r.fnc), r.excl ? 'Quitado' : 'Cuenta']),
+      estilo: (i, v, f, idx) => errs[idx] && errs[idx].excl ? 'color:#a0a8b4;text-decoration:line-through' : '' });
+}
+
+async function excluirError(linea, nc, excluir){
+  try {
+    await api('/api/seguimiento-clientes/deposito/error-excluir', { method: 'POST', body: JSON.stringify({ linea, nc, excluir }) });
+    await cargarDeposito(true);
+  } catch(e) { if (e.message !== 'sin PIN') alert('No se pudo guardar: ' + e.message); }
 }
 
 function renderIncentivo(){
@@ -1497,15 +1516,23 @@ function renderMinutos(){
   const f = $('#dMinDia').value;
   const g = Object.fromEntries((CART.gescom || []).filter(r => r.f === f).map(r => [r.b, r.min]));
   const c = Object.fromEntries(CART.minutos.filter(r => r.f === f).map(r => [r.b, r.minutos]));
-  $('#tDMin').innerHTML = '<table><thead><tr><th class="txt">Bodeguista</th><th>Minutos de Gescom</th><th>Minutos corregidos</th><th>Minutos que se usan</th></tr></thead><tbody>' +
+  const ea = Object.fromEntries((CART.ajustes || []).filter(r => r.f === f).map(r => [r.b, r.errores]));
+  const ec = {};   // errores calculados del día (sin las líneas quitadas)
+  CART.errores.filter(r => r.f === f && !r.excl).forEach(r => { ec[r.b] = (ec[r.b] || 0) + r.cant; });
+  $('#tDMin').innerHTML = '<table><thead><tr><th class="txt">Bodeguista</th><th>Minutos de Gescom</th><th>Minutos corregidos</th><th>Minutos que se usan</th>' +
+    '<th>Errores calculados</th><th>Errores corregidos</th><th>Errores que se usan</th></tr></thead><tbody>' +
     CART.bodeguistas.map(b => `<tr><td class="txt">${nomBod(b)}</td><td>${g[b] != null ? fmtN(g[b]) : '—'}</td>` +
-      `<td><input type="number" min="0" max="1440" data-b="${b}" value="${c[b] != null ? c[b] : ''}" style="width:90px" placeholder="—"></td>` +
-      `<td><b>${c[b] != null ? fmtN(c[b]) : (g[b] != null ? fmtN(g[b]) : '—')}</b></td></tr>`).join('') + '</tbody></table>';
+      `<td><input type="number" min="0" max="1440" data-b="${b}" data-c="min" value="${c[b] != null ? c[b] : ''}" style="width:90px" placeholder="—"></td>` +
+      `<td><b>${c[b] != null ? fmtN(c[b]) : (g[b] != null ? fmtN(g[b]) : '—')}</b></td>` +
+      `<td>${fmtN(ec[b] || 0)}</td>` +
+      `<td><input type="number" min="0" data-b="${b}" data-c="err" value="${ea[b] != null ? ea[b] : ''}" style="width:90px" placeholder="—"></td>` +
+      `<td><b>${ea[b] != null ? fmtN(ea[b]) : fmtN(ec[b] || 0)}</b></td></tr>`).join('') + '</tbody></table>';
   $('#dMinEstado').textContent = '';
 }
 async function guardarMinutos(){
   const fecha = $('#dMinDia').value;
-  const filas = CART.bodeguistas.map(b => ({ bodeguista: b, minutos: (document.querySelector(`#tDMin input[data-b="${b}"]`) || {}).value || '' }));
+  const val = (b, c) => (document.querySelector(`#tDMin input[data-b="${b}"][data-c="${c}"]`) || {}).value || '';
+  const filas = CART.bodeguistas.map(b => ({ bodeguista: b, minutos: val(b, 'min'), errores: val(b, 'err') }));
   $('#dMinEstado').textContent = 'Guardando…';
   try {
     await api('/api/seguimiento-clientes/deposito/minutos', { method: 'POST', body: JSON.stringify({ fecha, filas }) });
