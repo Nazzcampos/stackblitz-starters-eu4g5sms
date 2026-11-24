@@ -51,4 +51,4 @@ Cartelera de indicadores por bodeguista (día, semana y mes), ranking, errores d
 ## CCC Pepsico (pestaña del supervisor en /clientes)
 Clientes con 3 unidades o más de productos del proveedor 100 en el mes (facturas menos NC, por `fecha_entrega`) y saldo (`importe_total_c_imp`) mayor a $1.
 Objetivo y avance por vendedor, y lista de clientes sin CCC por vendedor y zona (ruta). Objetivo por vendedor: de Gescom (`objetivo_detalle`, objetivo '15', grupo Pepsico, medida Cantidad); lo escrito a mano en la web (tabla `ccc_objetivo` en Supabase) tiene prioridad. Variables opcionales: CCC_MIN_UNIDADES, CCC_OBJETIVO_CODIGO.
-Lista de faltantes: filtros por vendedor y día de visita (Lu a Vi), agrupada por vendedor y día; botón PDF (generado en el navegador, sin librerías) que en el celular abre "Compartir" para mandarlo por WhatsApp.
+Lista de faltantes: filtros por vendedor y día de visita (Lu a Vi), agrupada por vendedor y día; botón PDF (generado en el navegador, sin librerías) que en la PC se descarga y en el celular abre "Compartir" (WhatsApp, etc.).

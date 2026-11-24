@@ -1776,7 +1776,8 @@ async function descargarPDFCCC(){
   });
   const nombre = 'CCC_faltantes' + (vend ? '_vend' + vend : '') + (diaSel ? '_' + diaSel : '') + '_' + CCC.mes + '.pdf';
   const file = new File([crearPDF(it)], nombre, { type: 'application/pdf' });
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {   // en el celular abre "Compartir" (WhatsApp, etc.)
+  const esCelular = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (esCelular && navigator.canShare && navigator.canShare({ files: [file] })) {   // solo en el celular abre "Compartir"; en la PC se descarga
     try { await navigator.share({ files: [file], title: nombre }); return; } catch(e) { if (e.name === 'AbortError') return; }
   }
   const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
