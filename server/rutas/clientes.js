@@ -820,6 +820,151 @@ app.get('/api/seguimiento-clientes/combos', controlSupervisor, async (req, res) 
     }
 });
 
+
+// =====================================================================
+//  DEPÓSITO · cartelera de indicadores por bodeguista (reemplaza el Excel hecho a mano)
+//  - Unidades y pedidos: ventas preparadas (fecha_preparacion) con artículos del proveedor 100 (PEPSICO).
+//  - Errores: líneas de notas de crédito con motivo de error de armado; cuentan en el día de ARMADO del pedido original
+//    y para el preparador que lo armó (no el día en que vuelve la NC).
+//  - Minutos: no están en Gescom; se cargan en la web (tandas) y se guardan en la base propia.
+//  Gescom es de solo lectura: acá solo se consulta.
+// =====================================================================
+const DEP_PROVEEDOR = String(process.env.DEPOSITO_PROVEEDOR || '100').trim();
+const DEP_BODEGUISTAS = String(process.env.DEPOSITO_BODEGUISTAS || 'CAMPILLAY,BULACIO,BARRERA,ODARDA,MENNA')
+    .split(',').map(x => x.trim().toUpperCase()).filter(Boolean);
+const DEP_MOTIVOS = String(process.env.DEPOSITO_MOTIVOS ||
+    'No se cargó producto|Error de Armado: Diferencia de unidades|Error de Armado: Codigo cambiado')
+    .split('|').map(x => x.trim()).filter(Boolean);
+const sinAcentos = t => String(t == null ? '' : t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const DEP_MOTIVOS_N = new Set(DEP_MOTIVOS.map(sinAcentos));
+const claveBod = nombre => String(nombre || '').trim().split(/\s+/)[0].toUpperCase();
+const cacheDeposito = new Map();
+
+async function asegurarTablaMinutos() {
+    if (!db) throw new Error('Sin base propia (DATABASE_URL): no se pueden guardar los minutos');
+    await db.query(`CREATE TABLE IF NOT EXISTS deposito_minutos (
+        fecha date NOT NULL, bodeguista text NOT NULL,
+        ini1 text, fin1 text, ini2 text, fin2 text,
+        descuento integer NOT NULL DEFAULT 0, minutos integer NOT NULL DEFAULT 0,
+        actualizado timestamptz NOT NULL DEFAULT now(),
+        PRIMARY KEY (fecha, bodeguista))`);
+}
+
+async function obtenerDeposito(mes, forzar) {
+    const c = cacheDeposito.get(mes);
+    if (!forzar && c && Date.now() - c.t < 2 * 60 * 1000) return c.data;
+    const [a, m] = mes.split('-').map(Number);
+    const desde = `${mes}-01`;
+    const hasta = m === 12 ? `${a + 1}-01-01` : `${a}-${String(m + 1).padStart(2, '0')}-01`;
+
+    const pick = await pool.query(`
+        SELECT to_char(v.fecha_preparacion::date, 'YYYY-MM-DD') AS f, v.empleado_preparador_nombre AS prep,
+               COUNT(DISTINCT v.id)::int AS pedidos, COALESCE(SUM(vi.cantidad), 0)::float AS unid
+        FROM venta v
+        JOIN venta_item vi ON vi.venta_id = v.id AND vi.tenant_id = v.tenant_id
+        JOIN item i ON i.codigo = vi.item_codigo AND i.tenant_id = v.tenant_id
+        WHERE v.tenant_id = $1 AND i.prov_codigo = $2
+          AND v.fecha_preparacion >= $3::date AND v.fecha_preparacion < $4::date
+          AND v.tipo_comprobante_codigo IN ('VEN','FAC-A','FAC-B')
+        GROUP BY 1, 2 ORDER BY 1, 2`, [TENANT, DEP_PROVEEDOR, desde, hasta]);
+
+    const err = await pool.query(`
+        SELECT to_char(o.fecha_preparacion::date, 'YYYY-MM-DD') AS f,
+               COALESCE(o.empleado_preparador_nombre, n.empleado_preparador_nombre) AS prep,
+               n.motivo_rechazo_desc AS motivo,
+               n.tipo_comprobante_codigo AS tipo, n.punto_venta_codigo::text AS pv, n.numero_comprobante::text AS numero,
+               o.numero_comprobante::text AS orig, n.razon_social AS cliente,
+               i.descripcion AS articulo, ABS(vi.cantidad)::float AS cant,
+               to_char(n.fecha_comprobante::date, 'YYYY-MM-DD') AS fnc, n.reparto_codigo::text AS reparto
+        FROM venta n
+        JOIN venta o ON o.id = n.venta_referenciada_id AND o.tenant_id = n.tenant_id
+        JOIN venta_item vi ON vi.venta_id = n.id AND vi.tenant_id = n.tenant_id
+        LEFT JOIN item i ON i.codigo = vi.item_codigo AND i.tenant_id = n.tenant_id
+        WHERE n.tenant_id = $1 AND n.tipo_comprobante_codigo LIKE 'NCR%'
+          AND COALESCE(n.motivo_rechazo_desc, '') <> ''
+          AND o.fecha_preparacion >= $2::date AND o.fecha_preparacion < $3::date
+        ORDER BY 1, 2, n.numero_comprobante`, [TENANT, desde, hasta]);
+
+    const seguir = new Set(DEP_BODEGUISTAS);
+    const otros = new Set();
+    const dias = pick.rows.filter(r => {
+        const k = claveBod(r.prep);
+        if (!seguir.has(k)) { if (k) otros.add(k); return false; }
+        return true;
+    }).map(r => ({ f: r.f, b: claveBod(r.prep), unid: r.unid, ped: r.pedidos }));
+
+    const motivos = new Map();
+    const errores = [];
+    err.rows.forEach(r => {
+        motivos.set(r.motivo, (motivos.get(r.motivo) || 0) + r.cant);
+        if (!DEP_MOTIVOS_N.has(sinAcentos(r.motivo))) return;
+        const k = claveBod(r.prep);
+        if (!seguir.has(k)) return;
+        errores.push({ f: r.f, b: k, cant: r.cant, motivo: r.motivo, nc: [r.tipo, r.pv, r.numero].filter(Boolean).join(' '),
+            orig: r.orig, cliente: r.cliente || '', articulo: r.articulo || '', fnc: r.fnc, reparto: r.reparto || '' });
+    });
+
+    let minutos = [], avisoMin = '';
+    try {
+        await asegurarTablaMinutos();
+        const mm = await db.query(`SELECT to_char(fecha,'YYYY-MM-DD') AS f, bodeguista AS b, ini1, fin1, ini2, fin2, descuento, minutos
+            FROM deposito_minutos WHERE fecha >= $1::date AND fecha < $2::date`, [desde, hasta]);
+        minutos = mm.rows;
+    } catch (e) { avisoMin = e.message; }
+
+    const data = {
+        actualizado: new Date().toISOString(), mes, bodeguistas: DEP_BODEGUISTAS,
+        proveedor: DEP_PROVEEDOR, motivosContados: DEP_MOTIVOS,
+        motivosVistos: [...motivos].map(([m, n]) => ({ m, n, cuenta: DEP_MOTIVOS_N.has(sinAcentos(m)) })).sort((x, y) => y.n - x.n),
+        otros: [...otros], dias, errores, minutos, avisoMin,
+        objetivos: { uxh: 1000, err: 0.2 }
+    };
+    cacheDeposito.set(mes, { t: Date.now(), data });
+    return data;
+}
+
+app.get('/api/seguimiento-clientes/deposito', controlSupervisor, async (req, res) => {
+    try {
+        const mes = String(req.query.mes || hoyAR().slice(0, 7));
+        if (!mesValido(mes)) return res.status(400).json({ error: 'Mes inválido' });
+        res.json(await obtenerDeposito(mes, req.query.refresh === '1'));
+    } catch (err) {
+        console.error('❌ [clientes] Depósito:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+const horaValida = h => h == null || h === '' || /^([01]?\d|2[0-3]):[0-5]\d$/.test(String(h));
+app.post('/api/seguimiento-clientes/deposito/minutos', controlSupervisor, async (req, res) => {
+    try {
+        const fecha = String((req.body && req.body.fecha) || '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return res.status(400).json({ error: 'Fecha inválida' });
+        const filas = Array.isArray(req.body.filas) ? req.body.filas : [];
+        await asegurarTablaMinutos();
+        for (const f of filas) {
+            const b = String(f.bodeguista || '').toUpperCase();
+            if (!DEP_BODEGUISTAS.includes(b)) continue;
+            const t = [f.ini1, f.fin1, f.ini2, f.fin2];
+            if (!t.every(horaValida)) return res.status(400).json({ error: 'Hora inválida en ' + b });
+            const min = Math.round(Number(f.minutos) || 0), desc = Math.round(Number(f.descuento) || 0);
+            if (min < 0 || min > 1440 || desc < 0) return res.status(400).json({ error: 'Minutos inválidos en ' + b });
+            if (!min && !t.some(Boolean)) {
+                await db.query(`DELETE FROM deposito_minutos WHERE fecha = $1 AND bodeguista = $2`, [fecha, b]);
+                continue;
+            }
+            await db.query(`INSERT INTO deposito_minutos (fecha, bodeguista, ini1, fin1, ini2, fin2, descuento, minutos, actualizado)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now())
+                ON CONFLICT (fecha, bodeguista) DO UPDATE SET ini1=$3, fin1=$4, ini2=$5, fin2=$6, descuento=$7, minutos=$8, actualizado=now()`,
+                [fecha, b, ...t.map(x => x || null), desc, min]);
+        }
+        cacheDeposito.clear();
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('❌ [clientes] Minutos depósito:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 console.log('📊 Módulo provisorio de seguimiento de clientes y cobertura de marcas activo en /clientes');
 
 module.exports = {};

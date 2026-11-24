@@ -38,3 +38,10 @@ Dónde tocar según lo que quieras cambiar:
 - Una tabla nueva → `server/base.js` (MIGRACION).
 
 Novedades: campanita de notificaciones (server/avisos.js + rutas/notificaciones.js + public/js/campana.js), aviso de retornos compacto, cajas obligatorias, resumen mensual de combustible, cabecera con saludo, rediseño del panel admin, costo logístico por cliente/km/% de la venta en Venta por camión. Acompañantes y Planificación de repartos (acompanante.html, rutas/planificacion.js). Página /clientes (clientes.html en la raíz + rutas/clientes.js). Mapa del supervisor: tramos sin señal punteados, paradas, clientes visitados/pendientes del camión elegido y vista satélite. GPS: precisión máxima de envío 50 m y el odómetro no suma tramos menores al error del GPS.
+
+## Depósito (pestaña en /clientes, solo supervisor)
+Cartelera de indicadores por bodeguista (diaria, semanal y mensual) en `server/rutas/clientes.js` + `clientes.html`.
+- Unidades y pedidos: `venta` por `fecha_preparacion`, tipos VEN/FAC-A/FAC-B, artículos con `item.prov_codigo = 100`.
+- Errores: NC (`NCR%`) con `motivo_rechazo_desc` en la lista de motivos; se asignan al día y preparador del pedido original (`venta_referenciada_id`).
+- Minutos: se cargan en la web (tabla propia `deposito_minutos` en Supabase).
+- Variables opcionales: DEPOSITO_PROVEEDOR, DEPOSITO_BODEGUISTAS, DEPOSITO_MOTIVOS (separados por |).

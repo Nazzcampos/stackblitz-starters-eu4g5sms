@@ -115,6 +115,7 @@
     <button class="tab" data-vista="vMarcas">Cobertura de marcas</button>
     <button class="tab" data-vista="vStock">Stock</button>
     <button class="tab" data-vista="vCombos">Combos Pehuamar</button>
+    <button class="tab" data-vista="vDeposito">Depósito</button>
     <button class="tab" data-vista="vRuteo">Ruteo vendedores</button>
   </div>
 </header>
@@ -311,6 +312,61 @@
         <button class="sec" onclick="exportar('cCli','combos_clientes')">Descargar Excel</button>
       </div>
       <div class="tw" id="tCCli"></div>
+    </div>
+  </section>
+
+  <!-- ======================= DEPÓSITO (supervisor) ======================= -->
+  <section class="vista" id="vDeposito">
+    <div class="filtros">
+      <label>Mes <input type="month" id="dMes"></label>
+      <label id="dLblDia">Día <input type="date" id="dDia"></label>
+      <label id="dLblSem">Semana <select id="dSem"></select></label>
+      <button class="sec" onclick="cargarDeposito(true)">Actualizar</button>
+      <div style="flex-basis:100%;font-size:12px;color:var(--gris)">Período:
+        <div class="chips" id="dModos">
+          <span class="chip" data-m="dia">Día</span><span class="chip" data-m="sem">Semana</span><span class="chip on" data-m="mes">Mes</span>
+        </div>
+      </div>
+    </div>
+    <div class="nota" id="dNota"></div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2>Indicadores del depósito</h2><div class="sub" id="dSub"></div></div>
+        <button class="sec" onclick="exportar('dRes','deposito_indicadores')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tDRes"></div>
+    </div>
+
+    <div class="card" id="dCardGrid" style="display:none">
+      <div class="top">
+        <div><h2>Cartelera de la semana</h2><div class="sub">Lunes a viernes, total semanal y acumulado del mes</div></div>
+        <button class="sec" onclick="exportar('dGrid','deposito_cartelera_semana')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tDGrid"></div>
+    </div>
+
+    <div class="card">
+      <div class="top"><div><h2>Ranking de bodeguistas</h2><div class="sub">Del período elegido · productividad (más alto, mejor) y errores (más bajo, mejor)</div></div></div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap">
+        <div class="tw" id="tDRkP" style="flex:1;min-width:260px"></div>
+        <div class="tw" id="tDRkE" style="flex:1;min-width:260px"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2>Errores de armado</h2><div class="sub" id="dErrSub"></div></div>
+        <button class="sec" onclick="exportar('dErr','deposito_errores')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tDErr"></div>
+    </div>
+
+    <div class="card">
+      <div class="top"><div><h2>Minutos de armado</h2><div class="sub">Cargá las tandas de cada bodeguista (inicio y corte). Los minutos se calculan solos y podés escribirlos a mano. Con el descuento restás pausas.</div></div></div>
+      <div class="filtros" style="margin-bottom:8px"><label>Día <input type="date" id="dMinDia"></label></div>
+      <div class="tw" id="tDMin"></div>
+      <div style="margin-top:10px"><button onclick="guardarMinutos()">Guardar minutos del día</button> <span id="dMinEstado" class="sub"></span></div>
     </div>
   </section>
 
@@ -515,6 +571,7 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
   if (vistaActual === 'vMarcas' && !MARCAS) cargarMarcas(false);
   if (vistaActual === 'vStock' && !STOCK) cargarStock(false);
   if (vistaActual === 'vCombos' && !COMB) cargarCombos(false);
+  if (vistaActual === 'vDeposito' && !CART) cargarDeposito(false);
   if (vistaActual === 'vRuteo') cargarRuteo();
 }));
 
@@ -524,6 +581,7 @@ function actualizar(){
   if (vistaActual === 'vMarcas') cargarMarcas(true);
   if (vistaActual === 'vStock') cargarStock(true);
   if (vistaActual === 'vCombos') cargarCombos(true);
+  if (vistaActual === 'vDeposito') cargarDeposito(true);
   if (vistaActual === 'vRuteo') cargarRuteo();
 }
 
@@ -1229,6 +1287,172 @@ async function cargarRuteo(){
       `<td><button class="sec" onclick="bajarRuteo('${esc(f.codigo)}')">Excel</button></td></tr>`).join('') + '</tbody></table>';
 }
 const bajarRuteo = v => bajarArchivo('/api/seguimiento-clientes/ruteo/excel?vendedor=' + encodeURIComponent(v), 'ruteo_' + v + '.xlsx');
+
+// ------------------------------------------------ DEPÓSITO: cartelera de indicadores
+let CART = null, depModo = 'mes';
+const depN = (n, d = 1) => (n == null || !isFinite(n)) ? '—' : Number(n).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const nomBod = b => b.charAt(0) + b.slice(1).toLowerCase();
+const diaCorto = f => f.slice(8,10) + '/' + f.slice(5,7);
+const DIAS_CORTO = ['Lun','Mar','Mié','Jue','Vie'];
+
+function depSemanas(mes){
+  const [a, m] = mes.split('-').map(Number), out = [];
+  const d = new Date(Date.UTC(a, m - 1, 1));
+  while (d.getUTCMonth() === m - 1) {
+    if (d.getUTCDay() === 1) out.push([0,1,2,3,4].map(i => new Date(d.getTime() + i * 864e5).toISOString().slice(0, 10)));
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return out;
+}
+function depAgg(b, pred){
+  let unid = 0, ped = 0, min = 0, err = 0;
+  CART.dias.forEach(r => { if ((!b || r.b === b) && pred(r.f)) { unid += r.unid; ped += r.ped; } });
+  CART.minutos.forEach(r => { if ((!b || r.b === b) && pred(r.f)) min += r.minutos; });
+  CART.errores.forEach(r => { if ((!b || r.b === b) && pred(r.f)) err += r.cant; });
+  return { unid, ped, min, err, uxh: min > 0 ? unid / (min / 60) : null, pe: unid > 0 ? err * 100 / unid : null };
+}
+function depPred(){
+  if (depModo === 'dia') { const d = $('#dDia').value; return f => f === d; }
+  if (depModo === 'sem') { const w = depSemanas(CART.mes)[+$('#dSem').value] || []; return f => w.includes(f); }
+  return () => true;
+}
+const depColor = (ok) => ok == null ? '' : 'color:' + (ok ? 'var(--ok)' : 'var(--mal)') + ';font-weight:600';
+
+async function cargarDeposito(refresh){
+  const mes = $('#dMes').value || hoyAR().slice(0, 7);
+  $('#dMes').value = mes;
+  $('#dNota').textContent = 'Cargando…';
+  let j;
+  try { j = await api('/api/seguimiento-clientes/deposito?mes=' + mes + (refresh ? '&refresh=1' : '')); }
+  catch(e) { if (e.message !== 'sin PIN') $('#dNota').textContent = 'Error: ' + e.message; return; }
+  CART = j;
+  const sems = depSemanas(mes);
+  const prev = $('#dSem').value;
+  $('#dSem').innerHTML = sems.map((w, i) => `<option value="${i}">${i + 1}º SEM (${diaCorto(w[0])} al ${diaCorto(w[4])})</option>`).join('');
+  const hoy = hoyAR();
+  const conDatos = [...new Set(j.dias.map(r => r.f))].sort();
+  const ultimo = conDatos[conDatos.length - 1] || (hoy.slice(0, 7) === mes ? hoy : mes + '-01');
+  if (!$('#dDia').value || $('#dDia').value.slice(0, 7) !== mes) $('#dDia').value = ultimo;
+  if (!$('#dMinDia').value || $('#dMinDia').value.slice(0, 7) !== mes) $('#dMinDia').value = ultimo;
+  $('#dMinDia').min = $('#dDia').min = mes + '-01';
+  $('#dMinDia').max = $('#dDia').max = mes + '-31';
+  const iSem = sems.findIndex(w => w.includes($('#dDia').value));
+  $('#dSem').value = (prev !== '' && refresh && +prev < sems.length) ? prev : String(Math.max(iSem, 0));
+  const hora = new Date(j.actualizado).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  $('#dNota').textContent = `Unidades y pedidos: armados del proveedor ${j.proveedor} (PEPSICO) desde Gescom. Errores: notas de crédito con motivo de error de armado, asignadas al día de armado y al preparador del pedido. Actualizado ${hora}.` +
+    (j.avisoMin ? ' ⚠️ Minutos: ' + j.avisoMin : '') + (j.otros.length ? ' · Otros preparadores no incluidos: ' + j.otros.join(', ') : '');
+  renderDeposito();
+  renderMinutos();
+}
+
+function renderDeposito(){
+  if (!CART) return;
+  const pred = depPred();
+  const bods = CART.bodeguistas;
+  const sems = depSemanas(CART.mes);
+  $('#dLblDia').style.display = depModo === 'dia' ? '' : 'none';
+  $('#dLblSem').style.display = depModo === 'sem' ? '' : 'none';
+  document.querySelectorAll('#dModos .chip').forEach(c => c.classList.toggle('on', c.dataset.m === depModo));
+  const etiqueta = depModo === 'dia' ? fechaLabel($('#dDia').value)
+    : depModo === 'sem' ? ($('#dSem').selectedOptions[0] || {}).text || '' : 'Acumulado de ' + mesLabel(CART.mes);
+  $('#dSub').textContent = etiqueta + ' · objetivo: ' + fmtN(CART.objetivos.uxh) + ' unid/hr y ' + CART.objetivos.err + '% de errores';
+
+  // Resumen
+  const aggs = bods.map(b => ({ b, ...depAgg(b, pred) }));
+  const tot = { b: 'BIDO', ...depAgg(null, pred) };
+  const todos = [...aggs, tot];
+  const efic = a => (a.pe != null && a.pe > 0) ? CART.objetivos.err / a.pe * 100 : null;
+  const filas = todos.map(a => [a.b === 'BIDO' ? 'BIDO (total)' : nomBod(a.b), fmtN(a.unid), fmtN(a.ped), fmtN(a.min),
+    depN(a.uxh, 0), depN(a.uxh == null ? null : a.uxh / CART.objetivos.uxh * 100, 0) + (a.uxh == null ? '' : '%'),
+    fmtN(a.err), depN(a.pe, 2) + (a.pe == null ? '' : '%'), depN(efic(a), 0) + (efic(a) == null ? '' : '%')]);
+  $('#tDRes').innerHTML = tabla('dRes', ['Bodeguista','Unidades','Pedidos','Minutos','Unid/Hr','% Prod.','Error unid.','% Errores','% Eficiencia'], filas, {
+    txtCols: [0], totalUltima: true,
+    estilo: (i, v, f, idx) => i === 4 ? depColor(todos[idx].uxh == null ? null : todos[idx].uxh >= CART.objetivos.uxh)
+                           : i === 7 ? depColor(todos[idx].pe == null ? null : todos[idx].pe <= CART.objetivos.err) : ''
+  });
+
+  // Ranking
+  const rkP = aggs.filter(a => a.uxh != null).sort((x, y) => y.uxh - x.uxh);
+  const rkE = aggs.filter(a => a.pe != null).sort((x, y) => x.pe - y.pe);
+  $('#tDRkP').innerHTML = tabla('dRkP', ['Puesto','Bodeguista','Unid/Hr'], rkP.map((a, i) => [i + 1, nomBod(a.b), depN(a.uxh, 0)]), { txtCols: [1] });
+  $('#tDRkE').innerHTML = tabla('dRkE', ['Puesto','Bodeguista','% Errores'], rkE.map((a, i) => [i + 1, nomBod(a.b), depN(a.pe, 2) + '%']), { txtCols: [1] });
+
+  // Cartelera semanal
+  $('#dCardGrid').style.display = depModo === 'sem' ? '' : 'none';
+  if (depModo === 'sem') {
+    const dias = sems[+$('#dSem').value] || [];
+    const todosGrid = [...bods, null];
+    const calc = (b, f) => depAgg(b, x => x === f);
+    const indic = [
+      ['UNIDADES', a => a.unid, v => fmtN(v)], ['PEDIDOS', a => a.ped, v => fmtN(v)], ['MINUTOS', a => a.min, v => fmtN(v)],
+      ['UNID/HR', a => a.uxh, v => depN(v, 0)], ['ERROR UNID', a => a.err, v => fmtN(v)], ['% ERRORES', a => a.pe, v => depN(v, 2)]
+    ];
+    const objetivo = { 'UNID/HR': fmtN(CART.objetivos.uxh), '% ERRORES': String(CART.objetivos.err).replace('.', ',') };
+    const sinDatos = f => !CART.dias.some(r => r.f === f);
+    const rows = [];
+    todosGrid.forEach(b => {
+      const mes = depAgg(b, () => true), sem = depAgg(b, x => dias.includes(x));
+      const porDia = dias.map(f => calc(b, f));
+      indic.forEach(([nom, fn, fmt], k) => {
+        rows.push([k === 0 ? (b ? nomBod(b) : 'BIDO') : '', nom, objetivo[nom] || '', fmt(fn(mes)),
+          ...porDia.map((a, i) => sinDatos(dias[i]) ? '' : fmt(fn(a))), fmt(fn(sem))]);
+      });
+    });
+    const hdr = ['Pickeador','Indicador','Objetivo','Acum. mes', ...dias.map((f, i) => DIAS_CORTO[i] + ' ' + diaCorto(f)), 'Semanal'];
+    $('#tDGrid').innerHTML = tabla('dGrid', hdr, rows, { txtCols: [0, 1] });
+  }
+
+  // Errores del período
+  const errs = CART.errores.filter(r => pred(r.f));
+  const cant = errs.reduce((t, r) => t + r.cant, 0);
+  $('#dErrSub').textContent = `${fmtN(cant)} unidades en ${fmtN(errs.length)} líneas · motivos que cuentan: ${CART.motivosContados.join(' · ')}` +
+    (CART.motivosVistos.some(m => !m.cuenta) ? ' · No cuentan: ' + CART.motivosVistos.filter(m => !m.cuenta).map(m => `${m.m} (${fmtN(m.n)})`).join(', ') : '');
+  $('#tDErr').innerHTML = tabla('dErr', ['Fecha armado','Bodeguista','Comprobante NC','Pedido','Cliente','Artículo','Cant.','Motivo','Fecha NC'],
+    errs.map(r => [fechaLabel(r.f), nomBod(r.b), r.nc, r.orig, r.cliente, r.articulo, r.cant, r.motivo, fechaLabel(r.fnc)]), { txtCols: [0,1,2,3,4,5,7,8] });
+}
+
+// Minutos (tandas)
+function renderMinutos(){
+  if (!CART) return;
+  const f = $('#dMinDia').value;
+  const mapa = Object.fromEntries(CART.minutos.filter(r => r.f === f).map(r => [r.b, r]));
+  const inp = (b, c, tipo, v) => `<input type="${tipo}" data-b="${b}" data-c="${c}" value="${v == null ? '' : esc(v)}" style="width:${tipo === 'time' ? 96 : 70}px">`;
+  $('#tDMin').innerHTML = '<table><thead><tr><th class="txt">Bodeguista</th><th>Inicio 1ª tanda</th><th>Corte 1ª tanda</th><th>Inicio 2ª tanda</th><th>Corte 2ª tanda</th><th>Min. a descontar</th><th>Minutos</th></tr></thead><tbody>' +
+    CART.bodeguistas.map(b => { const r = mapa[b] || {};
+      return `<tr><td class="txt">${nomBod(b)}</td><td>${inp(b,'ini1','time',r.ini1)}</td><td>${inp(b,'fin1','time',r.fin1)}</td><td>${inp(b,'ini2','time',r.ini2)}</td><td>${inp(b,'fin2','time',r.fin2)}</td><td>${inp(b,'descuento','number',r.descuento || '')}</td><td>${inp(b,'minutos','number',r.minutos || '')}</td></tr>`;
+    }).join('') + '</tbody></table>';
+  $('#dMinEstado').textContent = '';
+}
+function recalcMinutos(b){
+  const g = c => document.querySelector(`#tDMin input[data-b="${b}"][data-c="${c}"]`);
+  const t = x => { const m = /^(\d{1,2}):(\d{2})$/.exec(x.value); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+  let min = 0, hay = false;
+  [['ini1','fin1'],['ini2','fin2']].forEach(([a, c]) => { const i = t(g(a)), f = t(g(c)); if (i != null && f != null) { min += Math.max(f - i, 0); hay = true; } });
+  if (hay) g('minutos').value = Math.max(min - (+g('descuento').value || 0), 0);
+}
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (el.matches && el.matches('#tDMin input') && el.dataset.c !== 'minutos') recalcMinutos(el.dataset.b);
+});
+async function guardarMinutos(){
+  const fecha = $('#dMinDia').value;
+  const filas = CART.bodeguistas.map(b => {
+    const g = c => (document.querySelector(`#tDMin input[data-b="${b}"][data-c="${c}"]`) || {}).value || '';
+    return { bodeguista: b, ini1: g('ini1'), fin1: g('fin1'), ini2: g('ini2'), fin2: g('fin2'), descuento: g('descuento'), minutos: g('minutos') };
+  });
+  $('#dMinEstado').textContent = 'Guardando…';
+  try {
+    await api('/api/seguimiento-clientes/deposito/minutos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fecha, filas }) });
+    await cargarDeposito(true);
+    $('#dMinEstado').textContent = '✔ Guardado';
+  } catch(e) { if (e.message !== 'sin PIN') $('#dMinEstado').textContent = 'Error: ' + e.message; }
+}
+$('#dMes').addEventListener('change', () => { $('#dDia').value = ''; $('#dMinDia').value = ''; cargarDeposito(false); });
+$('#dDia').addEventListener('change', renderDeposito);
+$('#dSem').addEventListener('change', renderDeposito);
+$('#dMinDia').addEventListener('change', renderMinutos);
+document.querySelectorAll('#dModos .chip').forEach(c => c.addEventListener('click', () => { depModo = c.dataset.m; renderDeposito(); }));
+$('#dMes').value = hoyAR().slice(0, 7);
 
 // ------------------------------------------------ MI RUTA (vendedor): ordenar con arrastrar y soltar
 let RV = null, rvTimer = null, rvPendiente = false;
