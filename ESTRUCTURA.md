@@ -47,3 +47,7 @@ Cartelera de indicadores por bodeguista (día, semana y mes), ranking, errores d
 - Incentivo: base 65.832 (DEPOSITO_PREMIO_BASE), escalas de la planilla; ver `DEP_INCENTIVO`.
 - Variables opcionales: DEPOSITO_PROVEEDOR, DEPOSITO_BODEGUISTAS, DEPOSITO_MOTIVOS (separados por |), ENCARGADO_PIN.
 - Ajuste de errores por el encargado: se puede quitar una línea de error (tabla `deposito_error_excluir`) o escribir un total por día y bodeguista (`deposito_errores_ajuste`, reemplaza al calculado).
+
+## CCC Pepsico (pestaña del supervisor en /clientes)
+Clientes con 3 unidades o más de productos del proveedor 100 en el mes (facturas menos NC, por `fecha_entrega`) y saldo (`importe_total_c_imp`) mayor a $1.
+Objetivo y avance por vendedor, y lista de clientes sin CCC por vendedor y zona (ruta). Objetivo por vendedor: de Gescom (`objetivo_detalle`, objetivo '15', grupo Pepsico, medida Cantidad); lo escrito a mano en la web (tabla `ccc_objetivo` en Supabase) tiene prioridad. Variables opcionales: CCC_MIN_UNIDADES, CCC_OBJETIVO_CODIGO.

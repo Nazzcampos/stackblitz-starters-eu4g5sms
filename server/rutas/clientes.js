@@ -1064,6 +1064,131 @@ app.post('/api/seguimiento-clientes/deposito/minutos', controlEncargado, async (
     }
 });
 
+
+// =====================================================================
+//  CCC PEPSICO: clientes que compraron 3 unidades o más de productos PEPSICO en el mes
+//  - Unidades: cantidad de artículos del proveedor 100 en facturas y notas de crédito (las NC restan), por fecha de entrega.
+//  - Saldo: el neto del mes (facturas menos NC) tiene que ser positivo (más de $1).
+//  - Base: clientes activos con ruta de cada vendedor. Objetivo por vendedor: se carga acá (queda en Supabase).
+//  Gescom es de solo lectura.
+// =====================================================================
+const CCC_MIN_UNIDADES = Number(process.env.CCC_MIN_UNIDADES || 3);
+const CCC_OBJETIVO_CODIGO = String(process.env.CCC_OBJETIVO_CODIGO || '15').trim();   // objetivo de Gescom (grupo Pepsico, medida Cantidad)
+const cacheCCC = new Map();
+
+async function asegurarTablaCCC() {
+    if (!db) throw new Error('Sin base propia (DATABASE_URL): no se pueden guardar los objetivos');
+    await db.query(`CREATE TABLE IF NOT EXISTS ccc_objetivo (
+        mes text NOT NULL, vendedor text NOT NULL, objetivo integer NOT NULL,
+        actualizado timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (mes, vendedor))`);
+}
+
+async function obtenerCCC(mes, forzar) {
+    const c = cacheCCC.get(mes);
+    if (!forzar && c && Date.now() - c.t < 2 * 60 * 1000) return c.data;
+    const [a, m] = mes.split('-').map(Number);
+    const desde = `${mes}-01`;
+    const hasta = m === 12 ? `${a + 1}-01-01` : `${a}-${String(m + 1).padStart(2, '0')}-01`;
+    const cods = codigosVendedores().map(sinCeros);
+    const cn = await columnaNombreRuta();
+    const filtro = await filtroAnuladas();
+
+    const base = await pool.query(`
+        SELECT DISTINCT ON (rh.cliente_id) rh.cliente_id::text AS id, c.codigo::text AS codigo,
+               ltrim(rh.vendedor_codigo::text, '0') AS vend, rh.vendedor_nombre AS vend_nombre,
+               COALESCE(rh.ruta_codigo::text, '') AS ruta, ${cn ? `rh.${cn}::text` : `NULL::text`} AS ruta_nombre,
+               COALESCE(NULLIF(c.nombre, ''), c.razon_social) AS nombre, c.localidad, rh.orden::int AS orden,
+               ${DIAS.map(d => `COALESCE(rh.${d}, 0)::int AS ${d}`).join(', ')}
+        FROM cliente_ruta_hist rh
+        JOIN cliente_hist c ON c.id = rh.cliente_id AND c.actual = true AND COALESCE(c.activo, true) = true
+        WHERE rh.actual = true AND rh.tenant_id = $1 AND ltrim(rh.vendedor_codigo::text, '0') = ANY($2::text[])
+        ORDER BY rh.cliente_id, (rh.fuerza_venta = 'Principal') DESC NULLS LAST`, [TENANT, cods]);
+
+    const ventas = await pool.query(`
+        SELECT v.cliente_id::text AS id, SUM(vi.cantidad)::float AS u, SUM(vi.importe_total_c_imp)::float AS m
+        FROM venta v
+        JOIN venta_item vi ON vi.venta_id = v.id AND vi.tenant_id = v.tenant_id
+        JOIN item i ON i.codigo = vi.item_codigo AND i.tenant_id = v.tenant_id AND i.prov_codigo = $4
+        WHERE v.tenant_id = $1 AND (v.tipo_comprobante_codigo LIKE 'FAC%' OR v.tipo_comprobante_codigo LIKE 'NCR%')
+          AND v.fecha_entrega >= $2::date AND v.fecha_entrega < $3::date${filtro}
+        GROUP BY 1`, [TENANT, desde, hasta, DEP_PROVEEDOR]);
+    const vm = new Map(ventas.rows.map(r => [r.id, r]));
+
+    const clientes = base.rows.map(r => {
+        const v = vm.get(r.id) || { u: 0, m: 0 };
+        const u = Math.round((v.u || 0) * 100) / 100, saldo = Math.round((v.m || 0) * 100) / 100;
+        return { id: r.id, codigo: r.codigo || '', vend: r.vend, nombre: r.nombre || '', localidad: r.localidad || '',
+            ruta: r.ruta || '', ruta_nombre: r.ruta_nombre || '', orden: r.orden == null || r.orden <= 0 ? null : r.orden,
+            dias: DIAS.filter(d => r[d] === 1), u, saldo, ccc: u >= CCC_MIN_UNIDADES && saldo > 1 };
+    });
+
+    const nombres = {};
+    base.rows.forEach(r => { if (r.vend_nombre && !nombres[r.vend]) nombres[r.vend] = r.vend_nombre; });
+    let objetivos = {}, avisoObj = '';
+    try {
+        await asegurarTablaCCC();
+        (await db.query(`SELECT vendedor, objetivo FROM ccc_objetivo WHERE mes = $1`, [mes])).rows.forEach(r => { objetivos[r.vendedor] = r.objetivo; });
+    } catch (e) { avisoObj = e.message; }
+
+    // Objetivo individual cargado en Gescom (objetivo 15). Lo escrito a mano en la web tiene prioridad.
+    const objGescom = {}; let periodoObj = null;
+    try {
+        const og = await pool.query(`
+            SELECT ltrim(d.vendedor_codigo::text, '0') AS vend, SUM(d.cantidad)::float AS cant,
+                   to_char(MIN(o.fecha_desde), 'YYYY-MM-DD') AS desde, to_char(MAX(o.fecha_fin), 'YYYY-MM-DD') AS hasta
+            FROM objetivo_detalle d
+            LEFT JOIN objetivo o ON o.codigo = d.objetivo_codigo AND o.tenant_id = d.tenant_id
+            WHERE d.tenant_id = $1 AND d.objetivo_codigo = $2
+            GROUP BY 1`, [TENANT, CCC_OBJETIVO_CODIGO]);
+        og.rows.forEach(r => { objGescom[r.vend] = Math.round(r.cant); if (r.desde) periodoObj = { desde: r.desde, hasta: r.hasta }; });
+    } catch (e) { avisoObj = (avisoObj ? avisoObj + ' · ' : '') + 'Objetivo de Gescom: ' + e.message; }
+
+    const vendedores = cods.map(cod => {
+        const mios = clientes.filter(x => x.vend === cod);
+        const ccc = mios.filter(x => x.ccc).length;
+        const manual = objetivos[cod] != null, gesc = objGescom[cod] != null ? objGescom[cod] : null;
+        return { cod, nombre: nombres[cod] || '', base: mios.length, ccc, objetivo: manual ? objetivos[cod] : gesc, objetivoGescom: gesc, manual };
+    });
+    const data = { mes, actualizado: new Date().toISOString(), minUnidades: CCC_MIN_UNIDADES, proveedor: DEP_PROVEEDOR,
+        vendedores, clientes, avisoObj, periodoObj, objetivoCodigo: CCC_OBJETIVO_CODIGO };
+    cacheCCC.set(mes, { t: Date.now(), data });
+    return data;
+}
+
+app.get('/api/seguimiento-clientes/ccc', controlSupervisor, async (req, res) => {
+    try {
+        const mes = String(req.query.mes || hoyAR().slice(0, 7));
+        if (!mesValido(mes)) return res.status(400).json({ error: 'Mes inválido' });
+        res.json(await obtenerCCC(mes, req.query.refresh === '1'));
+    } catch (err) {
+        console.error('❌ [clientes] CCC:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/seguimiento-clientes/ccc/objetivos', controlSupervisor, async (req, res) => {
+    try {
+        const { mes, objetivos } = req.body || {};
+        if (!mesValido(mes) || !objetivos || typeof objetivos !== 'object') return res.status(400).json({ error: 'Datos inválidos' });
+        await asegurarTablaCCC();
+        const cods = codigosVendedores().map(sinCeros);
+        for (const [cod, valor] of Object.entries(objetivos)) {
+            const v = sinCeros(cod);
+            if (!cods.includes(v)) continue;
+            if (valor === '' || valor == null) { await db.query(`DELETE FROM ccc_objetivo WHERE mes = $1 AND vendedor = $2`, [mes, v]); continue; }
+            const n = Math.round(Number(valor));
+            if (!(n >= 0 && n <= 100000)) return res.status(400).json({ error: 'Objetivo inválido para ' + v });
+            await db.query(`INSERT INTO ccc_objetivo (mes, vendedor, objetivo) VALUES ($1,$2,$3)
+                ON CONFLICT (mes, vendedor) DO UPDATE SET objetivo = $3, actualizado = now()`, [mes, v, n]);
+        }
+        cacheCCC.clear();
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('❌ [clientes] Objetivos CCC:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 console.log('📊 Módulo provisorio de seguimiento de clientes y cobertura de marcas activo en /clientes');
 
 module.exports = {};

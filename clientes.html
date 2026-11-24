@@ -122,6 +122,7 @@
     <button class="tab" data-vista="vMarcas">Cobertura de marcas</button>
     <button class="tab" data-vista="vStock">Stock</button>
     <button class="tab" data-vista="vCombos">Combos Pehuamar</button>
+    <button class="tab" data-vista="vCCC">CCC</button>
     <button class="tab" data-vista="vRuteo">Ruteo vendedores</button>
   </div>
 </header>
@@ -401,6 +402,36 @@
     </div>
   </section>
 
+  <!-- ======================= CCC (supervisor) ======================= -->
+  <section class="vista" id="vCCC">
+    <div class="filtros">
+      <label>Mes <input type="month" id="cMes"></label>
+      <button class="sec" onclick="cargarCCC(true)">Actualizar</button>
+    </div>
+    <div class="nota" id="cNota"></div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2>Objetivo y avance CCC</h2><div class="sub" id="cSub"></div></div>
+        <button class="sec" onclick="exportar('cRes','ccc_objetivo_avance')">Descargar Excel</button>
+      </div>
+      <div class="tw" id="tCRes"></div>
+      <div style="margin-top:10px"><button onclick="guardarObjetivosCCC()">Guardar objetivos</button> <span id="cEstado" class="sub"></span></div>
+    </div>
+
+    <div class="card">
+      <div class="top">
+        <div><h2>Clientes que faltan</h2><div class="sub" id="cFSub"></div></div>
+        <button class="sec" onclick="exportar('cFalt','ccc_clientes_faltantes')">Descargar Excel</button>
+      </div>
+      <div class="filtros" style="margin-bottom:8px">
+        <label>Vendedor <select id="cVend"></select></label>
+        <label>Zona <select id="cZona"></select></label>
+      </div>
+      <div id="cLista"></div>
+    </div>
+  </section>
+
   <!-- ======================= RUTEO (supervisor) ======================= -->
   <section class="vista" id="vRuteo">
     <div class="card">
@@ -609,7 +640,8 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
   if (vistaActual === 'vMarcas' && !MARCAS) cargarMarcas(false);
   if (vistaActual === 'vStock' && !STOCK) cargarStock(false);
   if (vistaActual === 'vCombos' && !COMB) cargarCombos(false);
-    if (vistaActual === 'vRuteo') cargarRuteo();
+    if (vistaActual === 'vCCC' && !CCC) cargarCCC(false);
+  if (vistaActual === 'vRuteo') cargarRuteo();
 }));
 
 function actualizar(){
@@ -620,6 +652,7 @@ function actualizar(){
   if (vistaActual === 'vStock') cargarStock(true);
   if (vistaActual === 'vCombos') cargarCombos(true);
   if (vistaActual === 'vDeposito') cargarDeposito(true);
+  if (vistaActual === 'vCCC') cargarCCC(true);
   if (vistaActual === 'vRuteo') cargarRuteo();
 }
 
@@ -1584,6 +1617,102 @@ $('#dSem').addEventListener('change', renderDeposito);
 $('#dMinDia').addEventListener('change', renderMinutos);
 document.querySelectorAll('#dModos .chip').forEach(c => c.addEventListener('click', () => { depModo = c.dataset.m; renderDeposito(); }));
 $('#dMes').value = hoyAR().slice(0, 7);
+
+// ------------------------------------------------ CCC PEPSICO
+let CCC = null;
+const cNum = n => (n == null || !isFinite(n)) ? '—' : Number(n).toLocaleString('es-AR', { maximumFractionDigits: 2 });
+const cZonaNombre = c => c.ruta_nombre ? (c.ruta + ' · ' + c.ruta_nombre) : (c.ruta || 'Sin zona');
+const cVendNombre = v => v.cod + (v.nombre ? ' · ' + v.nombre : '');
+
+async function cargarCCC(refresh){
+  const mes = $('#cMes').value || hoyAR().slice(0, 7);
+  $('#cMes').value = mes;
+  $('#cNota').textContent = 'Cargando…';
+  let j;
+  try { j = await api('/api/seguimiento-clientes/ccc?mes=' + mes + (refresh ? '&refresh=1' : '')); }
+  catch(e) { if (e.message !== 'sin PIN') $('#cNota').textContent = 'Error: ' + e.message; return; }
+  CCC = j;
+  const hora = new Date(j.actualizado).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  $('#cNota').textContent = `Un cliente cuenta como CCC con ${j.minUnidades} unidades o más de productos PEPSICO en el mes (facturas menos notas de crédito, por fecha de entrega) y saldo positivo mayor a $1. Actualizado ${hora}.` +
+    (j.avisoObj ? ' ⚠️ Objetivos: ' + j.avisoObj : '');
+  const vsel = $('#cVend').value;
+  $('#cVend').innerHTML = '<option value="">Todos los vendedores</option>' + j.vendedores.map(v => `<option value="${v.cod}">${esc(cVendNombre(v))}</option>`).join('');
+  $('#cVend').value = vsel;
+  renderCCC();
+}
+
+function renderCCC(){
+  if (!CCC) return;
+  const V = CCC.vendedores;
+  const pend = v => CCC.clientes.filter(c => c.vend === v.cod && !c.ccc).length;
+  const filas = V.map(v => [cVendNombre(v), fmtN(v.base), fmtN(v.ccc), v.objetivo == null ? '' : v.objetivo,
+    v.objetivo == null ? '—' : fmtN(Math.max(v.objetivo - v.ccc, 0)),
+    v.objetivo ? cNum(v.ccc / v.objetivo * 100) + '%' : '—', cNum(v.base ? v.ccc / v.base * 100 : null) + '%', fmtN(pend(v))]);
+  const tb = V.reduce((t, v) => t + v.base, 0), tc = V.reduce((t, v) => t + v.ccc, 0);
+  const conObj = V.every(v => v.objetivo != null), to = V.reduce((t, v) => t + (v.objetivo || 0), 0);
+  filas.push(['TOTAL', fmtN(tb), fmtN(tc), conObj ? fmtN(to) : '', conObj ? fmtN(Math.max(to - tc, 0)) : '—',
+    conObj && to ? cNum(tc / to * 100) + '%' : '—', cNum(tb ? tc / tb * 100 : null) + '%', fmtN(V.reduce((t, v) => t + pend(v), 0))]);
+  const po = CCC.periodoObj;
+  $('#cSub').textContent = mesLabel(CCC.mes) + ' · CCC logrados contra el objetivo de cada vendedor · objetivo ' + CCC.objetivoCodigo + ' de Gescom' +
+    (po ? ' (del ' + fechaLabel(po.desde) + ' al ' + fechaLabel(po.hasta) + ')' : '') + '. Si escribís otro valor, se usa ese; si lo borrás, vuelve el de Gescom.';
+  // la columna Objetivo es editable: se arma como tabla propia y la exportación usa los valores
+  const h = tabla('cRes', ['Vendedor','Clientes base','CCC logrados','Objetivo','Faltan para el objetivo','% del objetivo','% de la base','Clientes sin CCC'], filas, { txtCols: [0], totalUltima: true });
+  $('#tCRes').innerHTML = h;
+  const filasTr = $('#tCRes').querySelectorAll('tbody tr');
+  V.forEach((v, i) => {
+    const td = filasTr[i] && filasTr[i].children[3];
+    if (td) td.innerHTML = `<input type="number" min="0" data-cod="${v.cod}" data-gesc="${v.objetivoGescom == null ? '' : v.objetivoGescom}" data-orig="${v.manual ? v.objetivo : ''}" value="${v.manual ? v.objetivo : ''}" placeholder="${v.objetivoGescom == null ? '—' : v.objetivoGescom}" style="width:90px" title="${v.manual ? 'Corregido a mano. Gescom: ' + (v.objetivoGescom == null ? '—' : v.objetivoGescom) : 'Objetivo de Gescom'}">`;
+  });
+
+  // Lista de faltantes por zona
+  const vend = $('#cVend').value;
+  const base = CCC.clientes.filter(c => !c.ccc && (!vend || c.vend === vend));
+  const zonas = [...new Set(base.map(cZonaNombre))].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+  const zsel = $('#cZona').value;
+  $('#cZona').innerHTML = '<option value="">Todas las zonas</option>' + zonas.map(z => `<option value="${esc(z)}">${esc(z)}</option>`).join('');
+  $('#cZona').value = zonas.includes(zsel) ? zsel : '';
+  const zf = $('#cZona').value;
+  const lista = base.filter(c => !zf || cZonaNombre(c) === zf);
+  const falta = c => c.u >= CCC.minUnidades ? 'Saldo menor a $1' : fmtN(Math.max(CCC.minUnidades - c.u, 0)) + ' u.';
+  const orden = (a, b) => (a.vend - b.vend) || cZonaNombre(a).localeCompare(cZonaNombre(b), 'es', { numeric: true }) ||
+    ((a.orden == null) - (b.orden == null)) || ((a.orden || 0) - (b.orden || 0)) || a.nombre.localeCompare(b.nombre, 'es');
+  lista.sort(orden);
+  const fila = c => [c.codigo || c.id, c.nombre, c.localidad, c.dias.map(d => DIA_ETIQ_CORTO[d]).join(' '), cNum(c.u), falta(c)];
+  $('#cFSub').textContent = `${fmtN(lista.length)} clientes todavía sin CCC` + (CCC.vendedores.length ? '' : '');
+  // exportación plana
+  tabla('cFalt', ['Vendedor','Zona','Código','Cliente','Localidad','Días de visita','Unidades del mes','Falta'],
+    lista.map(c => [c.vend, cZonaNombre(c), c.codigo || c.id, c.nombre, c.localidad, c.dias.map(d => DIA_ETIQ_CORTO[d]).join(' '), cNum(c.u), falta(c)]), { txtCols: [1,2,3,4,5,7] });
+  // vista agrupada: vendedor → zona
+  let out = '';
+  const porV = new Map();
+  lista.forEach(c => { if (!porV.has(c.vend)) porV.set(c.vend, new Map()); const m = porV.get(c.vend); const z = cZonaNombre(c); if (!m.has(z)) m.set(z, []); m.get(z).push(c); });
+  let n = 0;
+  porV.forEach((zonasV, cod) => {
+    const vv = CCC.vendedores.find(x => x.cod === cod) || { cod, nombre: '' };
+    out += `<h3 style="margin:14px 0 4px">Vendedor ${esc(cVendNombre(vv))} <span class="sub">· ${(k => k + (k === 1 ? ' cliente' : ' clientes'))([...zonasV.values()].reduce((t, l) => t + l.length, 0))}</span></h3>`;
+    zonasV.forEach((cl, z) => {
+      out += `<div class="sub" style="margin:8px 0 2px"><b>Zona ${esc(z)}</b> · ${cl.length} cliente${cl.length > 1 ? 's' : ''}</div>`;
+      out += tabla('cZ' + (n++), ['Código','Cliente','Localidad','Días de visita','Unidades del mes','Falta'], cl.map(fila), { txtCols: [0,1,2,3,5] });
+    });
+  });
+  $('#cLista').innerHTML = out || '<div class="sub">No hay clientes pendientes con este filtro.</div>';
+}
+const DIA_ETIQ_CORTO = { lunes: 'Lu', martes: 'Ma', miercoles: 'Mi', jueves: 'Ju', viernes: 'Vi', sabado: 'Sa', domingo: 'Do' };
+
+async function guardarObjetivosCCC(){
+  const objetivos = {};
+  document.querySelectorAll('#tCRes input[data-cod]').forEach(i => { if (i.value !== i.dataset.orig) objetivos[i.dataset.cod] = i.value; });   // solo lo que cambió
+  $('#cEstado').textContent = 'Guardando…';
+  try {
+    await api('/api/seguimiento-clientes/ccc/objetivos', { method: 'POST', body: JSON.stringify({ mes: CCC.mes, objetivos }) });
+    await cargarCCC(true);
+    $('#cEstado').textContent = '✔ Guardado';
+  } catch(e) { if (e.message !== 'sin PIN') $('#cEstado').textContent = 'Error: ' + e.message; }
+}
+$('#cMes').addEventListener('change', () => cargarCCC(false));
+$('#cVend').addEventListener('change', () => { $('#cZona').value = ''; renderCCC(); });
+$('#cZona').addEventListener('change', renderCCC);
+$('#cMes').value = hoyAR().slice(0, 7);
 
 // ------------------------------------------------ MI RUTA (vendedor): ordenar con arrastrar y soltar
 let RV = null, rvTimer = null, rvPendiente = false;
