@@ -390,7 +390,11 @@
     <div class="card">
       <div class="c-titulo">MINUTOS DE ARMADO</div>
       <div class="sub" style="margin:8px 0">Se toman del tiempo de picking de Gescom. Si Gescom los calculó mal, escribí los minutos correctos del día y se usan esos; dejalo vacío para volver al de Gescom.</div>
-      <div class="filtros" style="margin-bottom:8px"><label>Día <input type="date" id="dMinDia"></label></div>
+      <div class="filtros" style="margin-bottom:8px">
+        <label>Día <input type="date" id="dMinDia"></label>
+        <label>Importar reporte de Gescom (Excel de "Picking Bodeguista/Fecha")<input type="file" id="dArchivo" accept=".xlsx,.xls"></label>
+        <span id="dImpEstado" class="sub"></span>
+      </div>
       <div class="tw" id="tDMin"></div>
       <div style="margin-top:10px"><button onclick="guardarMinutos()">Guardar minutos del día</button> <span id="dMinEstado" class="sub"></span></div>
     </div>
@@ -1383,7 +1387,7 @@ async function cargarDeposito(refresh){
   $('#dSem').value = (prev !== '' && refresh && +prev < sems.length) ? prev : String(Math.max(iSem, 0));
   const hora = new Date(j.actualizado).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
   $('#dNota').textContent = `Unidades y pedidos: armados del proveedor ${j.proveedor} (PEPSICO) desde Gescom. Errores: notas de crédito con motivo de error de armado, asignadas al día de armado y al preparador del pedido. Actualizado ${hora}.` +
-    (j.gescom.length ? '' : ' Los minutos de Gescom todavía no están conectados: por ahora se cargan a mano abajo.') +
+    (j.gescom.length ? ' Minutos de Gescom cargados hasta el ' + fechaLabel(j.gescom.map(r => r.f).sort().pop()) + '.' : ' Todavía no importaste el reporte de Gescom de este mes: subilo abajo, en "Minutos de armado".') +
     (j.avisoMin ? ' ⚠️ Minutos: ' + j.avisoMin : '') + (j.otros.length ? ' · Otros preparadores no incluidos: ' + j.otros.join(', ') : '');
   renderDeposito();
   renderMinutos();
@@ -1509,6 +1513,44 @@ async function guardarMinutos(){
     $('#dMinEstado').textContent = '✔ Guardado';
   } catch(e) { if (e.message !== 'sin PIN') $('#dMinEstado').textContent = 'Error: ' + e.message; }
 }
+// Importar el Excel de Gescom: se lee en el navegador y solo se envían fecha, bodeguista y minutos
+function cargarSheetJS(){
+  if (window.XLSX) return Promise.resolve();
+  return new Promise((ok, mal) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    sc.onload = ok; sc.onerror = () => mal(new Error('No se pudo cargar el lector de Excel (¿sin internet?)'));
+    document.head.appendChild(sc);
+  });
+}
+function tiempoAMin(t){
+  if (typeof t === 'number') return t * 1440;                    // Excel lo guardó como fracción de día
+  const m = /^(?:(\d+)\.)?(\d+):(\d{2}):(\d{2})$/.exec(String(t || '').trim());
+  return m ? (+(m[1] || 0)) * 1440 + (+m[2]) * 60 + (+m[3]) + (+m[4]) / 60 : null;
+}
+async function importarGescom(archivo){
+  const est = $('#dImpEstado');
+  est.textContent = 'Leyendo…';
+  try {
+    await cargarSheetJS();
+    const wb = XLSX.read(await archivo.arrayBuffer(), { type: 'array', cellDates: true });
+    let filas = [];
+    wb.SheetNames.forEach(n => {
+      XLSX.utils.sheet_to_json(wb.Sheets[n], { defval: '' }).forEach(r => {
+        if (r.Titulo !== 'Preparados' || !r.FechaPreparacion) return;
+        const fd = r.FechaPreparacion instanceof Date ? r.FechaPreparacion.toLocaleDateString('en-CA') : String(r.FechaPreparacion).slice(0, 10);
+        const min = tiempoAMin(r.Tiempo);
+        if (min != null) filas.push({ f: fd, nombre: r.Nombre, min });
+      });
+    });
+    if (!filas.length) throw new Error('No encontré filas "Preparados" con fecha. Tiene que ser el reporte de la pestaña "Picking Bodeguista/Fecha".');
+    const j = await api('/api/seguimiento-clientes/deposito/importar', { method: 'POST', body: JSON.stringify({ filas }) });
+    est.textContent = `✔ ${j.cargados} datos cargados (${fechaLabel(j.desde)} al ${fechaLabel(j.hasta)})` + (j.ignorados.length ? ' · no incluidos: ' + j.ignorados.join(', ') : '');
+    $('#dArchivo').value = '';
+    await cargarDeposito(true);
+  } catch(e) { if (e.message !== 'sin PIN') est.textContent = 'Error: ' + e.message; }
+}
+$('#dArchivo').addEventListener('change', e => { if (e.target.files[0]) importarGescom(e.target.files[0]); });
 $('#dMes').addEventListener('change', () => { $('#dDia').value = ''; $('#dMinDia').value = ''; cargarDeposito(false); });
 $('#dDia').addEventListener('change', renderDeposito);
 $('#dSem').addEventListener('change', renderDeposito);

@@ -869,6 +869,13 @@ async function asegurarTablaMinutos() {
         PRIMARY KEY (fecha, bodeguista))`);
 }
 
+async function asegurarTablaGescomMin() {
+    if (!db) throw new Error('Sin base propia (DATABASE_URL): no se pueden guardar los minutos');
+    await db.query(`CREATE TABLE IF NOT EXISTS deposito_gescom (
+        fecha date NOT NULL, bodeguista text NOT NULL, minutos integer NOT NULL DEFAULT 0,
+        importado timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (fecha, bodeguista))`);
+}
+
 async function obtenerDeposito(mes, forzar) {
     const c = cacheDeposito.get(mes);
     if (!forzar && c && Date.now() - c.t < 2 * 60 * 1000) return c.data;
@@ -923,9 +930,13 @@ async function obtenerDeposito(mes, forzar) {
             orig: r.orig, cliente: r.cliente || '', articulo: r.articulo || '', fnc: r.fnc, reparto: r.reparto || '' });
     });
 
-    let minutos = [], avisoMin = '';
+    let minutos = [], gescom = [], avisoMin = '';
     try {
         await asegurarTablaMinutos();
+        await asegurarTablaGescomMin();
+        const gg = await db.query(`SELECT to_char(fecha,'YYYY-MM-DD') AS f, bodeguista AS b, minutos AS min
+            FROM deposito_gescom WHERE fecha >= $1::date AND fecha < $2::date`, [desde, hasta]);
+        gescom = gg.rows;
         const mm = await db.query(`SELECT to_char(fecha,'YYYY-MM-DD') AS f, bodeguista AS b, minutos
             FROM deposito_minutos WHERE fecha >= $1::date AND fecha < $2::date`, [desde, hasta]);
         minutos = mm.rows;
@@ -935,7 +946,7 @@ async function obtenerDeposito(mes, forzar) {
         actualizado: new Date().toISOString(), mes, bodeguistas: DEP_BODEGUISTAS,
         proveedor: DEP_PROVEEDOR, motivosContados: DEP_MOTIVOS,
         motivosVistos: [...motivos].map(([m, n]) => ({ m, n, cuenta: DEP_MOTIVOS_N.has(sinAcentos(m)) })).sort((x, y) => y.n - x.n),
-        otros: [...otros], dias, errores, minutos, gescom: [], avisoMin,
+        otros: [...otros], dias, errores, minutos, gescom, avisoMin,
         objetivos: { uxh: 1000, err: 0.2 },
         incentivo: DEP_INCENTIVO
     };
@@ -950,6 +961,30 @@ app.get('/api/seguimiento-clientes/deposito', controlEncargado, async (req, res)
         res.json(await obtenerDeposito(mes, req.query.refresh === '1'));
     } catch (err) {
         console.error('❌ [clientes] Depósito:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Importa el reporte "Picking Bodeguista/Fecha" de Gescom (el navegador lo lee y manda solo fecha, nombre y minutos).
+// Re-importar el mismo día actualiza el valor de Gescom; las correcciones manuales no se tocan.
+app.post('/api/seguimiento-clientes/deposito/importar', controlEncargado, async (req, res) => {
+    try {
+        const filas = Array.isArray(req.body && req.body.filas) ? req.body.filas : [];
+        if (!filas.length || filas.length > 5000) return res.status(400).json({ error: 'El archivo no trae filas de "Preparados"' });
+        await asegurarTablaGescomMin();
+        let n = 0, desde = null, hasta = null; const ignorados = new Set();
+        for (const f of filas) {
+            const fecha = String(f.f || '').slice(0, 10), b = claveBod(f.nombre), min = Math.round(Number(f.min));
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !(min >= 0 && min <= 1440 * 2)) continue;
+            if (!DEP_BODEGUISTAS.includes(b)) { if (b) ignorados.add(b); continue; }
+            await db.query(`INSERT INTO deposito_gescom (fecha, bodeguista, minutos, importado) VALUES ($1,$2,$3, now())
+                ON CONFLICT (fecha, bodeguista) DO UPDATE SET minutos=$3, importado=now()`, [fecha, b, min]);
+            n++; if (!desde || fecha < desde) desde = fecha; if (!hasta || fecha > hasta) hasta = fecha;
+        }
+        cacheDeposito.clear();
+        res.json({ ok: true, cargados: n, desde, hasta, ignorados: [...ignorados] });
+    } catch (err) {
+        console.error('❌ [clientes] Importar minutos Gescom:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
