@@ -42,7 +42,7 @@ Novedades: campanita de notificaciones (server/avisos.js + rutas/notificaciones.
 ## Depósito (perfil "Encargado depósito" en /clientes, código ENCARGADO_PIN, por defecto 1234)
 Cartelera de indicadores por bodeguista (día, semana y mes), ranking, errores de armado e incentivo mensual. Código en `server/rutas/clientes.js` + `clientes.html`.
 - Unidades y pedidos: `venta` por `fecha_preparacion`, tipos VEN/FAC-A/FAC-B, artículos con `item.prov_codigo = 100`.
-- Errores: NC (`NCR%`) con `motivo_rechazo_desc` en la lista de motivos; se asignan al día y preparador del pedido original (`venta_referenciada_id`).
+- Errores: NC (`NCR%`) con `motivo_rechazo_desc` en la lista de motivos; solo artículos del proveedor 100; se asignan al día y preparador del pedido original (`venta_referenciada_id`).
 - Minutos: el tiempo de picking NO está en la base de Gescom; se importa el Excel del reporte "Picking Bodeguista/Fecha" (botón en "Minutos de armado", tabla `deposito_gescom`). La corrección manual por día (`deposito_minutos`) pisa al valor de Gescom.
 - Incentivo: base 65.832 (DEPOSITO_PREMIO_BASE), escalas de la planilla; ver `DEP_INCENTIVO`.
 - Variables opcionales: DEPOSITO_PROVEEDOR, DEPOSITO_BODEGUISTAS, DEPOSITO_MOTIVOS (separados por |), ENCARGADO_PIN.

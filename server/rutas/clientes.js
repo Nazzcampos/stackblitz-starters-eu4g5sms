@@ -905,11 +905,11 @@ async function obtenerDeposito(mes, forzar) {
         FROM venta n
         JOIN venta o ON o.id = n.venta_referenciada_id AND o.tenant_id = n.tenant_id
         JOIN venta_item vi ON vi.venta_id = n.id AND vi.tenant_id = n.tenant_id
-        LEFT JOIN item i ON i.codigo = vi.item_codigo AND i.tenant_id = n.tenant_id
+        JOIN item i ON i.codigo = vi.item_codigo AND i.tenant_id = n.tenant_id AND i.prov_codigo = $4
         WHERE n.tenant_id = $1 AND n.tipo_comprobante_codigo LIKE 'NCR%'
           AND COALESCE(n.motivo_rechazo_desc, '') <> ''
           AND o.fecha_preparacion >= $2::date AND o.fecha_preparacion < $3::date
-        ORDER BY 1, 2, n.numero_comprobante`, [TENANT, desde, hasta]);
+        ORDER BY 1, 2, n.numero_comprobante`, [TENANT, desde, hasta, DEP_PROVEEDOR]);
 
     const seguir = new Set(DEP_BODEGUISTAS);
     const otros = new Set();
