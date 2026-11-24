@@ -405,30 +405,31 @@
   <!-- ======================= CCC (supervisor) ======================= -->
   <section class="vista" id="vCCC">
     <div class="filtros">
-      <label>Mes <input type="month" id="cMes"></label>
+      <label>Mes <input type="month" id="ccMes"></label>
       <button class="sec" onclick="cargarCCC(true)">Actualizar</button>
     </div>
-    <div class="nota" id="cNota"></div>
+    <div class="nota" id="ccNota"></div>
 
     <div class="card">
       <div class="top">
-        <div><h2>Objetivo y avance CCC</h2><div class="sub" id="cSub"></div></div>
+        <div><h2>Objetivo y avance CCC</h2><div class="sub" id="ccSub"></div></div>
         <button class="sec" onclick="exportar('cRes','ccc_objetivo_avance')">Descargar Excel</button>
       </div>
-      <div class="tw" id="tCRes"></div>
-      <div style="margin-top:10px"><button onclick="guardarObjetivosCCC()">Guardar objetivos</button> <span id="cEstado" class="sub"></span></div>
+      <div class="tw" id="tCCRes"></div>
+      <div style="margin-top:10px"><button onclick="guardarObjetivosCCC()">Guardar objetivos</button> <span id="ccEstado" class="sub"></span></div>
     </div>
 
     <div class="card">
       <div class="top">
-        <div><h2>Clientes que faltan</h2><div class="sub" id="cFSub"></div></div>
+        <div><h2>Clientes que faltan</h2><div class="sub" id="ccFSub"></div></div>
         <button class="sec" onclick="exportar('cFalt','ccc_clientes_faltantes')">Descargar Excel</button>
       </div>
       <div class="filtros" style="margin-bottom:8px">
-        <label>Vendedor <select id="cVend"></select></label>
-        <label>Zona <select id="cZona"></select></label>
+        <label>Vendedor <select id="ccVend" style="min-width:240px"></select></label>
+        <label>Día de visita <select id="ccDia" style="min-width:160px"></select></label>
+        <button class="sec" onclick="descargarPDFCCC()" style="align-self:flex-end">Descargar PDF</button>
       </div>
-      <div id="cLista"></div>
+      <div id="ccLista"></div>
     </div>
   </section>
 
@@ -1625,19 +1626,20 @@ const cZonaNombre = c => c.ruta_nombre ? (c.ruta + ' · ' + c.ruta_nombre) : (c.
 const cVendNombre = v => v.cod + (v.nombre ? ' · ' + v.nombre : '');
 
 async function cargarCCC(refresh){
-  const mes = $('#cMes').value || hoyAR().slice(0, 7);
-  $('#cMes').value = mes;
-  $('#cNota').textContent = 'Cargando…';
+  const mes = $('#ccMes').value || hoyAR().slice(0, 7);
+  $('#ccMes').value = mes;
+  $('#ccNota').textContent = 'Cargando…';
   let j;
   try { j = await api('/api/seguimiento-clientes/ccc?mes=' + mes + (refresh ? '&refresh=1' : '')); }
-  catch(e) { if (e.message !== 'sin PIN') $('#cNota').textContent = 'Error: ' + e.message; return; }
+  catch(e) { if (e.message !== 'sin PIN') $('#ccNota').textContent = 'Error: ' + e.message; return; }
   CCC = j;
   const hora = new Date(j.actualizado).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-  $('#cNota').textContent = `Un cliente cuenta como CCC con ${j.minUnidades} unidades o más de productos PEPSICO en el mes (facturas menos notas de crédito, por fecha de entrega) y saldo positivo mayor a $1. Actualizado ${hora}.` +
+  $('#ccNota').textContent = `Un cliente cuenta como CCC con ${j.minUnidades} unidades o más de productos PEPSICO en el mes (facturas menos notas de crédito, por fecha de entrega) y saldo positivo mayor a $1. Actualizado ${hora}.` +
     (j.avisoObj ? ' ⚠️ Objetivos: ' + j.avisoObj : '');
-  const vsel = $('#cVend').value;
-  $('#cVend').innerHTML = '<option value="">Todos los vendedores</option>' + j.vendedores.map(v => `<option value="${v.cod}">${esc(cVendNombre(v))}</option>`).join('');
-  $('#cVend').value = vsel;
+  const vsel = $('#ccVend').value, dsel = $('#ccDia').value;
+  $('#ccVend').innerHTML = '<option value="">Todos los vendedores</option>' + j.vendedores.map(v => `<option value="${v.cod}"${v.cod === vsel ? ' selected' : ''}>${esc(cVendNombre(v))}</option>`).join('');
+  const diasHay = new Set(); j.clientes.forEach(c => c.dias.forEach(d => diasHay.add(d)));
+  $('#ccDia').innerHTML = '<option value="">Todos los días</option>' + DIAS_CCC.filter(d => diasHay.has(d)).map(d => `<option value="${d}"${d === dsel ? ' selected' : ''}>${DIA_LARGO[d]}</option>`).join('');
   renderCCC();
 }
 
@@ -1653,66 +1655,147 @@ function renderCCC(){
   filas.push(['TOTAL', fmtN(tb), fmtN(tc), conObj ? fmtN(to) : '', conObj ? fmtN(Math.max(to - tc, 0)) : '—',
     conObj && to ? cNum(tc / to * 100) + '%' : '—', cNum(tb ? tc / tb * 100 : null) + '%', fmtN(V.reduce((t, v) => t + pend(v), 0))]);
   const po = CCC.periodoObj;
-  $('#cSub').textContent = mesLabel(CCC.mes) + ' · CCC logrados contra el objetivo de cada vendedor · objetivo ' + CCC.objetivoCodigo + ' de Gescom' +
+  $('#ccSub').textContent = mesLabel(CCC.mes) + ' · CCC logrados contra el objetivo de cada vendedor · objetivo ' + CCC.objetivoCodigo + ' de Gescom' +
     (po ? ' (del ' + fechaLabel(po.desde) + ' al ' + fechaLabel(po.hasta) + ')' : '') + '. Si escribís otro valor, se usa ese; si lo borrás, vuelve el de Gescom.';
   // la columna Objetivo es editable: se arma como tabla propia y la exportación usa los valores
   const h = tabla('cRes', ['Vendedor','Clientes base','CCC logrados','Objetivo','Faltan para el objetivo','% del objetivo','% de la base','Clientes sin CCC'], filas, { txtCols: [0], totalUltima: true });
-  $('#tCRes').innerHTML = h;
-  const filasTr = $('#tCRes').querySelectorAll('tbody tr');
+  $('#tCCRes').innerHTML = h;
+  const filasTr = $('#tCCRes').querySelectorAll('tbody tr');
   V.forEach((v, i) => {
     const td = filasTr[i] && filasTr[i].children[3];
     if (td) td.innerHTML = `<input type="number" min="0" data-cod="${v.cod}" data-gesc="${v.objetivoGescom == null ? '' : v.objetivoGescom}" data-orig="${v.manual ? v.objetivo : ''}" value="${v.manual ? v.objetivo : ''}" placeholder="${v.objetivoGescom == null ? '—' : v.objetivoGescom}" style="width:90px" title="${v.manual ? 'Corregido a mano. Gescom: ' + (v.objetivoGescom == null ? '—' : v.objetivoGescom) : 'Objetivo de Gescom'}">`;
   });
 
-  // Lista de faltantes por zona
-  const vend = $('#cVend').value;
-  const base = CCC.clientes.filter(c => !c.ccc && (!vend || c.vend === vend));
-  const zonas = [...new Set(base.map(cZonaNombre))].sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
-  const zsel = $('#cZona').value;
-  $('#cZona').innerHTML = '<option value="">Todas las zonas</option>' + zonas.map(z => `<option value="${esc(z)}">${esc(z)}</option>`).join('');
-  $('#cZona').value = zonas.includes(zsel) ? zsel : '';
-  const zf = $('#cZona').value;
-  const lista = base.filter(c => !zf || cZonaNombre(c) === zf);
+  // Lista de faltantes: filtros por vendedor y día de visita
+  const vend = $('#ccVend').value, diaSel = $('#ccDia').value;
   const falta = c => c.u >= CCC.minUnidades ? 'Saldo menor a $1' : fmtN(Math.max(CCC.minUnidades - c.u, 0)) + ' u.';
-  const orden = (a, b) => (a.vend - b.vend) || cZonaNombre(a).localeCompare(cZonaNombre(b), 'es', { numeric: true }) ||
+  const ordC = (a, b) => cZonaNombre(a).localeCompare(cZonaNombre(b), 'es', { numeric: true }) ||
     ((a.orden == null) - (b.orden == null)) || ((a.orden || 0) - (b.orden || 0)) || a.nombre.localeCompare(b.nombre, 'es');
-  lista.sort(orden);
-  const fila = c => [c.codigo || c.id, c.nombre, c.localidad, c.dias.map(d => DIA_ETIQ_CORTO[d]).join(' '), cNum(c.u), falta(c)];
-  $('#cFSub').textContent = `${fmtN(lista.length)} clientes todavía sin CCC` + (CCC.vendedores.length ? '' : '');
-  // exportación plana
-  tabla('cFalt', ['Vendedor','Zona','Código','Cliente','Localidad','Días de visita','Unidades del mes','Falta'],
-    lista.map(c => [c.vend, cZonaNombre(c), c.codigo || c.id, c.nombre, c.localidad, c.dias.map(d => DIA_ETIQ_CORTO[d]).join(' '), cNum(c.u), falta(c)]), { txtCols: [1,2,3,4,5,7] });
-  // vista agrupada: vendedor → zona
-  let out = '';
-  const porV = new Map();
-  lista.forEach(c => { if (!porV.has(c.vend)) porV.set(c.vend, new Map()); const m = porV.get(c.vend); const z = cZonaNombre(c); if (!m.has(z)) m.set(z, []); m.get(z).push(c); });
-  let n = 0;
-  porV.forEach((zonasV, cod) => {
-    const vv = CCC.vendedores.find(x => x.cod === cod) || { cod, nombre: '' };
-    out += `<h3 style="margin:14px 0 4px">Vendedor ${esc(cVendNombre(vv))} <span class="sub">· ${(k => k + (k === 1 ? ' cliente' : ' clientes'))([...zonasV.values()].reduce((t, l) => t + l.length, 0))}</span></h3>`;
-    zonasV.forEach((cl, z) => {
-      out += `<div class="sub" style="margin:8px 0 2px"><b>Zona ${esc(z)}</b> · ${cl.length} cliente${cl.length > 1 ? 's' : ''}</div>`;
-      out += tabla('cZ' + (n++), ['Código','Cliente','Localidad','Días de visita','Unidades del mes','Falta'], cl.map(fila), { txtCols: [0,1,2,3,5] });
+  const base = CCC.clientes.filter(c => !c.ccc && (!vend || c.vend === vend) && (!diaSel || (diaSel === 'sin' ? !c.dias.length : c.dias.includes(diaSel))));
+  const grupos = [];   // { vend, vendTxt, dia, items }
+  CCC.vendedores.filter(v => !vend || v.cod === vend).forEach(v => {
+    const mios = base.filter(c => c.vend === v.cod);
+    if (!mios.length) return;
+    const dias = diaSel ? [diaSel] : [...DIAS_CCC, 'sin'];
+    dias.forEach(d => {
+      const items = mios.filter(c => d === 'sin' ? !c.dias.length : c.dias.includes(d)).sort(ordC);
+      if (items.length) grupos.push({ vend: v.cod, vendTxt: cVendNombre(v), dia: d, items });
     });
   });
-  $('#cLista').innerHTML = out || '<div class="sub">No hay clientes pendientes con este filtro.</div>';
+  CCC_GRUPOS = grupos;
+  const diaTxt = d => d === 'sin' ? 'Sin día asignado' : DIA_LARGO[d];
+  const fila = c => [cZonaNombre(c), c.codigo || c.id, c.nombre, c.localidad, cNum(c.u), falta(c)];
+  const total = new Set(base.map(c => c.id)).size;
+  $('#ccFSub').textContent = `${fmtN(total)} cliente${total === 1 ? '' : 's'} todavía sin CCC` + (diaSel ? ' · ' + diaTxt(diaSel) : '') + (vend ? ' · vendedor ' + vend : '');
+  // exportación plana
+  const plano = [];
+  grupos.forEach(g => g.items.forEach(c => plano.push([g.vend, diaTxt(g.dia), ...fila(c)])));
+  tabla('cFalt', ['Vendedor','Día de visita','Zona','Código','Cliente','Localidad','Unidades del mes','Falta'], plano, { txtCols: [1,2,3,4,5,7] });
+  // vista agrupada: vendedor → día
+  let out = '', n = 0, ultimo = null;
+  grupos.forEach(g => {
+    if (g.vend !== ultimo) {
+      const cant = grupos.filter(x => x.vend === g.vend).reduce((t, x) => t + x.items.length, 0);
+      out += `<h3 style="margin:14px 0 4px">Vendedor ${esc(g.vendTxt)}</h3>`;
+      ultimo = g.vend;
+    }
+    out += `<div class="sub" style="margin:8px 0 2px"><b>${esc(diaTxt(g.dia))}</b> · ${g.items.length} cliente${g.items.length > 1 ? 's' : ''}</div>`;
+    out += tabla('cZ' + (n++), ['Zona','Código','Cliente','Localidad','Unidades del mes','Falta'], g.items.map(fila), { txtCols: [0,1,2,3,5] });
+  });
+  $('#ccLista').innerHTML = out || '<div class="sub">No hay clientes pendientes con este filtro.</div>';
 }
+let CCC_GRUPOS = [];
+const DIAS_CCC = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'];
+const DIA_LARGO = { lunes: 'Lunes', martes: 'Martes', miercoles: 'Miércoles', jueves: 'Jueves', viernes: 'Viernes', sabado: 'Sábado', domingo: 'Domingo' };
 const DIA_ETIQ_CORTO = { lunes: 'Lu', martes: 'Ma', miercoles: 'Mi', jueves: 'Ju', viernes: 'Vi', sabado: 'Sa', domingo: 'Do' };
+
+// PDF-INICIO — generador mínimo de PDF (sin librerías): sirve para mandar el listado por WhatsApp
+function pdfTxt(t){ return String(t == null ? '' : t).replace(/[–—]/g, '-').replace(/…/g, '...').replace(/[^\x00-\xFF]/g, '?').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)'); }
+function pdfCorto(t, ancho, tam){ t = String(t == null ? '' : t); const max = Math.floor(ancho / (tam * 0.5)); return t.length > max ? t.slice(0, Math.max(max - 1, 1)) + '.' : t; }
+function crearPDF(items){
+  const W = 595, H = 842, M = 40, paginas = [[]];
+  let y = H - M, ops = paginas[0];
+  const nueva = () => { ops = []; paginas.push(ops); y = H - M; };
+  const texto = (x, yy, t, tam, neg) => ops.push(`BT /${neg ? 'F2' : 'F1'} ${tam} Tf ${x} ${yy} Td (${pdfTxt(t)}) Tj ET`);
+  const X = [58, 180, 224, 412, 506], A = [118, 40, 184, 90, 49];
+  items.forEach(it => {
+    const alto = it.t === 'h1' ? 26 : it.t === 'h2' ? 22 : it.t === 'sp' ? 8 : 15;
+    if (y - alto < 50) nueva();
+    y -= alto;
+    if (it.t === 'h1') texto(M, y + 6, it.txt, 15, true);
+    else if (it.t === 'h2') texto(M, y + 5, it.txt, 11, true);
+    else if (it.t === 'p') texto(M, y + 4, it.txt, 9, false);
+    else if (it.t === 'cab') { ops.push(`0.9 g ${M} ${y - 3} ${W - 2 * M} 14 re f 0 g`); it.cols.forEach((c, i) => texto(X[i], y + 1, c, 8.5, true)); }
+    else if (it.t === 'fila') {
+      ops.push(`0.5 w ${M + 1} ${y + 1} 8 8 re S`);
+      it.cols.forEach((c, i) => texto(X[i], y + 1, pdfCorto(c, A[i], 9), 9, false));
+      ops.push(`0.85 G 0.4 w ${M} ${y - 4} m ${W - M} ${y - 4} l S 0 G`);
+    }
+  });
+  const objs = [];
+  const add = c => { objs.push(c); return objs.length; };
+  add('<< /Type /Catalog /Pages 2 0 R >>');
+  add('');   // páginas: se completa abajo
+  add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+  add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  const kids = [];
+  paginas.forEach(pg => {
+    const cont = pg.join('\n');
+    const pid = objs.length + 1, cid = pid + 1;
+    add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${cid} 0 R >>`);
+    add(`<< /Length ${cont.length} >>\nstream\n${cont}\nendstream`);
+    kids.push(pid + ' 0 R');
+  });
+  objs[1] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${kids.length} >>`;
+  let out = '%PDF-1.4\n'; const off = [];
+  objs.forEach((o, i) => { off.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xr = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + off.map(o => String(o).padStart(10, '0') + ' 00000 n \n').join('');
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF`;
+  return Uint8Array.from(out, c => c.charCodeAt(0));
+}
+// PDF-FIN
+
+async function descargarPDFCCC(){
+  if (!CCC || !CCC_GRUPOS.length) { alert('No hay clientes para este filtro.'); return; }
+  const vend = $('#ccVend').value, diaSel = $('#ccDia').value;
+  const v = CCC.vendedores.find(x => x.cod === vend);
+  const diaTxt = d => d === 'sin' ? 'Sin día asignado' : DIA_LARGO[d];
+  const it = [];
+  it.push({ t: 'h1', txt: 'Clientes que faltan para el CCC · ' + mesLabel(CCC.mes) });
+  it.push({ t: 'p', txt: (v ? 'Vendedor ' + cVendNombre(v) : 'Todos los vendedores') + (diaSel ? ' · ' + diaTxt(diaSel) : ' · todos los días') });
+  it.push({ t: 'p', txt: `Falta llegar a ${CCC.minUnidades} unidades de productos PEPSICO en el mes. Generado el ${fechaLabel(hoyAR())}.` });
+  it.push({ t: 'sp' });
+  let ultimo = null;
+  CCC_GRUPOS.forEach(g => {
+    if (!vend && g.vend !== ultimo) { it.push({ t: 'h2', txt: 'Vendedor ' + g.vendTxt }); ultimo = g.vend; }
+    it.push({ t: 'h2', txt: `${diaTxt(g.dia)} · ${g.items.length} cliente${g.items.length > 1 ? 's' : ''}` });
+    it.push({ t: 'cab', cols: ['Zona', 'Código', 'Cliente', 'Localidad', 'Falta'] });
+    g.items.forEach(c => it.push({ t: 'fila', cols: [cZonaNombre(c), c.codigo || c.id, c.nombre, c.localidad, c.u >= CCC.minUnidades ? 'Saldo<$1' : fmtN(Math.max(CCC.minUnidades - c.u, 0)) + ' u.'] }));
+    it.push({ t: 'sp' });
+  });
+  const nombre = 'CCC_faltantes' + (vend ? '_vend' + vend : '') + (diaSel ? '_' + diaSel : '') + '_' + CCC.mes + '.pdf';
+  const file = new File([crearPDF(it)], nombre, { type: 'application/pdf' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {   // en el celular abre "Compartir" (WhatsApp, etc.)
+    try { await navigator.share({ files: [file], title: nombre }); return; } catch(e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+}
 
 async function guardarObjetivosCCC(){
   const objetivos = {};
-  document.querySelectorAll('#tCRes input[data-cod]').forEach(i => { if (i.value !== i.dataset.orig) objetivos[i.dataset.cod] = i.value; });   // solo lo que cambió
-  $('#cEstado').textContent = 'Guardando…';
+  document.querySelectorAll('#tCCRes input[data-cod]').forEach(i => { if (i.value !== i.dataset.orig) objetivos[i.dataset.cod] = i.value; });   // solo lo que cambió
+  $('#ccEstado').textContent = 'Guardando…';
   try {
     await api('/api/seguimiento-clientes/ccc/objetivos', { method: 'POST', body: JSON.stringify({ mes: CCC.mes, objetivos }) });
     await cargarCCC(true);
-    $('#cEstado').textContent = '✔ Guardado';
-  } catch(e) { if (e.message !== 'sin PIN') $('#cEstado').textContent = 'Error: ' + e.message; }
+    $('#ccEstado').textContent = '✔ Guardado';
+  } catch(e) { if (e.message !== 'sin PIN') $('#ccEstado').textContent = 'Error: ' + e.message; }
 }
-$('#cMes').addEventListener('change', () => cargarCCC(false));
-$('#cVend').addEventListener('change', () => { $('#cZona').value = ''; renderCCC(); });
-$('#cZona').addEventListener('change', renderCCC);
-$('#cMes').value = hoyAR().slice(0, 7);
+$('#ccMes').addEventListener('change', () => cargarCCC(false));
+$('#ccVend').addEventListener('change', renderCCC);
+$('#ccDia').addEventListener('change', renderCCC);
+$('#ccMes').value = hoyAR().slice(0, 7);
 
 // ------------------------------------------------ MI RUTA (vendedor): ordenar con arrastrar y soltar
 let RV = null, rvTimer = null, rvPendiente = false;
