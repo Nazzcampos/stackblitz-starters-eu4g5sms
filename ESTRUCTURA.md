@@ -37,10 +37,10 @@ Dónde tocar según lo que quieras cambiar:
 - Cómo se comporta una pantalla → `public/js/<pantalla>.js`.
 - Una tabla nueva → `server/base.js` (MIGRACION).
 
-Novedades: campanita de notificaciones (server/avisos.js + rutas/notificaciones.js + public/js/campana.js), aviso de retornos compacto, cajas obligatorias, resumen mensual de combustible, cabecera con saludo, rediseño del panel admin, costo logístico por cliente/km/% de la venta en Venta por camión. Acompañantes y Planificación de repartos (acompanante.html, rutas/planificacion.js). Página /clientes (clientes.html en la raíz + rutas/clientes.js). Mapa del supervisor: tramos sin señal punteados, paradas, clientes visitados/pendientes del camión elegido y vista satélite. GPS: precisión máxima de envío 50 m y el odómetro no suma tramos menores al error del GPS.
+Novedades: campanita de notificaciones (server/avisos.js + rutas/notificaciones.js + public/js/campana.js), aviso de retornos compacto, cajas obligatorias, resumen mensual de combustible, cabecera con saludo, rediseño del panel admin, costo logístico por cliente/km/% de la venta en Venta por camión. Acompañantes y Planificación de repartos (acompanante.html, rutas/planificacion.js). Página /clientes (gestion.html en la raíz + rutas/clientes.js). Mapa del supervisor: tramos sin señal punteados, paradas, clientes visitados/pendientes del camión elegido y vista satélite. GPS: precisión máxima de envío 50 m y el odómetro no suma tramos menores al error del GPS.
 
-## Depósito (perfil "Encargado depósito" en /clientes, código ENCARGADO_PIN, por defecto 1234)
-Cartelera de indicadores por bodeguista (día, semana y mes), ranking, errores de armado e incentivo mensual. Código en `server/rutas/clientes.js` + `clientes.html`.
+## Depósito (perfil "Encargado depósito" en /gestion, código ENCARGADO_PIN, por defecto 1234)
+Cartelera de indicadores por bodeguista (día, semana y mes), ranking, errores de armado e incentivo mensual. Código en `server/rutas/clientes.js` + `gestion.html`.
 - Unidades y pedidos: `venta` por `fecha_preparacion`, tipos VEN/FAC-A/FAC-B, artículos con `item.prov_codigo = 100`.
 - Errores: NC (`NCR%`) con `motivo_rechazo_desc` en la lista de motivos; solo artículos del proveedor 100; se asignan al día y preparador del pedido original (`venta_referenciada_id`).
 - Minutos: el tiempo de picking NO está en la base de Gescom; se importa el Excel del reporte "Picking Bodeguista/Fecha" (botón en "Minutos de armado", tabla `deposito_gescom`). La corrección manual por día (`deposito_minutos`) pisa al valor de Gescom.
@@ -48,7 +48,12 @@ Cartelera de indicadores por bodeguista (día, semana y mes), ranking, errores d
 - Variables opcionales: DEPOSITO_PROVEEDOR, DEPOSITO_BODEGUISTAS, DEPOSITO_MOTIVOS (separados por |), ENCARGADO_PIN.
 - Ajuste de errores por el encargado: se puede quitar una línea de error (tabla `deposito_error_excluir`) o escribir un total por día y bodeguista (`deposito_errores_ajuste`, reemplaza al calculado).
 
-## CCC Pepsico (pestaña del supervisor en /clientes)
+## CCC Pepsico (pestaña del supervisor en /gestion)
 Clientes con 3 unidades o más de productos del proveedor 100 en el mes (facturas menos NC, por `fecha_entrega`) y saldo (`importe_total_c_imp`) mayor a $1.
 Objetivo y avance por vendedor, y lista de clientes sin CCC por vendedor y zona (ruta). Objetivo por vendedor: de Gescom (`objetivo_detalle`, objetivo '15', grupo Pepsico, medida Cantidad); lo escrito a mano en la web (tabla `ccc_objetivo` en Supabase) tiene prioridad. Variables opcionales: CCC_MIN_UNIDADES, CCC_OBJETIVO_CODIGO.
 Lista de faltantes: filtros por vendedor y día de visita (Lu a Vi), agrupada por vendedor y día; botón PDF (generado en el navegador, sin librerías) que en la PC se descarga y en el celular abre "Compartir" (WhatsApp, etc.).
+
+## /gestion (antes /clientes) — rediseño oscuro y perfil Bodeguista
+- La web ahora vive en `/gestion` (archivo `gestion.html`); `/clientes` redirige a `/gestion`. Las rutas de API `/api/seguimiento-clientes/...` no cambiaron.
+- Diseño oscuro (paleta BeniQ, Inter, iconos tipo Lucide en SVG), menú lateral expandible/contraíble y barra superior (hora, estado de base de datos, usuario).
+- Perfil **Bodeguista** (código `BODEGUISTA_PIN`, por defecto 1234, header `x-bod`): solo lectura. Ve la tabla mensual de indicadores y el detalle de errores de armado (con filtro por bodeguista). No ve incentivo ($), ranking, minutos ni cartelera; no puede quitar errores, editar minutos ni importar. El servidor solo le habilita `GET /api/seguimiento-clientes/deposito` (sin incentivo); todos los POST siguen siendo del encargado.

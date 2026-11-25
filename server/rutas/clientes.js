@@ -1,6 +1,6 @@
 // ================================================================
 //  MÓDULO PROVISORIO: Seguimiento de clientes y cobertura de marcas  ->  /clientes
-//  Para QUITARLO: borrar este archivo, clientes.html (en la raíz)
+//  Para QUITARLO: borrar este archivo, gestion.html (en la raíz)
 //  y la línea  require('./server/rutas/clientes.js');  de index.js.
 //  (Opcional) en Supabase: DROP TABLE clientes_objetivo_marca;
 //
@@ -47,6 +47,7 @@ const SUBMARCAS = [
 const leerPin = () => String(process.env.CLIENTES_PIN || '5940').trim();
 const leerPinSupervisor = () => String(process.env.SUPERVISOR_PIN || '1234').trim();
 const leerPinEncargado = () => String(process.env.ENCARGADO_PIN || '1234').trim();
+const leerPinBodeguista = () => String(process.env.BODEGUISTA_PIN || '1234').trim();
 const codigosVendedores = () => String(process.env.VENDEDORES_CODIGOS || '21,22,23,24,25,27,31,32,33,34')
     .split(',').map(c => c.trim()).filter(Boolean);
 const sinCeros = c => String(c == null ? '' : c).trim().replace(/^0+(?=\d)/, '');
@@ -65,6 +66,14 @@ function controlEncargado(req, res, next) {
     controlPin(req, res, () => {
         if (String(req.get('x-enc') || '').trim() !== leerPinEncargado()) return res.status(403).json({ error: 'Código de encargado incorrecto' });
         next();
+    });
+}
+// Bodeguista: solo lectura de la tabla mensual y los errores (no tiene acceso a ninguna escritura)
+function controlLectorDeposito(req, res, next) {
+    controlPin(req, res, () => {
+        if (String(req.get('x-enc') || '').trim() === leerPinEncargado()) { req.esEncargado = true; return next(); }
+        if (String(req.get('x-bod') || '').trim() === leerPinBodeguista()) return next();
+        return res.status(403).json({ error: 'Código incorrecto' });
     });
 }
 function controlVendedor(req, res, next) {
@@ -305,9 +314,11 @@ const mesValido = m => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(m || ''));
 // =====================================================================
 //  RUTAS
 // =====================================================================
-app.get('/clientes', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', '..', 'clientes.html'));
+app.get('/gestion', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', '..', 'gestion.html'));
 });
+// El nombre anterior sigue funcionando (marcadores viejos)
+app.get('/clientes', (req, res) => res.redirect(301, '/gestion'));
 
 app.get('/api/seguimiento-clientes/datos', controlSupervisor, async (req, res) => {
     try {
@@ -505,6 +516,10 @@ app.get('/api/acceso/verificar', controlPin, async (req, res) => {
     }
     if (rol === 'encargado') {
         if (String(req.get('x-enc') || '').trim() !== leerPinEncargado()) return res.status(403).json({ error: 'Código de encargado incorrecto' });
+        return res.json({ ok: true, rol });
+    }
+    if (rol === 'bodeguista') {
+        if (String(req.get('x-bod') || '').trim() !== leerPinBodeguista()) return res.status(403).json({ error: 'Código de bodeguista incorrecto' });
         return res.json({ ok: true, rol });
     }
     if (rol === 'vendedor') {
@@ -969,11 +984,13 @@ async function obtenerDeposito(mes, forzar) {
     return data;
 }
 
-app.get('/api/seguimiento-clientes/deposito', controlEncargado, async (req, res) => {
+app.get('/api/seguimiento-clientes/deposito', controlLectorDeposito, async (req, res) => {
     try {
         const mes = String(req.query.mes || hoyAR().slice(0, 7));
         if (!mesValido(mes)) return res.status(400).json({ error: 'Mes inválido' });
-        res.json(await obtenerDeposito(mes, req.query.refresh === '1'));
+        const d = await obtenerDeposito(mes, req.query.refresh === '1' && !!req.esEncargado);
+        // El bodeguista no ve el incentivo ($) de nadie
+        res.json(req.esEncargado ? d : Object.assign({}, d, { incentivo: null, soloLectura: true }));
     } catch (err) {
         console.error('❌ [clientes] Depósito:', err.message);
         res.status(500).json({ error: err.message });
