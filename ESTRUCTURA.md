@@ -57,3 +57,10 @@ Lista de faltantes: filtros por vendedor y día de visita (Lu a Vi), agrupada po
 - La web ahora vive en `/gestion` (archivo `gestion.html`); `/clientes` redirige a `/gestion`. Las rutas de API `/api/seguimiento-clientes/...` no cambiaron.
 - Diseño oscuro (paleta BeniQ, Inter, iconos tipo Lucide en SVG), menú lateral expandible/contraíble y barra superior (hora, estado de base de datos, usuario).
 - Perfil **Bodeguista** (código `BODEGUISTA_PIN`, por defecto 1234, header `x-bod`): solo lectura. Ve la tabla mensual de indicadores y el detalle de errores de armado (con filtro por bodeguista). No ve incentivo ($), ranking, minutos ni cartelera; no puede quitar errores, editar minutos ni importar. El servidor solo le habilita `GET /api/seguimiento-clientes/deposito` (sin incentivo); todos los POST siguen siendo del encargado.
+
+## Administración — resúmenes de cuenta corriente en PDF (perfil "Administración" en /gestion)
+- Código `ADMINISTRACION_PIN` (por defecto 1234, header `x-adm`). Código en `server/rutas/clientes.js` (sección ADMINISTRACIÓN) + vista `#vAdm` en `gestion.html`.
+- Se arma con movimientos reales (el reporte de Gescom calcula mal los saldos): facturas / NC / ND de `venta`; cobros de `caja_movimiento` ("Cobro de cliente <código>", confirmados, varios medios = un cobro); ajustes DAJ/CAJ de `asiento_movimiento` (Gescom los guarda desde jul-2026).
+- Saldo anclado a las fotos diarias de `cta_cte_cliente` (variable `CTA_FOTOS_DESDE`, por defecto 2026-07-27): lo que no se puede detallar queda como "Saldo anterior". El saldo se controla contra la foto de la fecha final y la pantalla avisa si no coincide.
+- Clientes asociados (sucursales/bocas): grupos guardados en la tabla propia `adm_grupos` (Supabase), con sugerencia por mismo CUIT. Gescom no sincroniza su módulo de "clientes asociados".
+- API: `/api/administracion/{grupos,buscar,resumen}`.

@@ -48,6 +48,7 @@ const leerPin = () => String(process.env.CLIENTES_PIN || '5940').trim();
 const leerPinSupervisor = () => String(process.env.SUPERVISOR_PIN || '1234').trim();
 const leerPinEncargado = () => String(process.env.ENCARGADO_PIN || '1234').trim();
 const leerPinBodeguista = () => String(process.env.BODEGUISTA_PIN || '1234').trim();
+const leerPinAdm = () => String(process.env.ADMINISTRACION_PIN || '1234').trim();
 const codigosVendedores = () => String(process.env.VENDEDORES_CODIGOS || '21,22,23,24,25,27,31,32,33,34')
     .split(',').map(c => c.trim()).filter(Boolean);
 const sinCeros = c => String(c == null ? '' : c).trim().replace(/^0+(?=\d)/, '');
@@ -65,6 +66,12 @@ function controlSupervisor(req, res, next) {
 function controlEncargado(req, res, next) {
     controlPin(req, res, () => {
         if (String(req.get('x-enc') || '').trim() !== leerPinEncargado()) return res.status(403).json({ error: 'Código de encargado incorrecto' });
+        next();
+    });
+}
+function controlAdministracion(req, res, next) {
+    controlPin(req, res, () => {
+        if (String(req.get('x-adm') || '').trim() !== leerPinAdm()) return res.status(403).json({ error: 'Código de administración incorrecto' });
         next();
     });
 }
@@ -516,6 +523,10 @@ app.get('/api/acceso/verificar', controlPin, async (req, res) => {
     }
     if (rol === 'encargado') {
         if (String(req.get('x-enc') || '').trim() !== leerPinEncargado()) return res.status(403).json({ error: 'Código de encargado incorrecto' });
+        return res.json({ ok: true, rol });
+    }
+    if (rol === 'administracion') {
+        if (String(req.get('x-adm') || '').trim() !== leerPinAdm()) return res.status(403).json({ error: 'Código de administración incorrecto' });
         return res.json({ ok: true, rol });
     }
     if (rol === 'bodeguista') {
@@ -1204,6 +1215,197 @@ app.post('/api/seguimiento-clientes/ccc/objetivos', controlSupervisor, async (re
         console.error('❌ [clientes] Objetivos CCC:', err.message);
         res.status(500).json({ error: err.message });
     }
+});
+
+
+// =====================================================================
+//  ADMINISTRACIÓN: resúmenes de cuenta corriente en PDF (perfil "Administración", código ADMINISTRACION_PIN, por defecto 1234)
+//  Gescom trae mal los saldos de su reporte, así que se arma el resumen con los movimientos reales:
+//    - Facturas / notas de crédito / notas de débito: tabla venta (fecha del comprobante, importe total)
+//    - Cobros: caja_movimiento "Cobro de cliente <código>" confirmados (varios medios de pago = un solo cobro)
+//    - Ajustes de deuda (DAJ) y de crédito (CAJ): asiento_movimiento (Gescom los guarda desde julio de 2026)
+//  El saldo se ancla a la foto diaria de cta_cte_cliente (saldo pendiente al cierre del día, desde CTA_FOTOS_DESDE):
+//  lo que no se puede detallar (ajustes anteriores a las fotos) queda como "Saldo anterior". Y se controla el saldo
+//  calculado contra la foto de la fecha final: si no coincide, la pantalla avisa.
+//  Los grupos de clientes asociados (sucursales / bocas) se guardan en la base propia: tabla adm_grupos.
+// =====================================================================
+const CTA_FOTOS_DESDE = /^\d{4}-\d{2}-\d{2}$/.test(process.env.CTA_FOTOS_DESDE || '') ? process.env.CTA_FOTOS_DESDE : '2026-07-27';
+const fechaValida = f => /^\d{4}-\d{2}-\d{2}$/.test(String(f || ''));
+const sumarDias = (f, n) => { const d = new Date(f + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const redondear = n => Math.round((Number(n) || 0) * 100) / 100;
+
+let tablaGruposLista = false;
+async function asegurarTablaGrupos() {
+    if (!db) throw new Error('Sin base propia (DATABASE_URL): no se pueden guardar los grupos de clientes');
+    if (tablaGruposLista) return;
+    await db.query(`CREATE TABLE IF NOT EXISTS adm_grupos (
+        nombre text PRIMARY KEY, codigos text[] NOT NULL, actualizado timestamptz NOT NULL DEFAULT now())`);
+    tablaGruposLista = true;
+}
+
+app.get('/api/administracion/grupos', controlAdministracion, async (req, res) => {
+    try {
+        await asegurarTablaGrupos();
+        res.json((await db.query(`SELECT nombre, codigos FROM adm_grupos ORDER BY lower(nombre)`)).rows);
+    } catch (err) { console.error('❌ [admin] grupos:', err.message); res.status(500).json({ error: err.message }); }
+});
+app.post('/api/administracion/grupos', controlAdministracion, async (req, res) => {
+    try {
+        const nombre = String((req.body || {}).nombre || '').trim().slice(0, 80);
+        const codigos = [...new Set(((req.body || {}).codigos || []).map(c => sinCeros(String(c).trim())).filter(c => /^\d{1,10}$/.test(c)))];
+        if (!nombre) return res.status(400).json({ error: 'Poné un nombre para el grupo' });
+        if (!codigos.length) return res.status(400).json({ error: 'El grupo necesita al menos un cliente' });
+        await asegurarTablaGrupos();
+        await db.query(`INSERT INTO adm_grupos (nombre, codigos) VALUES ($1, $2)
+            ON CONFLICT (nombre) DO UPDATE SET codigos = $2, actualizado = now()`, [nombre, codigos]);
+        res.json({ ok: true });
+    } catch (err) { console.error('❌ [admin] guardar grupo:', err.message); res.status(500).json({ error: err.message }); }
+});
+app.delete('/api/administracion/grupos', controlAdministracion, async (req, res) => {
+    try {
+        await asegurarTablaGrupos();
+        await db.query(`DELETE FROM adm_grupos WHERE nombre = $1`, [String(req.query.nombre || '')]);
+        res.json({ ok: true });
+    } catch (err) { console.error('❌ [admin] borrar grupo:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// Buscador de clientes por código, nombre o CUIT. Con ?cuit=<código> trae los clientes que comparten CUIT con ese código (sugerencia de asociados)
+app.get('/api/administracion/buscar', controlAdministracion, async (req, res) => {
+    try {
+        const q = String(req.query.q || '').trim().slice(0, 60);
+        const cols = `ltrim(c.codigo::text, '0') AS codigo, COALESCE(NULLIF(c.nombre, ''), c.razon_social) AS nombre,
+                      c.razon_social, c.documento, c.localidad, COALESCE(c.activo, true) AS activo`;
+        let r;
+        if (req.query.cuit) {
+            r = await pool.query(`
+                SELECT ${cols} FROM cliente_hist c
+                WHERE c.tenant_id = $1 AND c.actual = true AND c.documento IS NOT NULL AND c.documento <> ''
+                  AND c.documento = (SELECT documento FROM cliente_hist WHERE tenant_id = $1 AND actual = true AND ltrim(codigo::text, '0') = $2 LIMIT 1)
+                ORDER BY c.codigo::text LIMIT 60`, [TENANT, sinCeros(req.query.cuit)]);
+        } else {
+            if (q.length < 2) return res.json([]);
+            r = await pool.query(`
+                SELECT ${cols} FROM cliente_hist c
+                WHERE c.tenant_id = $1 AND c.actual = true
+                  AND (ltrim(c.codigo::text, '0') = $2 OR c.razon_social ILIKE $3 OR c.nombre ILIKE $3 OR c.documento ILIKE $3)
+                ORDER BY c.razon_social LIMIT 40`, [TENANT, sinCeros(q), '%' + q + '%']);
+        }
+        res.json(r.rows);
+    } catch (err) { console.error('❌ [admin] buscar:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// Saldo pendiente de los clientes según la foto diaria de la cta. cte.; null si ese día no hay foto
+async function saldoFoto(ids, fecha) {
+    const hay = await pool.query(`SELECT 1 FROM cta_cte_cliente WHERE fecha_sync = $1::date LIMIT 1`, [fecha]);
+    if (!hay.rows.length) return null;
+    const r = await pool.query(`
+        SELECT COALESCE(SUM(CASE WHEN es_credito THEN -importe ELSE importe END), 0)::float AS saldo
+        FROM cta_cte_cliente WHERE fecha_sync = $1::date AND cliente_id = ANY($2::bigint[])`, [fecha, ids]);
+    return redondear(r.rows[0].saldo);
+}
+
+async function armarResumen(codigos, desde, hasta) {
+    const cods = [...new Set(codigos.map(c => sinCeros(String(c).trim())).filter(Boolean))];
+    const cl = await pool.query(`
+        SELECT c.id::text AS id, ltrim(c.codigo::text, '0') AS codigo, COALESCE(NULLIF(c.nombre, ''), c.razon_social) AS nombre,
+               c.razon_social, c.documento
+        FROM cliente_hist c WHERE c.tenant_id = $1 AND c.actual = true AND ltrim(c.codigo::text, '0') = ANY($2::text[])`, [TENANT, cods]);
+    if (!cl.rows.length) throw new Error('No se encontraron esos clientes en Gescom');
+    const ids = cl.rows.map(c => c.id);
+    const porId = new Map(cl.rows.map(c => [c.id, c.codigo]));
+    const filtro = await filtroAnuladas();
+    const tope = hasta > CTA_FOTOS_DESDE ? hasta : CTA_FOTOS_DESDE;   // siempre se trae hasta la primera foto, que es donde se ancla el saldo
+
+    const mov = [];
+    // 1) Facturas, notas de crédito y de débito
+    const v = await pool.query(`
+        SELECT v.cliente_id::text AS cid, to_char(v.fecha_comprobante, 'YYYY-MM-DD') AS f, v.tipo_comprobante_codigo AS tipo,
+               v.punto_venta_codigo::text AS pv, v.numero_comprobante::text AS num, v.importe_total::float AS imp,
+               v.motivo_rechazo_desc AS m_rech, v.motivo_cambio_desc AS m_camb
+        FROM venta v
+        WHERE v.tenant_id = $1 AND v.cliente_id = ANY($2::bigint[])
+          AND (v.tipo_comprobante_codigo LIKE 'FAC%' OR v.tipo_comprobante_codigo LIKE 'NCR%' OR v.tipo_comprobante_codigo LIKE 'NDB%')
+          AND v.fecha_comprobante < ($3::date + 1)${filtro}`, [TENANT, ids, tope]);
+    v.rows.forEach(r => {
+        const nc = /^NCR/.test(r.tipo);
+        const concepto = nc ? (r.m_rech ? 'Devolución por Rechazo' : r.m_camb ? 'Devolución por Canje' : 'Nota de crédito')
+            : /^NDB/.test(r.tipo) ? 'Nota de débito' : 'Venta';
+        mov.push({ f: r.f, ord: nc ? 1 : 0, cod: porId.get(r.cid), tipo: r.tipo, num: String(r.pv || '').padStart(4, '0') + '-' + String(r.num || '').padStart(8, '0'),
+            concepto, debe: nc ? 0 : redondear(r.imp), haber: nc ? redondear(r.imp) : 0 });
+    });
+    // 2) Cobros (un cobro puede tener varios medios de pago: se suman)
+    const cobDet = cods.map(c => 'Cobro de cliente ' + c);
+    const cb = await pool.query(`
+        SELECT m.operacion_id::text AS op, m.operacion_detalle AS det, to_char(MIN(m.fecha_ejecucion), 'YYYY-MM-DD') AS f,
+               SUM(m.importe)::float AS imp, string_agg(DISTINCT m.tipo_valor_descripcion, ', ') AS medio
+        FROM caja_movimiento m
+        WHERE m.tenant_id = $1 AND m.caja_mov_estado = 'Confirmado' AND m.tipo_movimiento = 'Ingreso'
+          AND m.operacion_detalle = ANY($2::text[]) AND m.fecha_ejecucion < ($3::date + 1)
+        GROUP BY 1, 2`, [TENANT, cobDet, tope]);
+    cb.rows.forEach(r => {
+        mov.push({ f: r.f, ord: 3, cod: sinCeros(String(r.det).replace('Cobro de cliente ', '')), tipo: 'COB', num: '',
+            concepto: 'Cobro' + (r.medio ? ' · ' + r.medio : ''), debe: 0, haber: redondear(r.imp) });
+    });
+    // 3) Ajustes de deuda y de crédito
+    const pat = cods.map(c => 'Cliente ' + c + ' - %');
+    const aj = await pool.query(`
+        SELECT a.tipo_entity AS te, a.entity_id::text AS eid, MIN(a.entity_desc) AS d, to_char(MIN(a.fecha), 'YYYY-MM-DD') AS f,
+               MAX(a.valor)::float AS imp, MIN(a.asiento_comentario) AS com
+        FROM asiento_movimiento a
+        WHERE a.tenant_id = $1 AND a.tipo_entity IN ('deuda-ajuste-cliente', 'credito-ajuste-cliente')
+          AND a.asiento_comentario LIKE ANY($2::text[]) AND a.fecha < ($3::date + 1)
+        GROUP BY 1, 2`, [TENANT, pat, tope]);
+    aj.rows.forEach(r => {
+        const deuda = r.te === 'deuda-ajuste-cliente';
+        const m = /(DAJ|CAJ)\s+(\S+)/.exec(r.d || '');
+        const cm = /^Cliente\s+(\S+)\s+-/.exec(r.com || '');
+        mov.push({ f: r.f, ord: 2, cod: cm ? sinCeros(cm[1]) : '', tipo: m ? m[1] : (deuda ? 'DAJ' : 'CAJ'), num: m ? m[2] : '',
+            concepto: deuda ? 'Deuda por ajuste' : 'Crédito por ajuste', debe: deuda ? redondear(r.imp) : 0, haber: deuda ? 0 : redondear(r.imp) });
+    });
+    mov.sort((a, b) => a.f < b.f ? -1 : a.f > b.f ? 1 : a.ord - b.ord || String(a.num).localeCompare(String(b.num)));
+    const acum = f => redondear(mov.filter(m => m.f <= f).reduce((t, m) => t + m.debe - m.haber, 0));
+
+    // Anclaje con las fotos de la cuenta corriente
+    let brecha = 0, avisoAncla = '';
+    const fotoAncla = await saldoFoto(ids, CTA_FOTOS_DESDE);
+    if (fotoAncla == null) avisoAncla = 'No hay foto de cuenta corriente del ' + CTA_FOTOS_DESDE + ': el saldo se calcula solo con los movimientos.';
+    else brecha = redondear(fotoAncla - acum(CTA_FOTOS_DESDE));
+    const anterior = desde ? mov.filter(m => m.f < desde) : [];
+    const apertura = redondear(brecha + anterior.reduce((t, m) => t + m.debe - m.haber, 0));
+    const filas = mov.filter(m => (!desde || m.f >= desde) && m.f <= hasta);
+    let saldo = apertura;
+    filas.forEach(m => { saldo = redondear(saldo + m.debe - m.haber); m.saldo = saldo; });
+
+    // Control: saldo calculado vs. foto de la última fecha disponible hasta "hasta"
+    let control = { estado: 'sin-control', texto: 'No hay fotos de cuenta corriente para esa fecha (empiezan el ' + CTA_FOTOS_DESDE + '): el saldo no se pudo controlar.' };
+    if (fotoAncla != null) {
+        const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Buenos_Aires' });
+        let d = hasta > hoy ? hoy : hasta;
+        for (let i = 0; i < 6 && d >= CTA_FOTOS_DESDE; i++, d = sumarDias(d, -1)) {
+            const foto = await saldoFoto(ids, d);
+            if (foto == null) continue;
+            const calc = redondear(brecha + acum(d));
+            control = { estado: Math.abs(calc - foto) < 1 ? 'ok' : 'difiere', fecha: d, calculado: calc, foto, diferencia: redondear(calc - foto) };
+            break;
+        }
+    }
+    return {
+        clientes: cl.rows.map(c => ({ codigo: c.codigo, nombre: c.nombre, razon_social: c.razon_social, documento: c.documento })),
+        faltan: cods.filter(c => !cl.rows.some(x => x.codigo === c)),
+        desde: desde || '', hasta, apertura, brecha, avisoAncla, filas, saldoFinal: saldo, control,
+        totales: { debe: redondear(filas.reduce((t, m) => t + m.debe, 0)), haber: redondear(filas.reduce((t, m) => t + m.haber, 0)) }
+    };
+}
+
+app.get('/api/administracion/resumen', controlAdministracion, async (req, res) => {
+    try {
+        const codigos = String(req.query.codigos || '').split(',').map(c => c.trim()).filter(Boolean).slice(0, 60);
+        const hasta = String(req.query.hasta || '');
+        const desde = String(req.query.desde || '');
+        if (!codigos.length) return res.status(400).json({ error: 'Elegí un cliente o un grupo' });
+        if (!fechaValida(hasta) || (desde && !fechaValida(desde))) return res.status(400).json({ error: 'Fechas inválidas' });
+        res.json(await armarResumen(codigos, desde, hasta));
+    } catch (err) { console.error('❌ [admin] resumen:', err.message); res.status(500).json({ error: err.message }); }
 });
 
 console.log('📊 Módulo provisorio de seguimiento de clientes y cobertura de marcas activo en /clientes');

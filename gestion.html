@@ -468,6 +468,48 @@
     </div>
   </section>
 
+  <!-- ======================= ADMINISTRACIÓN: resúmenes de cuenta ======================= -->
+  <section class="vista" id="vAdm">
+    <div class="card">
+      <div class="top"><div><h2>1 · ¿De quién es el resumen?</h2>
+        <div class="sub">Elegí un grupo ya armado (por ejemplo una cadena con varias bocas) o buscá los clientes por código, nombre o CUIT.</div></div></div>
+      <div class="filtros" style="margin-bottom:10px">
+        <label>Grupo guardado <select id="aGrupo" onchange="admElegirGrupo()"></select></label>
+        <label>Buscar cliente <input id="aBuscar" placeholder="código, nombre o CUIT" style="min-width:240px"></label>
+        <button class="sec" onclick="admBuscar()">Buscar</button>
+        <button class="sec" onclick="admMismoCuit()" id="aBtnCuit">Traer clientes con el mismo CUIT</button>
+      </div>
+      <div class="tw" id="aResultados" style="max-height:240px"></div>
+      <div class="sub" style="margin:10px 0 4px">Clientes incluidos en el resumen:</div>
+      <div class="chips" id="aSel"></div>
+      <div class="filtros" style="margin:12px 0 0">
+        <label>Nombre del grupo (para guardarlo) <input id="aNombreGrupo" placeholder="ej. Delfín"></label>
+        <button class="sec" onclick="admGuardarGrupo()">Guardar grupo</button>
+        <button class="sec" onclick="admBorrarGrupo()">Borrar grupo</button>
+        <span class="sub" id="aGrupoEstado"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="top"><div><h2>2 · Período</h2>
+        <div class="sub">Para un pedido tipo "hasta el 10/11", dejá el desde en el 1 de enero y poné el hasta.</div></div></div>
+      <div class="filtros" style="margin-bottom:0">
+        <label>Desde <input type="date" id="aDesde"></label>
+        <label>Hasta <input type="date" id="aHasta"></label>
+        <label>Nombre que sale en el PDF <input id="aTitulo" placeholder="ej. Delfín" style="min-width:220px"></label>
+        <label class="chk"><input type="checkbox" id="aSuc" checked onchange="admPintar()"> Mostrar sucursal en cada línea</label>
+        <button onclick="admVer()">Ver resumen</button>
+        <button class="sec" onclick="admPDF()">Descargar PDF</button>
+      </div>
+    </div>
+    <div class="nota" id="aNota"></div>
+    <div class="card" id="aCard" style="display:none">
+      <div class="top"><div><h2 id="aH2">Resumen</h2><div class="sub" id="aSub"></div></div></div>
+      <div id="aControl" style="margin-bottom:10px"></div>
+      <div class="tw" id="tAdm" style="max-height:620px"></div>
+    </div>
+  </section>
+
   <!-- ======================= CCC (supervisor) ======================= -->
   <section class="vista" id="vCCC">
     <div class="filtros">
@@ -544,6 +586,7 @@
         <button class="sec" onclick="elegirRol('vendedor')">Vendedor</button>
         <button class="sec" onclick="elegirRol('encargado')">Encargado depósito</button>
         <button class="sec" onclick="elegirRol('bodeguista')">Bodeguista</button>
+        <button class="sec" onclick="elegirRol('administracion')">Administración</button>
       </div>
       <a onclick="salirTodo()">Salir</a>
     </div>
@@ -605,7 +648,7 @@ function mostrarLogin(msg, paso){
   $('#lgPin').style.display = paso === 'pin' ? '' : 'none';
   $('#lgRol').style.display = paso === 'rol' ? '' : 'none';
   $('#lgCod').style.display = paso === 'cod' ? '' : 'none';
-  $('#lgTitulo').textContent = paso === 'pin' ? 'Gestión BIDO' : paso === 'rol' ? '¿Quién sos?' : (ROL_ELEGIDO === 'supervisor' ? 'Código de supervisor' : ROL_ELEGIDO === 'encargado' ? 'Código de encargado de depósito' : 'Tu código de vendedor');
+  $('#lgTitulo').textContent = paso === 'pin' ? 'Gestión BIDO' : paso === 'rol' ? '¿Quién sos?' : (ROL_ELEGIDO === 'supervisor' ? 'Código de supervisor' : ROL_ELEGIDO === 'encargado' ? 'Código de encargado de depósito' : ROL_ELEGIDO === 'bodeguista' ? 'Código de bodeguista' : ROL_ELEGIDO === 'administracion' ? 'Código de administración' : 'Tu código de vendedor');
   $('#pinErr').textContent = msg || '';
   $('#pinInput').value = ''; $('#codInput').value = '';
   setTimeout(() => (paso === 'pin' ? $('#pinInput') : $('#codInput')).focus(), 50);
@@ -616,6 +659,7 @@ function headersAcceso(extra){
   if (getRol() === 'vend') h['x-vendedor'] = getCod();
   if (getRol() === 'enc') h['x-enc'] = getCod();
   if (getRol() === 'bod') h['x-bod'] = getCod();
+  if (getRol() === 'adm') h['x-adm'] = getCod();
   return h;
 }
 async function verificar(rol, cod){
@@ -624,6 +668,7 @@ async function verificar(rol, cod){
   if (rol === 'vendedor') h['x-vendedor'] = cod;
   if (rol === 'encargado') h['x-enc'] = cod;
   if (rol === 'bodeguista') h['x-bod'] = cod;
+  if (rol === 'administracion') h['x-adm'] = cod;
   const r = await fetch('/api/acceso/verificar?rol=' + (rol || ''), { headers: h });
   let j = {}; try { j = await r.json(); } catch(e) {}
   return { ok: r.ok, status: r.status, j };
@@ -644,7 +689,7 @@ async function entrarCodigo(){
   const v = await verificar(ROL_ELEGIDO, c).catch(() => ({ ok: false, status: 0, j: { error: 'Sin conexión' } }));
   if (v.status === 401) { setPin(''); return mostrarLogin('Código de entrada incorrecto', 'pin'); }
   if (!v.ok) return mostrarLogin(v.j.error || 'Código incorrecto', 'cod');
-  setRol(ROL_ELEGIDO === 'supervisor' ? 'sup' : ROL_ELEGIDO === 'encargado' ? 'enc' : ROL_ELEGIDO === 'bodeguista' ? 'bod' : 'vend', c);
+  setRol(ROL_ELEGIDO === 'supervisor' ? 'sup' : ROL_ELEGIDO === 'encargado' ? 'enc' : ROL_ELEGIDO === 'bodeguista' ? 'bod' : ROL_ELEGIDO === 'administracion' ? 'adm' : 'vend', c);
   if (v.j.nombre) ses.set('clientesNombre', v.j.nombre);
   iniciar();
 }
@@ -686,7 +731,7 @@ function menuLateral(){
 }
 function pintarCascaron(){
   const r = getRol();
-  const nom = r === 'sup' ? 'Supervisor' : r === 'enc' ? 'Encargado depósito' : r === 'bod' ? 'Bodeguista' : (ses.get('clientesNombre') || 'Vendedor');
+  const nom = r === 'sup' ? 'Supervisor' : r === 'enc' ? 'Encargado depósito' : r === 'bod' ? 'Bodeguista' : r === 'adm' ? 'Administración' : (ses.get('clientesNombre') || 'Vendedor');
   $('#uNom').textContent = nom; $('#uIni').textContent = nom.charAt(0).toUpperCase();
 }
 function tickReloj(){ $('#reloj').textContent = 'En vivo · ' + new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' }); }
@@ -696,20 +741,24 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
 // Arranque según el perfil
 function iniciar(){
   $('#login').style.display = 'none';
-  const rol = getRol(), sup = rol === 'sup', bod = rol === 'bod', enc = rol === 'enc' || bod;
+  const rol = getRol(), sup = rol === 'sup', adm = rol === 'adm', bod = rol === 'bod', enc = rol === 'enc' || bod;
   document.body.classList.toggle('bod', bod); pintarCascaron();
   if (bod) depModo = 'mes';
   document.querySelector('.tabs').style.display = sup ? 'flex' : 'none';
   document.querySelectorAll('.vista').forEach(v => v.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
-  $('#hTitulo').textContent = sup ? 'Seguimiento de clientes' : bod ? 'Indicadores de depósito' : enc ? 'Indicadores de depósito' : 'Mi ruta de ventas';
-  $('#hSub').textContent = sup ? 'BIDO S.R.L. · datos de Gescom' : bod ? 'BIDO S.R.L. · bodeguista (solo lectura)' : enc ? 'BIDO S.R.L. · encargado de depósito' : 'BIDO S.R.L. · vendedor ' + getCod() + (ses.get('clientesNombre') ? ' · ' + ses.get('clientesNombre') : '');
+  $('#hTitulo').textContent = adm ? 'Administración' : sup ? 'Seguimiento de clientes' : bod ? 'Indicadores de depósito' : enc ? 'Indicadores de depósito' : 'Mi ruta de ventas';
+  $('#hSub').textContent = adm ? 'BIDO S.R.L. · resúmenes de cuenta corriente' : sup ? 'BIDO S.R.L. · datos de Gescom' : bod ? 'BIDO S.R.L. · bodeguista (solo lectura)' : enc ? 'BIDO S.R.L. · encargado de depósito' : 'BIDO S.R.L. · vendedor ' + getCod() + (ses.get('clientesNombre') ? ' · ' + ses.get('clientesNombre') : '');
   $('#estado').textContent = '—';
   if (sup) {
     document.querySelector('.tab[data-vista="vClientes"]').classList.add('on');
     $('#vClientes').classList.add('on');
     vistaActual = 'vClientes';
     cargar(false);
+  } else if (adm) {
+    $('#vAdm').classList.add('on');
+    vistaActual = 'vAdm';
+    cargarAdm();
   } else if (enc) {
     $('#vDeposito').classList.add('on');
     vistaActual = 'vDeposito';
@@ -736,6 +785,7 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
 function actualizar(){
   if (getRol() === 'vend') { cargarRutaVend(RV && RV.dia, RV && RV.ruta); return; }
   if (getRol() === 'enc' || getRol() === 'bod') { cargarDeposito(true); return; }
+  if (getRol() === 'adm') { cargarAdm(); return; }
   cargar(true);
   if (vistaActual === 'vMarcas') cargarMarcas(true);
   if (vistaActual === 'vStock') cargarStock(true);
@@ -1893,6 +1943,201 @@ $('#ccMes').addEventListener('change', () => cargarCCC(false));
 $('#ccVend').addEventListener('change', renderCCC);
 $('#ccDia').addEventListener('change', renderCCC);
 $('#ccMes').value = hoyAR().slice(0, 7);
+
+
+// ------------------------------------------------ ADMINISTRACIÓN: resúmenes de cuenta corriente
+let ADM = { sel: [], grupos: [], res: null };
+const fmtM = n => Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+async function cargarAdm(){
+  if (!$('#aHasta').value) $('#aHasta').value = hoyAR();
+  if (!$('#aDesde').value) $('#aDesde').value = hoyAR().slice(0, 4) + '-01-01';
+  try { ADM.grupos = await api('/api/administracion/grupos'); } catch(e) { if (e.message !== 'sin PIN') $('#aNota').textContent = 'Grupos: ' + e.message; ADM.grupos = []; }
+  $('#aGrupo').innerHTML = '<option value="">— ninguno —</option>' + ADM.grupos.map(g => `<option value="${esc(g.nombre)}">${esc(g.nombre)} (${g.codigos.length})</option>`).join('');
+  admPintarSel();
+}
+async function admAgregar(codigo){
+  codigo = String(codigo);
+  if (ADM.sel.some(c => c.codigo === codigo)) return;
+  const f = (ADM.ultimos || []).find(c => c.codigo === codigo);
+  if (f) ADM.sel.push(f); else {
+    try { const r = await api('/api/administracion/buscar?q=' + encodeURIComponent(codigo)); const x = r.find(c => c.codigo === codigo); if (x) ADM.sel.push(x); } catch(e) {}
+  }
+  admPintarSel();
+}
+function admQuitar(codigo){ ADM.sel = ADM.sel.filter(c => c.codigo !== codigo); admPintarSel(); }
+function admPintarSel(){
+  $('#aSel').innerHTML = ADM.sel.length ? ADM.sel.map(c => `<span class="chip on">${esc(c.codigo)} · ${esc(c.nombre)} <b style="cursor:pointer" onclick="admQuitar('${esc(c.codigo)}')">×</b></span>`).join('')
+    : '<span class="sub">Todavía no elegiste ningún cliente.</span>';
+  $('#aBtnCuit').style.display = ADM.sel.length ? '' : 'none';
+  if (!$('#aTitulo').dataset.manual) $('#aTitulo').value = $('#aNombreGrupo').value || (ADM.sel.length === 1 ? ADM.sel[0].razon_social || ADM.sel[0].nombre : '');
+}
+$('#aTitulo').addEventListener('input', () => { $('#aTitulo').dataset.manual = '1'; });
+function admTablaClientes(rows){
+  ADM.ultimos = rows;
+  $('#aResultados').innerHTML = rows.length ? '<table><thead><tr><th>Código</th><th class="txt">Cliente</th><th class="txt">CUIT</th><th class="txt">Localidad</th><th></th></tr></thead><tbody>' +
+    rows.map(c => `<tr><td>${esc(c.codigo)}</td><td class="txt">${esc(c.nombre)}${c.razon_social && c.razon_social !== c.nombre ? ' <span class="sub">(' + esc(c.razon_social) + ')</span>' : ''}${c.activo === false ? ' <span class="tag">inactivo</span>' : ''}</td><td class="txt">${esc(c.documento || '')}</td><td class="txt">${esc(c.localidad || '')}</td>
+      <td><button class="sec" onclick="admAgregar('${esc(c.codigo)}')">${ADM.sel.some(x => x.codigo === c.codigo) ? 'Agregado' : 'Agregar'}</button></td></tr>`).join('') + '</tbody></table>'
+    : '<div class="vacio">Sin resultados.</div>';
+}
+async function admBuscar(){
+  const q = $('#aBuscar').value.trim();
+  if (q.length < 2) { $('#aResultados').innerHTML = '<div class="vacio">Escribí al menos 2 letras o el código.</div>'; return; }
+  try { admTablaClientes(await api('/api/administracion/buscar?q=' + encodeURIComponent(q))); } catch(e) { if (e.message !== 'sin PIN') $('#aNota').textContent = 'Error: ' + e.message; }
+}
+$('#aBuscar').addEventListener('keydown', e => { if (e.key === 'Enter') admBuscar(); });
+async function admMismoCuit(){
+  if (!ADM.sel.length) return;
+  try {
+    const rows = await api('/api/administracion/buscar?cuit=' + encodeURIComponent(ADM.sel[0].codigo));
+    $('#aResultados').dataset.cuit = '1';
+    admTablaClientes(rows);
+    if (!rows.length) $('#aResultados').innerHTML = '<div class="vacio">Ese cliente no tiene CUIT cargado o no hay otros con el mismo.</div>';
+  } catch(e) { if (e.message !== 'sin PIN') $('#aNota').textContent = 'Error: ' + e.message; }
+}
+async function admElegirGrupo(){
+  const g = ADM.grupos.find(x => x.nombre === $('#aGrupo').value);
+  ADM.sel = []; $('#aNombreGrupo').value = g ? g.nombre : ''; delete $('#aTitulo').dataset.manual;
+  if (!g) { admPintarSel(); return; }
+  try {
+    const r = await api('/api/administracion/resumen?codigos=' + g.codigos.join(',') + '&desde=' + hoyAR() + '&hasta=' + hoyAR());
+    ADM.sel = r.clientes.map(c => ({ codigo: c.codigo, nombre: c.nombre, razon_social: c.razon_social, documento: c.documento }));
+    g.codigos.filter(c => !ADM.sel.some(x => x.codigo === c)).forEach(c => ADM.sel.push({ codigo: c, nombre: '(no encontrado en Gescom)' }));
+  } catch(e) { g.codigos.forEach(c => ADM.sel.push({ codigo: c, nombre: '' })); }
+  admPintarSel();
+}
+async function admGuardarGrupo(){
+  const nombre = $('#aNombreGrupo').value.trim();
+  if (!nombre || !ADM.sel.length) { $('#aGrupoEstado').textContent = 'Poné un nombre y elegí al menos un cliente.'; return; }
+  try {
+    await api('/api/administracion/grupos', { method: 'POST', body: JSON.stringify({ nombre, codigos: ADM.sel.map(c => c.codigo) }) });
+    await cargarAdm(); $('#aGrupo').value = nombre; $('#aGrupoEstado').textContent = '✔ Grupo guardado';
+  } catch(e) { if (e.message !== 'sin PIN') $('#aGrupoEstado').textContent = 'Error: ' + e.message; }
+}
+async function admBorrarGrupo(){
+  const nombre = $('#aGrupo').value;
+  if (!nombre) { $('#aGrupoEstado').textContent = 'Elegí primero el grupo que querés borrar.'; return; }
+  if (!confirm('¿Borrar el grupo "' + nombre + '"? Los clientes no se tocan.')) return;
+  try { await api('/api/administracion/grupos?nombre=' + encodeURIComponent(nombre), { method: 'DELETE' }); ADM.sel = []; $('#aNombreGrupo').value = ''; await cargarAdm(); $('#aGrupoEstado').textContent = 'Grupo borrado'; }
+  catch(e) { if (e.message !== 'sin PIN') $('#aGrupoEstado').textContent = 'Error: ' + e.message; }
+}
+async function admVer(){
+  if (!ADM.sel.length) { $('#aNota').textContent = 'Elegí al menos un cliente.'; return false; }
+  const hasta = $('#aHasta').value, desde = $('#aDesde').value;
+  if (!hasta) { $('#aNota').textContent = 'Poné la fecha "hasta".'; return false; }
+  $('#aNota').textContent = 'Calculando…';
+  try {
+    ADM.res = await api('/api/administracion/resumen?codigos=' + ADM.sel.map(c => c.codigo).join(',') + '&desde=' + desde + '&hasta=' + hasta);
+    $('#aNota').textContent = '';
+    admPintar();
+    return true;
+  } catch(e) { if (e.message !== 'sin PIN') $('#aNota').textContent = 'Error: ' + e.message; return false; }
+}
+function admConSuc(){ return $('#aSuc').checked && ADM.res && ADM.res.clientes.length > 1; }
+function admFilas(){
+  const r = ADM.res, f = [];
+  if (r.apertura) f.push({ f: r.desde, suc: '', comp: '', concepto: 'Saldo anterior', debe: 0, haber: 0, saldo: r.apertura, ap: true });
+  r.filas.forEach(m => f.push({ f: m.f, suc: m.cod, comp: (m.tipo + ' ' + (m.num || '')).trim(), concepto: m.concepto, debe: m.debe, haber: m.haber, saldo: m.saldo }));
+  return f;
+}
+function admPintar(){
+  const r = ADM.res; if (!r) return;
+  $('#aCard').style.display = '';
+  $('#aH2').textContent = $('#aTitulo').value || 'Resumen de cuenta corriente';
+  $('#aSub').textContent = 'Del ' + (r.desde ? fechaLabel(r.desde) : 'inicio') + ' al ' + fechaLabel(r.hasta) + ' · ' + r.clientes.length + ' cliente' + (r.clientes.length > 1 ? 's' : '') + ': ' + r.clientes.map(c => c.codigo).join(', ') +
+    (r.faltan.length ? ' · no encontrados: ' + r.faltan.join(', ') : '');
+  const c = r.control;
+  $('#aControl').innerHTML = c.estado === 'ok' ? `<span class="tag ok">✔ Saldo controlado contra la cuenta corriente de Gescom al ${fechaLabel(c.fecha)} (${fmtM(c.foto)})</span>`
+    : c.estado === 'difiere' ? `<span class="tag av">⚠ El saldo calculado (${fmtM(c.calculado)}) NO coincide con la cuenta corriente de Gescom al ${fechaLabel(c.fecha)} (${fmtM(c.foto)}). Diferencia: ${fmtM(c.diferencia)}. Revisá antes de enviar.</span>`
+    : `<span class="tag">${esc(c.texto)}</span>`;
+  if (r.avisoAncla) $('#aControl').innerHTML += ' <span class="tag av">' + esc(r.avisoAncla) + '</span>';
+  const suc = admConSuc();
+  const filas = admFilas().map(x => [fechaLabel(x.f), ...(suc ? [x.suc] : []), x.comp, x.concepto, x.debe ? fmtM(x.debe) : '', x.haber ? fmtM(x.haber) : '', fmtM(x.saldo)]);
+  filas.push(['TOTALES', ...(suc ? [''] : []), '', '', fmtM(r.totales.debe), fmtM(r.totales.haber), fmtM(r.saldoFinal)]);
+  const hdr = ['Fecha', ...(suc ? ['Sucursal'] : []), 'Comprobante', 'Concepto', 'Debe', 'Haber', 'Saldo'];
+  const txt = suc ? [0,1,2,3] : [0,1,2];
+  $('#tAdm').innerHTML = tabla('aRes', hdr, filas, { txtCols: txt, totalUltima: true });
+}
+function pdfAncho(t, tam){ let w = 0; for (const ch of String(t)) w += /[0-9$]/.test(ch) ? 0.556 : /[.,:]/.test(ch) ? 0.278 : ch === '-' ? 0.333 : ch === ' ' ? 0.278 : 0.55; return w * tam; }
+function crearPDFResumen(r, titulo, suc){
+  const W = 595, H = 842, M = 36, R = W - M;
+  const paginas = [[]]; let ops = paginas[0], y = H - M;
+  const T = (x, yy, t, tam, neg) => ops.push(`BT /${neg ? 'F2' : 'F1'} ${tam} Tf ${x.toFixed(1)} ${yy.toFixed(1)} Td (${pdfTxt(t)}) Tj ET`);
+  const TD = (xd, yy, t, tam, neg) => T(xd - pdfAncho(t, tam), yy, t, tam, neg);   // alineado a la derecha
+  const cols = suc ? { f: 36, s: 82, c: 114, con: 216, d: 415, h: 487, s2: R } : { f: 36, s: 0, c: 84, con: 190, d: 415, h: 487, s2: R };
+  const anchoCon = cols.d - 58 - cols.con;
+  const cab = () => {
+    ops.push(`0.9 g ${M} ${y - 4} ${R - M} 15 re f 0 g`);
+    T(cols.f + 2, y, 'Fecha', 8.5, true); if (suc) T(cols.s, y, 'Suc.', 8.5, true);
+    T(cols.c, y, 'Comprobante', 8.5, true); T(cols.con, y, 'Concepto', 8.5, true);
+    TD(cols.d, y, 'Debe', 8.5, true); TD(cols.h, y, 'Haber', 8.5, true); TD(cols.s2 - 2, y, 'Saldo', 8.5, true);
+    y -= 17;
+  };
+  const nueva = () => { ops = []; paginas.push(ops); y = H - M; cab(); };
+  // Encabezado
+  T(M, y - 8, 'BIDO S.R.L.', 15, true); y -= 24;
+  T(M, y, 'Resumen de cuenta corriente', 12, true); y -= 17;
+  T(M, y, titulo || r.clientes.map(c => c.razon_social || c.nombre).join(' / '), 11, true); y -= 14;
+  const cuits = [...new Set(r.clientes.map(c => c.documento).filter(Boolean))];
+  if (cuits.length) { T(M, y, 'CUIT: ' + cuits.join(' · '), 9, false); y -= 12; }
+  if (r.clientes.length > 1) {
+    const lista = 'Clientes: ' + r.clientes.map(c => c.codigo + ' ' + (c.nombre || '')).join(' · ');
+    const max = Math.floor((R - M) / 4.3);
+    for (let i = 0; i < lista.length; i += max) { T(M, y, lista.slice(i, i + max), 8, false); y -= 11; }
+  }
+  T(M, y, 'Período: ' + (r.desde ? fechaLabel(r.desde) : 'inicio') + ' al ' + fechaLabel(r.hasta) + '   ·   Emitido el ' + fechaLabel(hoyAR()), 9, false); y -= 20;
+  cab();
+  const fila = (x, neg) => {
+    if (y < 70) nueva();
+    T(cols.f + 2, y, fechaLabel(x.f), 8, neg);
+    if (suc) T(cols.s, y, x.suc, 8, neg);
+    T(cols.c, y, pdfCorto(x.comp, cols.con - cols.c - 4, 8), 8, neg);
+    T(cols.con, y, pdfCorto(x.concepto, anchoCon, 8), 8, neg);
+    if (x.debe) TD(cols.d, y, fmtM(x.debe), 8, neg);
+    if (x.haber) TD(cols.h, y, fmtM(x.haber), 8, neg);
+    TD(cols.s2 - 2, y, fmtM(x.saldo), 8, neg);
+    ops.push(`0.88 G 0.4 w ${M} ${y - 4} m ${R} ${y - 4} l S 0 G`);
+    y -= 13;
+  };
+  admFilas().forEach(x => fila(x, !!x.ap));
+  if (y < 90) nueva();
+  y -= 4; ops.push(`0 G 0.8 w ${M} ${y + 8} m ${R} ${y + 8} l S`);
+  T(cols.con, y - 4, 'TOTALES', 9, true); TD(cols.d, y - 4, fmtM(r.totales.debe), 9, true); TD(cols.h, y - 4, fmtM(r.totales.haber), 9, true); y -= 24;
+  T(M, y, 'Saldo al ' + fechaLabel(r.hasta) + ':', 11, true); TD(R, y, '$ ' + fmtM(r.saldoFinal), 12, true);
+  // Pie con número de página
+  paginas.forEach((pg, i) => pg.push(`BT /F1 8 Tf ${M} 24 Td (${pdfTxt('BIDO S.R.L. · Resumen de cuenta corriente')}) Tj ET`,
+    `BT /F1 8 Tf ${R - 60} 24 Td (${pdfTxt('Página ' + (i + 1) + ' de ' + paginas.length)}) Tj ET`));
+  const objs = []; const add = c => { objs.push(c); return objs.length; };
+  add('<< /Type /Catalog /Pages 2 0 R >>'); add('');
+  add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+  add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  const kids = [];
+  paginas.forEach(pg => {
+    const cont = pg.join('\n'), pid = objs.length + 1, cid = pid + 1;
+    add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${cid} 0 R >>`);
+    add(`<< /Length ${cont.length} >>\nstream\n${cont}\nendstream`);
+    kids.push(pid + ' 0 R');
+  });
+  objs[1] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${kids.length} >>`;
+  let out = '%PDF-1.4\n'; const off = [];
+  objs.forEach((o, i) => { off.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xr = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + off.map(o => String(o).padStart(10, '0') + ' 00000 n \n').join('');
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF`;
+  return Uint8Array.from(out, c => c.charCodeAt(0));
+}
+async function admPDF(){
+  if (!(await admVer())) return;
+  const r = ADM.res, c = r.control;
+  if (c.estado === 'difiere' && !confirm('El saldo calculado difiere de la cuenta corriente de Gescom en $ ' + fmtM(c.diferencia) + ' al ' + fechaLabel(c.fecha) + '.\n¿Descargar el PDF igual?')) return;
+  const titulo = $('#aTitulo').value.trim();
+  const nombre = 'Resumen_' + (titulo || r.clientes[0].codigo).replace(/[^A-Za-z0-9]+/g, '_') + '_hasta_' + r.hasta + '.pdf';
+  const file = new File([crearPDFResumen(r, titulo, admConSuc())], nombre, { type: 'application/pdf' });
+  const esCelular = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (esCelular && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: nombre }); return; } catch(e) { if (e.name === 'AbortError') return; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+}
 
 // ------------------------------------------------ MI RUTA (vendedor): ordenar con arrastrar y soltar
 let RV = null, rvTimer = null, rvPendiente = false;
