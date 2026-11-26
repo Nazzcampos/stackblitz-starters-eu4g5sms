@@ -56,7 +56,7 @@ Lista de faltantes: filtros por vendedor y día de visita (Lu a Vi), agrupada po
 ## /gestion (antes /clientes) — rediseño oscuro y perfil Bodeguista
 - La web ahora vive en `/gestion` (archivo `gestion.html`); `/clientes` redirige a `/gestion`. Las rutas de API `/api/seguimiento-clientes/...` no cambiaron.
 - Diseño oscuro (paleta BeniQ, Inter, iconos tipo Lucide en SVG), menú lateral expandible/contraíble y barra superior (hora, estado de base de datos, usuario).
-- Perfil **Bodeguista** (código `BODEGUISTA_PIN`, por defecto 1234, header `x-bod`): solo lectura. Ve la tabla mensual de indicadores y el detalle de errores de armado (con filtro por bodeguista). No ve incentivo ($), ranking, minutos ni cartelera; no puede quitar errores, editar minutos ni importar. El servidor solo le habilita `GET /api/seguimiento-clientes/deposito` (sin incentivo); todos los POST siguen siendo del encargado.
+- Perfil **Bodeguista** (código `BODEGUISTA_PIN`, por defecto 1234, header `x-bod`): solo lectura, salvo "Pedir cartel" (ver abajo). Ve la tabla mensual de indicadores y el detalle de errores de armado (con filtro por bodeguista). No ve incentivo ($), ranking, minutos ni cartelera; no puede quitar errores, editar minutos ni importar. El servidor solo le habilita `GET /api/seguimiento-clientes/deposito` (sin incentivo); todos los POST siguen siendo del encargado.
 
 ## Administración — resúmenes de cuenta corriente en PDF (perfil "Administración" en /gestion)
 - Código `ADMINISTRACION_PIN` (por defecto 1234, header `x-adm`). Código en `server/rutas/clientes.js` (sección ADMINISTRACIÓN) + vista `#vAdm` en `gestion.html`.
@@ -64,3 +64,8 @@ Lista de faltantes: filtros por vendedor y día de visita (Lu a Vi), agrupada po
 - Saldo anclado a las fotos diarias de `cta_cte_cliente` (variable `CTA_FOTOS_DESDE`, por defecto 2026-07-27): lo que no se puede detallar queda como "Saldo anterior". El saldo se controla contra la foto de la fecha final y la pantalla avisa si no coincide.
 - Clientes asociados (sucursales/bocas): grupos guardados en la tabla propia `adm_grupos` (Supabase), con sugerencia por mismo CUIT. Gescom no sincroniza su módulo de "clientes asociados".
 - API: `/api/administracion/{grupos,buscar,resumen}`.
+
+## Artículos y carteles de rack (bodeguistas / encargado → Administración)
+- Pestaña **Artículos** (perfiles Bodeguista y Encargado): buscador por nombre o código de artículos activos de Gescom (`GET /api/seguimiento-clientes/articulos?q=`). El filtro de "activo" se detecta solo mirando las columnas de `item` (activo / habilitado / inactivo / baja).
+- "Pedir cartel" (`POST .../articulos/pedir-cartel`): guarda el pedido en la tabla propia `cartel_pedidos` (código y nombre salen de Gescom, no del navegador; un artículo ya pedido y pendiente no se duplica). Es lo único que el bodeguista puede escribir.
+- Perfil **Administración**: tarjeta "Carteles de rack" con los pedidos pendientes/impresos; "Generar carteles" baja un PDF A4 horizontal, 4 carteles por hoja (código grande + nombre, con guías de corte punteadas) y marca los pedidos como impresos. Se pueden descartar pedidos. API: `/api/administracion/carteles`.

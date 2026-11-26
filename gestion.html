@@ -160,12 +160,14 @@
   </div>
   <div class="menuh"><span>MENÚ</span><button onclick="menuLateral()" title="Expandir / contraer"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button></div>
   <nav class="tabs">
-      <button class="tab on" data-vista="vClientes" title="Clientes y altas"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg><span>Clientes y altas</span></button>
-      <button class="tab" data-vista="vMarcas" title="Cobertura de marcas"><svg class="i" viewBox="0 0 24 24"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.2"/></svg><span>Cobertura de marcas</span></button>
-      <button class="tab" data-vista="vStock" title="Stock"><svg class="i" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg><span>Stock</span></button>
-      <button class="tab" data-vista="vCombos" title="Combos Pehuamar"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Combos Pehuamar</span></button>
-      <button class="tab" data-vista="vCCC" title="CCC"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>CCC</span></button>
-      <button class="tab" data-vista="vRuteo" title="Ruteo vendedores"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h8"/></svg><span>Ruteo vendedores</span></button>
+      <button class="tab on" data-roles="sup" data-vista="vClientes" title="Clientes y altas"><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg><span>Clientes y altas</span></button>
+      <button class="tab" data-roles="sup" data-vista="vMarcas" title="Cobertura de marcas"><svg class="i" viewBox="0 0 24 24"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.2"/></svg><span>Cobertura de marcas</span></button>
+      <button class="tab" data-roles="sup" data-vista="vStock" title="Stock"><svg class="i" viewBox="0 0 24 24"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="m3 8 9 5 9-5M12 13v8"/></svg><span>Stock</span></button>
+      <button class="tab" data-roles="sup" data-vista="vCombos" title="Combos Pehuamar"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Combos Pehuamar</span></button>
+      <button class="tab" data-roles="sup" data-vista="vCCC" title="CCC"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>CCC</span></button>
+      <button class="tab" data-roles="sup" data-vista="vRuteo" title="Ruteo vendedores"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h8"/></svg><span>Ruteo vendedores</span></button>
+      <button class="tab" data-roles="bod enc" data-vista="vDeposito" title="Indicadores de depósito"><svg class="i" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg><span>Indicadores</span></button>
+      <button class="tab" data-roles="bod enc" data-vista="vArticulos" title="Artículos"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span>Artículos</span></button>
   </nav>
   <div class="camion"><img src="/public/img/menu-gestion.jpg" alt="BeniQ"></div>
 </aside>
@@ -468,8 +470,33 @@
     </div>
   </section>
 
+  <!-- ======================= ARTÍCULOS (bodeguistas y encargado) ======================= -->
+  <section class="vista" id="vArticulos">
+    <div class="card">
+      <div class="top"><div><h2>Buscador de artículos</h2>
+        <div class="sub">Escribí el nombre o el código del artículo activo. Si en el rack falta el cartel, tocá "Pedir cartel".</div></div></div>
+      <div class="filtros" style="margin-bottom:10px">
+        <label style="flex:1;min-width:240px">Nombre o código <input id="aqBuscar" placeholder="ej. toddy 360  ·  1188" autocomplete="off" style="font-size:17px;padding:12px 14px"></label>
+        <button onclick="artBuscar()" style="padding:12px 20px">Buscar</button>
+      </div>
+      <div class="sub" id="aqEstado"></div>
+      <div id="aqLista"></div>
+    </div>
+  </section>
+
   <!-- ======================= ADMINISTRACIÓN: resúmenes de cuenta ======================= -->
   <section class="vista" id="vAdm">
+    <div class="card" id="aCarteles">
+      <div class="top"><div><h2>Carteles de rack <span class="tag av" id="ctPend" style="display:none"></span></h2>
+        <div class="sub">Pedidos de los bodeguistas. Elegí los que querés imprimir y tocá "Generar carteles": baja un PDF (4 por hoja A4 horizontal) y los marca como impresos.</div></div></div>
+      <div class="filtros" style="margin-bottom:10px">
+        <label>Ver <select id="ctEstado" onchange="cargarCarteles()"><option value="pendiente">Pendientes</option><option value="impreso">Impresos (últimos 60)</option></select></label>
+        <button onclick="generarCarteles()">Generar carteles</button>
+        <span class="sub" id="ctNota"></span>
+      </div>
+      <div class="tw" id="tCart" style="max-height:420px"></div>
+    </div>
+
     <div class="card">
       <div class="top"><div><h2>1 · ¿De quién es el resumen?</h2>
         <div class="sub">Elegí un grupo ya armado (por ejemplo una cadena con varias bocas) o buscá los clientes por código, nombre o CUIT.</div></div></div>
@@ -744,7 +771,8 @@ function iniciar(){
   const rol = getRol(), sup = rol === 'sup', adm = rol === 'adm', bod = rol === 'bod', enc = rol === 'enc' || bod;
   document.body.classList.toggle('bod', bod); pintarCascaron();
   if (bod) depModo = 'mes';
-  document.querySelector('.tabs').style.display = sup ? 'flex' : 'none';
+  document.querySelector('.tabs').style.display = (sup || enc) ? 'flex' : 'none';
+  document.querySelectorAll('.tab').forEach(t => { t.style.display = t.dataset.roles.split(' ').includes(rol) ? '' : 'none'; });
   document.querySelectorAll('.vista').forEach(v => v.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   $('#hTitulo').textContent = adm ? 'Administración' : sup ? 'Seguimiento de clientes' : bod ? 'Indicadores de depósito' : enc ? 'Indicadores de depósito' : 'Mi ruta de ventas';
@@ -760,6 +788,7 @@ function iniciar(){
     vistaActual = 'vAdm';
     cargarAdm();
   } else if (enc) {
+    document.querySelector('.tab[data-vista="vDeposito"]').classList.add('on');
     $('#vDeposito').classList.add('on');
     vistaActual = 'vDeposito';
     cargarDeposito(false);
@@ -779,12 +808,13 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
   if (vistaActual === 'vStock' && !STOCK) cargarStock(false);
   if (vistaActual === 'vCombos' && !COMB) cargarCombos(false);
     if (vistaActual === 'vCCC' && !CCC) cargarCCC(false);
+  if (vistaActual === 'vArticulos') $('#aqBuscar').focus();
   if (vistaActual === 'vRuteo') cargarRuteo();
 }));
 
 function actualizar(){
   if (getRol() === 'vend') { cargarRutaVend(RV && RV.dia, RV && RV.ruta); return; }
-  if (getRol() === 'enc' || getRol() === 'bod') { cargarDeposito(true); return; }
+  if (getRol() === 'enc' || getRol() === 'bod') { if (vistaActual === 'vArticulos') artBuscar(); else cargarDeposito(true); return; }
   if (getRol() === 'adm') { cargarAdm(); return; }
   cargar(true);
   if (vistaActual === 'vMarcas') cargarMarcas(true);
@@ -1951,9 +1981,10 @@ const fmtM = n => Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits
 async function cargarAdm(){
   if (!$('#aHasta').value) $('#aHasta').value = hoyAR();
   if (!$('#aDesde').value) $('#aDesde').value = hoyAR().slice(0, 4) + '-01-01';
-  try { ADM.grupos = await api('/api/administracion/grupos'); } catch(e) { if (e.message !== 'sin PIN') $('#aNota').textContent = 'Grupos: ' + e.message; ADM.grupos = []; }
+  try { const g = await api('/api/administracion/grupos'); ADM.grupos = Array.isArray(g) ? g : []; } catch(e) { if (e.message !== 'sin PIN') $('#aNota').textContent = 'Grupos: ' + e.message; ADM.grupos = []; }
   $('#aGrupo').innerHTML = '<option value="">— ninguno —</option>' + ADM.grupos.map(g => `<option value="${esc(g.nombre)}">${esc(g.nombre)} (${g.codigos.length})</option>`).join('');
   admPintarSel();
+  cargarCarteles();
 }
 async function admAgregar(codigo){
   codigo = String(codigo);
@@ -2137,6 +2168,102 @@ async function admPDF(){
     try { await navigator.share({ files: [file], title: nombre }); return; } catch(e) { if (e.name === 'AbortError') return; }
   }
   const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+}
+
+
+// ------------------------------------------------ ARTÍCULOS (bodeguistas): buscador y pedido de cartel
+let AQ = { t: null };
+async function artBuscar(){
+  const q = $('#aqBuscar').value.trim();
+  if (q.length < 2) { $('#aqEstado').textContent = 'Escribí al menos 2 letras o el código.'; $('#aqLista').innerHTML = ''; return; }
+  $('#aqEstado').textContent = 'Buscando…';
+  try {
+    const r = await api('/api/seguimiento-clientes/articulos?q=' + encodeURIComponent(q));
+    $('#aqEstado').textContent = r.articulos.length ? (r.hayMas ? 'Se muestran los primeros 60: afiná la búsqueda.' : r.articulos.length + ' artículo' + (r.articulos.length > 1 ? 's' : '')) : 'No hay artículos activos con eso.';
+    $('#aqLista').innerHTML = r.articulos.map(a => `<div class="rv-item" style="max-width:none">
+      <div style="font-size:26px;font-weight:700;min-width:96px;color:var(--datos)">${esc(a.codigo)}</div>
+      <div class="rv-main"><div class="rv-nom" style="font-size:16px">${esc(a.descripcion)}</div><div class="rv-dir">${esc(a.proveedor)}</div></div>
+      ${a.pedido ? '<span class="tag ok">Cartel pedido ✓</span>' : `<button class="sec" onclick="artPedir('${esc(a.codigo)}', this)">Pedir cartel</button>`}
+    </div>`).join('');
+  } catch(e) { if (e.message !== 'sin PIN') $('#aqEstado').textContent = 'Error: ' + e.message; }
+}
+$('#aqBuscar').addEventListener('input', () => { clearTimeout(AQ.t); AQ.t = setTimeout(artBuscar, 350); });
+$('#aqBuscar').addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(AQ.t); artBuscar(); } });
+async function artPedir(codigo, btn){
+  btn.disabled = true;
+  try {
+    await api('/api/seguimiento-clientes/articulos/pedir-cartel', { method: 'POST', body: JSON.stringify({ codigo }) });
+    btn.outerHTML = '<span class="tag ok">Cartel pedido ✓</span>';
+  } catch(e) { btn.disabled = false; if (e.message !== 'sin PIN') alert('No se pudo pedir el cartel: ' + e.message); }
+}
+
+// ------------------------------------------------ ADMINISTRACIÓN: pedidos de cartel y PDF de carteles
+let CART_ADM = [];
+async function cargarCarteles(){
+  try {
+    const r = await api('/api/administracion/carteles?estado=' + $('#ctEstado').value);
+    CART_ADM = r.carteles;
+    $('#ctPend').style.display = r.pendientes ? '' : 'none'; $('#ctPend').textContent = r.pendientes + ' pendiente' + (r.pendientes === 1 ? '' : 's');
+    const imp = $('#ctEstado').value === 'impreso';
+    $('#tCart').innerHTML = CART_ADM.length ? '<table><thead><tr><th><input type="checkbox" checked onchange="document.querySelectorAll(\'.cChk\').forEach(c => c.checked = this.checked)"></th><th>Código</th><th class="txt">Artículo</th><th class="txt">Pedido</th>' + (imp ? '<th class="txt">Impreso</th>' : '') + '<th></th></tr></thead><tbody>' +
+      CART_ADM.map(c => `<tr><td><input type="checkbox" class="cChk" data-id="${c.id}" checked></td><td><b>${esc(c.codigo)}</b></td><td class="txt">${esc(c.nombre)}</td><td class="txt">${esc(c.pedido)}</td>${imp ? `<td class="txt">${esc(c.impreso || '')}</td>` : ''}<td><button class="sec" onclick="borrarCartel(${c.id})">Descartar</button></td></tr>`).join('') + '</tbody></table>'
+      : '<div class="vacio">' + (imp ? 'Todavía no se imprimió ningún cartel.' : 'No hay carteles pendientes.') + '</div>';
+  } catch(e) { if (e.message !== 'sin PIN') $('#ctNota').textContent = 'Error: ' + e.message; }
+}
+async function borrarCartel(id){
+  if (!confirm('¿Descartar este pedido de cartel?')) return;
+  try { await api('/api/administracion/carteles?id=' + id, { method: 'DELETE' }); cargarCarteles(); } catch(e) { if (e.message !== 'sin PIN') $('#ctNota').textContent = 'Error: ' + e.message; }
+}
+const ANCHO_B = { A:.722,B:.722,C:.722,D:.722,E:.667,F:.611,G:.778,H:.722,I:.278,J:.556,K:.722,L:.611,M:.833,N:.722,O:.778,P:.667,Q:.778,R:.722,S:.667,T:.611,U:.722,V:.667,W:.944,X:.667,Y:.667,Z:.611,' ':.278,'.':.278,',':.278,'-':.333,'/':.278,'%':.889,'&':.722,'(':.333,')':.333 };
+function pdfAnchoB(t, tam){ let w = 0; for (const ch of String(t)) w += ANCHO_B[ch] != null ? ANCHO_B[ch] : /[0-9]/.test(ch) ? .556 : /[a-zñáéíóú]/.test(ch) ? .6 : .72; return w * tam * 1.02; }
+function crearPDFCarteles(lista){
+  const W = 842, H = 595, cw = W / 2, ch = H / 2, paginas = [];
+  const centrado = (ops, x0, ancho, y, t, tam) => ops.push(`BT /F2 ${tam.toFixed(1)} Tf ${(x0 + (ancho - pdfAnchoB(t, tam)) / 2).toFixed(1)} ${y.toFixed(1)} Td (${pdfTxt(t)}) Tj ET`);
+  lista.forEach((c, i) => {
+    if (i % 4 === 0) paginas.push([`0.75 G 0.5 w [4 4] 0 d ${cw} 0 m ${cw} ${H} l S 0 ${ch} m ${W} ${ch} l S [] 0 d 0 G`]);
+    const ops = paginas[paginas.length - 1], k = i % 4, x0 = (k % 2) * cw, y0 = (k < 2 ? ch : 0);   // 0,1 arriba · 2,3 abajo
+    const ancho = cw - 36, cod = String(c.codigo);
+    const tamCod = Math.min(150, ancho / (cod.length * .556 * 1.02));
+    centrado(ops, x0, cw, y0 + ch * 0.46, cod, tamCod);
+    const nom = String(c.nombre || '').trim().replace(/\s+/g, ' ');
+    let tam = 34; while (tam > 18 && pdfAnchoB(nom, tam) > ancho) tam -= 2;
+    if (pdfAnchoB(nom, tam) <= ancho) centrado(ops, x0, cw, y0 + ch * 0.20, nom, tam);
+    else {
+      const pal = nom.split(' '); let mejor = [nom, ''], dif = 1e9;
+      for (let j = 1; j < pal.length; j++) { const a = pal.slice(0, j).join(' '), b = pal.slice(j).join(' '); const d = Math.abs(pdfAnchoB(a, 10) - pdfAnchoB(b, 10)); if (d < dif) { dif = d; mejor = [a, b]; } }
+      let t2 = 30; while (t2 > 12 && Math.max(pdfAnchoB(mejor[0], t2), pdfAnchoB(mejor[1], t2)) > ancho) t2 -= 1;
+      centrado(ops, x0, cw, y0 + ch * 0.23, mejor[0], t2); centrado(ops, x0, cw, y0 + ch * 0.23 - t2 * 1.1, mejor[1], t2);
+    }
+  });
+  const objs = []; const add = c => { objs.push(c); return objs.length; };
+  add('<< /Type /Catalog /Pages 2 0 R >>'); add('');
+  add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+  add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  const kids = [];
+  paginas.forEach(pg => {
+    const cont = pg.join('\n'), pid = objs.length + 1, cid = pid + 1;
+    add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${cid} 0 R >>`);
+    add(`<< /Length ${cont.length} >>\nstream\n${cont}\nendstream`);
+    kids.push(pid + ' 0 R');
+  });
+  objs[1] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${kids.length} >>`;
+  let out = '%PDF-1.4\n'; const off = [];
+  objs.forEach((o, i) => { off.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xr = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + off.map(o => String(o).padStart(10, '0') + ' 00000 n \n').join('');
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF`;
+  return Uint8Array.from(out, c => c.charCodeAt(0));
+}
+async function generarCarteles(){
+  const ids = [...document.querySelectorAll('.cChk:checked')].map(c => Number(c.dataset.id));
+  const lista = CART_ADM.filter(c => ids.includes(c.id));
+  if (!lista.length) { $('#ctNota').textContent = 'No hay carteles elegidos.'; return; }
+  const nombre = 'Carteles_rack_' + hoyAR() + '.pdf';
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new File([crearPDFCarteles(lista)], nombre, { type: 'application/pdf' })); a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+  if ($('#ctEstado').value === 'pendiente') {
+    try { await api('/api/administracion/carteles/impreso', { method: 'POST', body: JSON.stringify({ ids }) }); $('#ctNota').textContent = '✔ PDF generado (' + lista.length + ') y pedidos marcados como impresos'; cargarCarteles(); }
+    catch(e) { if (e.message !== 'sin PIN') $('#ctNota').textContent = 'El PDF se bajó pero no se pudo marcar como impreso: ' + e.message; }
+  }
 }
 
 // ------------------------------------------------ MI RUTA (vendedor): ordenar con arrastrar y soltar

@@ -1408,6 +1408,110 @@ app.get('/api/administracion/resumen', controlAdministracion, async (req, res) =
     } catch (err) { console.error('❌ [admin] resumen:', err.message); res.status(500).json({ error: err.message }); }
 });
 
+
+// =====================================================================
+//  ARTÍCULOS Y CARTELES DE RACK
+//  Bodeguistas (y encargado) buscan un artículo activo por nombre o código para saber cuál es al contar stock, y pueden
+//  "Pedir cartel". Administración ve los pedidos y genera el PDF con los carteles (código grande + nombre) para imprimir.
+//  Los pedidos se guardan en la base propia: tabla cartel_pedidos.
+// =====================================================================
+let promesaActivoItem = null;
+function condicionItemActivo() {
+    if (!promesaActivoItem) {
+        promesaActivoItem = pool.query(`/*RETORNO*/ SELECT column_name FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'item' AND column_name IN ('activo', 'inactivo', 'habilitado', 'baja', 'dado_de_baja')`)
+            .then(r => {
+                const n = r.rows.map(c => c.column_name);
+                if (n.includes('activo')) return { sql: ` AND COALESCE(i.activo::text, 'true') NOT IN ('false', 'f', '0')`, col: 'activo' };
+                if (n.includes('habilitado')) return { sql: ` AND COALESCE(i.habilitado::text, 'true') NOT IN ('false', 'f', '0')`, col: 'habilitado' };
+                const baja = ['inactivo', 'baja', 'dado_de_baja'].find(c => n.includes(c));
+                if (baja) return { sql: ` AND COALESCE(i.${baja}::text, 'false') IN ('false', 'f', '0')`, col: baja };
+                return { sql: '', col: '' };
+            })
+            .catch(() => { promesaActivoItem = null; return { sql: '', col: '' }; });
+    }
+    return promesaActivoItem;
+}
+
+let tablaCartelesLista = false;
+async function asegurarTablaCarteles() {
+    if (!db) throw new Error('Sin base propia (DATABASE_URL): no se pueden guardar los pedidos de cartel');
+    if (tablaCartelesLista) return;
+    await db.query(`CREATE TABLE IF NOT EXISTS cartel_pedidos (
+        id serial PRIMARY KEY, codigo text NOT NULL, nombre text NOT NULL,
+        estado text NOT NULL DEFAULT 'pendiente', pedido timestamptz NOT NULL DEFAULT now(), impreso timestamptz)`);
+    tablaCartelesLista = true;
+}
+
+app.get('/api/seguimiento-clientes/articulos', controlLectorDeposito, async (req, res) => {
+    try {
+        const palabras = String(req.query.q || '').trim().split(/\s+/).filter(Boolean).slice(0, 5).map(w => w.slice(0, 40));
+        if (!palabras.length || palabras.join('').length < 2) return res.json({ articulos: [] });
+        const act = await condicionItemActivo();
+        const params = [TENANT]; const conds = [];
+        palabras.forEach(w => { params.push('%' + w.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`(i.descripcion ILIKE $${params.length} OR i.codigo::text ILIKE $${params.length})`); });
+        const r = await pool.query(`
+            SELECT DISTINCT ON (i.codigo) i.codigo::text AS codigo, i.descripcion, COALESCE(i.prov_razonsocial, '') AS proveedor
+            FROM item i
+            WHERE i.tenant_id = $1${act.sql} AND ${conds.join(' AND ')}
+            ORDER BY i.codigo, i.descripcion
+            LIMIT 400`, params);
+        const q1 = palabras[0].toLowerCase();
+        const filas = r.rows.sort((a, b) =>
+            (a.codigo.toLowerCase() === q1 ? 0 : a.codigo.toLowerCase().startsWith(q1) ? 1 : 2) - (b.codigo.toLowerCase() === q1 ? 0 : b.codigo.toLowerCase().startsWith(q1) ? 1 : 2)
+            || String(a.descripcion).localeCompare(String(b.descripcion))).slice(0, 60);
+        let pendientes = new Set();
+        try {
+            await asegurarTablaCarteles();
+            (await db.query(`SELECT codigo FROM cartel_pedidos WHERE estado = 'pendiente' AND codigo = ANY($1::text[])`, [filas.map(f => f.codigo)])).rows.forEach(x => pendientes.add(x.codigo));
+        } catch (e) { /* sin base propia: igual se puede buscar */ }
+        res.json({ articulos: filas.map(f => ({ ...f, pedido: pendientes.has(f.codigo) })), filtroActivo: act.col || null, hayMas: r.rows.length > 60 });
+    } catch (err) { console.error('❌ [articulos] buscar:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/seguimiento-clientes/articulos/pedir-cartel', controlLectorDeposito, async (req, res) => {
+    try {
+        const codigo = String((req.body || {}).codigo || '').trim().slice(0, 40);
+        if (!codigo) return res.status(400).json({ error: 'Falta el código' });
+        const r = await pool.query(`SELECT i.codigo::text AS codigo, i.descripcion FROM item i WHERE i.tenant_id = $1 AND i.codigo::text = $2 LIMIT 1`, [TENANT, codigo]);
+        if (!r.rows.length) return res.status(404).json({ error: 'Ese artículo no existe en Gescom' });
+        await asegurarTablaCarteles();
+        const ya = await db.query(`SELECT 1 FROM cartel_pedidos WHERE codigo = $1 AND estado = 'pendiente' LIMIT 1`, [codigo]);
+        if (!ya.rows.length) await db.query(`INSERT INTO cartel_pedidos (codigo, nombre) VALUES ($1, $2)`, [codigo, String(r.rows[0].descripcion || '').trim()]);
+        res.json({ ok: true, yaPedido: !!ya.rows.length });
+    } catch (err) { console.error('❌ [articulos] pedir cartel:', err.message); res.status(500).json({ error: err.message }); }
+});
+
+// Administración: pedidos de cartel
+app.get('/api/administracion/carteles', controlAdministracion, async (req, res) => {
+    try {
+        await asegurarTablaCarteles();
+        const estado = req.query.estado === 'impreso' ? 'impreso' : 'pendiente';
+        const r = await db.query(`
+            SELECT id, codigo, nombre, estado, to_char(pedido AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM-DD HH24:MI') AS pedido,
+                   to_char(impreso AT TIME ZONE 'America/Argentina/Buenos_Aires', 'YYYY-MM-DD HH24:MI') AS impreso
+            FROM cartel_pedidos WHERE estado = $1 ORDER BY ${estado === 'impreso' ? 'impreso DESC LIMIT 60' : 'pedido'}`, [estado]);
+        const cant = await db.query(`SELECT count(*)::int AS n FROM cartel_pedidos WHERE estado = 'pendiente'`);
+        res.json({ carteles: r.rows, pendientes: cant.rows[0].n });
+    } catch (err) { console.error('❌ [admin] carteles:', err.message); res.status(500).json({ error: err.message }); }
+});
+app.post('/api/administracion/carteles/impreso', controlAdministracion, async (req, res) => {
+    try {
+        const ids = ((req.body || {}).ids || []).map(Number).filter(n => Number.isInteger(n) && n > 0).slice(0, 500);
+        if (!ids.length) return res.status(400).json({ error: 'No hay carteles elegidos' });
+        await asegurarTablaCarteles();
+        await db.query(`UPDATE cartel_pedidos SET estado = 'impreso', impreso = now() WHERE id = ANY($1::int[]) AND estado = 'pendiente'`, [ids]);
+        res.json({ ok: true });
+    } catch (err) { console.error('❌ [admin] carteles impreso:', err.message); res.status(500).json({ error: err.message }); }
+});
+app.delete('/api/administracion/carteles', controlAdministracion, async (req, res) => {
+    try {
+        await asegurarTablaCarteles();
+        await db.query(`DELETE FROM cartel_pedidos WHERE id = $1`, [Number(req.query.id) || 0]);
+        res.json({ ok: true });
+    } catch (err) { console.error('❌ [admin] carteles borrar:', err.message); res.status(500).json({ error: err.message }); }
+});
+
 console.log('📊 Módulo provisorio de seguimiento de clientes y cobertura de marcas activo en /clientes');
 
 module.exports = {};
