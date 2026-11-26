@@ -168,6 +168,8 @@
       <button class="tab" data-roles="sup" data-vista="vRuteo" title="Ruteo vendedores"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h8"/></svg><span>Ruteo vendedores</span></button>
       <button class="tab" data-roles="bod enc" data-vista="vDeposito" title="Indicadores de depósito"><svg class="i" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg><span>Indicadores</span></button>
       <button class="tab" data-roles="bod enc" data-vista="vArticulos" title="Artículos"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span>Artículos</span></button>
+      <button class="tab" data-roles="adm" data-vista="vAdm" title="Resúmenes de cuenta"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span>Resúmenes de cuenta</span></button>
+      <button class="tab" data-roles="adm" data-vista="vCarteles" title="Carteles de rack"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4M7 9h10"/></svg><span>Carteles de rack</span></button>
   </nav>
   <div class="camion"><img src="/public/img/menu-gestion.jpg" alt="BeniQ"></div>
 </aside>
@@ -484,8 +486,8 @@
     </div>
   </section>
 
-  <!-- ======================= ADMINISTRACIÓN: resúmenes de cuenta ======================= -->
-  <section class="vista" id="vAdm">
+  <!-- ======================= CARTELES DE RACK (administración) ======================= -->
+  <section class="vista" id="vCarteles">
     <div class="card" id="aCarteles">
       <div class="top"><div><h2>Carteles de rack <span class="tag av" id="ctPend" style="display:none"></span></h2>
         <div class="sub">Pedidos de los bodeguistas. Elegí los que querés imprimir y tocá "Generar carteles": baja un PDF (4 por hoja A4 horizontal) y los marca como impresos.</div></div></div>
@@ -496,7 +498,10 @@
       </div>
       <div class="tw" id="tCart" style="max-height:420px"></div>
     </div>
+  </section>
 
+  <!-- ======================= ADMINISTRACIÓN: resúmenes de cuenta ======================= -->
+  <section class="vista" id="vAdm">
     <div class="card">
       <div class="top"><div><h2>1 · ¿De quién es el resumen?</h2>
         <div class="sub">Elegí un grupo ya armado (por ejemplo una cadena con varias bocas) o buscá los clientes por código, nombre o CUIT.</div></div></div>
@@ -771,12 +776,12 @@ function iniciar(){
   const rol = getRol(), sup = rol === 'sup', adm = rol === 'adm', bod = rol === 'bod', enc = rol === 'enc' || bod;
   document.body.classList.toggle('bod', bod); pintarCascaron();
   if (bod) depModo = 'mes';
-  document.querySelector('.tabs').style.display = (sup || enc) ? 'flex' : 'none';
+  document.querySelector('.tabs').style.display = (sup || enc || adm) ? 'flex' : 'none';
   document.querySelectorAll('.tab').forEach(t => { t.style.display = t.dataset.roles.split(' ').includes(rol) ? '' : 'none'; });
   document.querySelectorAll('.vista').forEach(v => v.classList.remove('on'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
   $('#hTitulo').textContent = adm ? 'Administración' : sup ? 'Seguimiento de clientes' : bod ? 'Indicadores de depósito' : enc ? 'Indicadores de depósito' : 'Mi ruta de ventas';
-  $('#hSub').textContent = adm ? 'BIDO S.R.L. · resúmenes de cuenta corriente' : sup ? 'BIDO S.R.L. · datos de Gescom' : bod ? 'BIDO S.R.L. · bodeguista (solo lectura)' : enc ? 'BIDO S.R.L. · encargado de depósito' : 'BIDO S.R.L. · vendedor ' + getCod() + (ses.get('clientesNombre') ? ' · ' + ses.get('clientesNombre') : '');
+  $('#hSub').textContent = adm ? 'BIDO S.R.L. · administración' : sup ? 'BIDO S.R.L. · datos de Gescom' : bod ? 'BIDO S.R.L. · bodeguista (solo lectura)' : enc ? 'BIDO S.R.L. · encargado de depósito' : 'BIDO S.R.L. · vendedor ' + getCod() + (ses.get('clientesNombre') ? ' · ' + ses.get('clientesNombre') : '');
   $('#estado').textContent = '—';
   if (sup) {
     document.querySelector('.tab[data-vista="vClientes"]').classList.add('on');
@@ -784,6 +789,7 @@ function iniciar(){
     vistaActual = 'vClientes';
     cargar(false);
   } else if (adm) {
+    document.querySelector('.tab[data-vista="vAdm"]').classList.add('on');
     $('#vAdm').classList.add('on');
     vistaActual = 'vAdm';
     cargarAdm();
@@ -808,6 +814,7 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
   if (vistaActual === 'vStock' && !STOCK) cargarStock(false);
   if (vistaActual === 'vCombos' && !COMB) cargarCombos(false);
     if (vistaActual === 'vCCC' && !CCC) cargarCCC(false);
+  if (vistaActual === 'vCarteles') cargarCarteles();
   if (vistaActual === 'vArticulos') $('#aqBuscar').focus();
   if (vistaActual === 'vRuteo') cargarRuteo();
 }));
@@ -815,7 +822,7 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
 function actualizar(){
   if (getRol() === 'vend') { cargarRutaVend(RV && RV.dia, RV && RV.ruta); return; }
   if (getRol() === 'enc' || getRol() === 'bod') { if (vistaActual === 'vArticulos') artBuscar(); else cargarDeposito(true); return; }
-  if (getRol() === 'adm') { cargarAdm(); return; }
+  if (getRol() === 'adm') { if (vistaActual === 'vCarteles') cargarCarteles(); else cargarAdm(); return; }
   cargar(true);
   if (vistaActual === 'vMarcas') cargarMarcas(true);
   if (vistaActual === 'vStock') cargarStock(true);
@@ -1984,7 +1991,6 @@ async function cargarAdm(){
   try { const g = await api('/api/administracion/grupos'); ADM.grupos = Array.isArray(g) ? g : []; } catch(e) { if (e.message !== 'sin PIN') $('#aNota').textContent = 'Grupos: ' + e.message; ADM.grupos = []; }
   $('#aGrupo').innerHTML = '<option value="">— ninguno —</option>' + ADM.grupos.map(g => `<option value="${esc(g.nombre)}">${esc(g.nombre)} (${g.codigos.length})</option>`).join('');
   admPintarSel();
-  cargarCarteles();
 }
 async function admAgregar(codigo){
   codigo = String(codigo);
