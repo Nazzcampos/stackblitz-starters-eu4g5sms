@@ -506,6 +506,16 @@
       <div class="sub" id="rpAviso" style="margin-bottom:8px"></div>
       <div class="tabla" id="tRepo"></div>
     </div>
+    <div class="card" style="margin-top:14px">
+      <div class="top"><div><h2>Hoja de lo ya repuesto</h2>
+        <div class="sub">Toma de Gescom los Movimientos de Stock con motivo "Movimiento de Almacenamiento hacia Picking" del día elegido y arma la hoja para el encargado (unidades convertidas a cajas).</div></div></div>
+      <div class="filtros" style="margin-bottom:10px">
+        <label>Fecha <input type="date" id="rpMovFecha"></label>
+        <button onclick="cargarMovRepo()">Buscar movimientos</button>
+        <button onclick="imprimirMovRepo()">Imprimir / guardar PDF</button>
+      </div>
+      <div class="tabla" id="tMov"></div>
+    </div>
   </section>
   <section class="vista" id="vCarteles">
     <div class="card" id="aCarteles">
@@ -2283,6 +2293,26 @@ function imprimirRepo(){
   w.document.write('<!doctype html><meta charset="utf-8"><title>Reposición</title><style>body{font:11px Arial,sans-serif;margin:14px}h1{font-size:16px;margin:0 0 4px}p{margin:0 0 8px;color:#444}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:3px 5px;text-align:right}th{background:#e8e8e8}td:nth-child(2),td:nth-child(4),th:nth-child(4){text-align:left}tr{page-break-inside:avoid}@page{size:A4 landscape;margin:10mm}</style>' +
     '<h1>' + esc(t) + ' · ' + fechaLabel(hoyAR()) + '</h1><p>Picking ' + REPO.dias_picking + ' días · Almacenamiento ' + REPO.dias_alm + ' días · ventas ' + REPO.ventana + ' días</p><table><thead><tr>' +
     h.map(x => '<th>' + esc(x) + '</th>').join('') + '</tr></thead><tbody>' + f.map(r => '<tr>' + r.map(v => '<td>' + esc(v == null ? '' : v) + '</td>').join('') + '</tr>').join('') + '</tbody></table>');
+  w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
+}
+
+let MOVR = null;
+async function cargarMovRepo(){
+  if (!$('#rpMovFecha').value) $('#rpMovFecha').value = hoyAR();
+  $('#tMov').innerHTML = '<div class="vacio">Buscando…</div>';
+  try {
+    MOVR = await api('/api/administracion/reposicion/movimientos?fecha=' + $('#rpMovFecha').value);
+    if (!MOVR.filas) { $('#tMov').innerHTML = '<div class="vacio">No se encontró la columna de motivo. Columnas: ' + esc((MOVR.columnas || []).map(c => c.column_name).join(', ')) + '</div>'; MOVR = null; return; }
+    $('#tMov').innerHTML = tabla('movrepo', ['Código','Descripción','Bultos','Unidades'], MOVR.filas.map(r => [r.codigo, r.descripcion, r.bultos == null ? '(sin dato de caja)' : r.bultos, r.unidades]), { txtCols: [1] });
+  } catch(e) { if (e.message !== 'sin PIN') $('#tMov').innerHTML = '<div class="vacio">' + esc(e.message) + '</div>'; }
+}
+function imprimirMovRepo(){
+  if (!MOVR || !MOVR.filas.length) { alert('No hay movimientos para imprimir. Buscá primero.'); return; }
+  const w = window.open('', '_blank');
+  if (!w) { alert('Permití las ventanas emergentes para imprimir.'); return; }
+  w.document.write('<!doctype html><meta charset="utf-8"><title>Reposición ' + MOVR.fecha + '</title><style>body{font:13px Arial,sans-serif;margin:0}h1{font-size:15px;text-align:center;margin:0 0 4px}table{border-collapse:collapse;width:100%}th{background:#d9d9d9;border:1px solid #777;padding:3px 6px}td{border:1px solid #999;padding:3px 6px;background:#f2f2f2}td:nth-child(1){text-align:right}td:nth-child(3),td:nth-child(4){text-align:right}tr{page-break-inside:avoid}@page{size:A4 portrait;margin:12mm}</style>' +
+    '<h1>REPOSICIÓN · ' + fechaLabel(MOVR.fecha) + '</h1><table><thead><tr><th>Codigo</th><th>Descripcion</th><th>Bultos</th><th>Unidades</th></tr></thead><tbody>' +
+    MOVR.filas.map(r => '<tr><td>' + esc(r.codigo) + '</td><td>' + esc(r.descripcion) + '</td><td>' + (r.bultos == null ? '' : r.bultos) + '</td><td>' + r.unidades + '</td></tr>').join('') + '</tbody></table>');
   w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
 }
 async function cargarCarteles(){

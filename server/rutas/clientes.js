@@ -1658,6 +1658,54 @@ app.get('/api/administracion/reposicion', controlAdministracion, async (req, res
     }
 });
 
+// ---- Movimientos de reposición ya hechos en Gescom (Movimiento de Stock, motivo "Movimiento de Almacenamiento hacia Picking")
+let colsMovStock = null;
+app.get('/api/administracion/reposicion/movimientos', controlAdministracion, async (req, res) => {
+    try {
+        const fecha = fechaValida(req.query.fecha) ? req.query.fecha : hoyAR();
+        if (!colsMovStock) {
+            const r = await pool.query(`SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'stock_movimiento'`);
+            colsMovStock = r.rows;
+        }
+        const nom = colsMovStock.map(c => c.column_name);
+        if (!nom.length) throw new Error('Gescom no tiene la tabla stock_movimiento en esta conexión.');
+        const motivos = colsMovStock.filter(c => /motivo/i.test(c.column_name) && TEXTOS.test(c.data_type)).map(c => c.column_name);
+        if (req.query.diagnostico === '1' || !motivos.length) {
+            const m = await pool.query(`SELECT * FROM stock_movimiento ORDER BY 1 DESC LIMIT 3`);
+            return res.json({ columnas: colsMovStock, muestra: m.rows });
+        }
+        const cantCol = nom.includes('cantidad_diferencia') ? 'cantidad_diferencia' : null;
+        if (!cantCol) throw new Error('stock_movimiento no tiene cantidad_diferencia (columnas: ' + nom.join(', ') + ')');
+        const fch = nom.includes('fecha_creacion') ? 'fecha_creacion' : nom.find(c => /^fecha/i.test(c));
+        const motivoSql = motivos.map(c => `m.${qi(c)} ILIKE '%almacenamiento hacia picking%'`).join(' OR ');
+        const tenant = nom.includes('tenant_id') ? ' AND m.tenant_id = $3' : '';
+        const params = [fecha, fecha, ...(tenant ? [TENANT] : [])];
+        // Cada movimiento deja una pata que resta (origen) y otra que suma (destino): se toma solo la que suma
+        const r = await pool.query(`
+            SELECT m.item_codigo::text AS codigo, SUM(m.${qi(cantCol)})::float AS u, MAX(m.${qi(fch)}) AS ultima
+            FROM stock_movimiento m
+            WHERE (${motivoSql}) AND m.${qi(cantCol)} > 0
+              AND m.${qi(fch)} >= $1::date AND m.${qi(fch)} < ($2::date + 1)${tenant}
+            GROUP BY 1`, params);
+        let base;
+        try { await asegurarTablaRepo(); base = db ? (await db.query(`SELECT * FROM repo_base`)).rows : leerRepoJson(); } catch (e) { base = leerRepoJson(); }
+        const bm = new Map(base.map(a => [String(a.codigo), a]));
+        const desc = new Map();
+        const sinBase = r.rows.filter(x => !bm.has(x.codigo)).map(x => x.codigo);
+        if (sinBase.length) (await pool.query(`SELECT DISTINCT ON (codigo) codigo::text AS codigo, descripcion FROM item WHERE tenant_id = $1 AND codigo::text = ANY($2::text[])`, [TENANT, sinBase])).rows.forEach(x => desc.set(x.codigo, x.descripcion));
+        const filas = r.rows.map(x => {
+            const a = bm.get(x.codigo), uxb = a ? a.unid_caja : 0;
+            const u = Math.round(x.u * 1000) / 1000;
+            return { codigo: x.codigo, descripcion: a ? a.descripcion : (desc.get(x.codigo) || ''), unidades_total: u, uxb,
+                bultos: uxb ? Math.floor(u / uxb + 1e-9) : null, unidades: uxb ? Math.round((u - Math.floor(u / uxb + 1e-9) * uxb) * 1000) / 1000 : u };
+        }).sort((a, b) => a.codigo.length - b.codigo.length || a.codigo.localeCompare(b.codigo));
+        res.json({ fecha, filas });
+    } catch (err) {
+        console.error('❌ [clientes] Error en movimientos de reposición:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 console.log('📊 Módulo provisorio de seguimiento de clientes y cobertura de marcas activo en /clientes');
 
 module.exports = {};
