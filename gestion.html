@@ -494,13 +494,11 @@
   <section class="vista" id="vRepo">
     <div class="card">
       <div class="top"><div><h2>Reposición de depósitos</h2>
-        <div class="sub" id="rpSub">Sugerido de Almacenamiento a Picking y viaje del bodeguista desde Externo.</div></div></div>
+        <div class="sub" id="rpSub">Artículos a mover de Almacenamiento a Picking según los días de stock que quedan en Picking.</div></div></div>
       <div class="filtros" style="margin-bottom:10px">
         <label>Días en Picking <input type="number" id="rpDP" value="2" min="0.5" step="0.5" style="width:70px"></label>
         <label>Días en Almacenamiento <input type="number" id="rpDA" value="4" min="0.5" step="0.5" style="width:70px"></label>
         <label>Promediar ventas de los últimos <input type="number" id="rpVen" value="30" min="5" max="90" style="width:70px"> días</label>
-        <label>Ver <select id="rpVer" onchange="renderRepo()"><option value="alm">Almacenamiento → Picking</option><option value="ext">Viaje desde Externo</option><option value="todo">Todos los artículos</option></select></label>
-        <label><input type="checkbox" id="rpSolo" checked onchange="renderRepo()"> Solo los que hay que reponer</label>
         <button onclick="cargarRepo()">Calcular</button>
         <button onclick="imprimirRepo()">Imprimir hoja</button>
         <button onclick="exportar('repo','reposicion')">Descargar CSV</button>
@@ -2264,30 +2262,17 @@ async function cargarRepo(){
   } catch(e) { if (e.message !== 'sin PIN') $('#tRepo').innerHTML = '<div class="vacio">' + esc(e.message) + '</div>'; }
 }
 function repoFilas(){
-  if (!REPO) return { h: [], f: [], t: '' };
-  const ver = $('#rpVer').value, solo = $('#rpSolo').checked;
-  const n = x => x == null ? '' : fmtN(x);
-  if (ver === 'ext') {
-    const fs = REPO.filas.filter(r => r.pal_necesarios > 0 || !solo && r.ext > 0);
-    return { t: 'Viaje desde Externo', h: ['Slotting','Marca','Código','Artículo','Vta diaria (u)','Almacenamiento (u)','Días Alm.','Objetivo Alm. (u)','Palets a traer','Palets necesarios','Palets en Externo','Aviso'],
-      f: fs.map(r => [r.slotting || '', r.marca, r.codigo, r.descripcion, r.vta, r.alm_desp, r.vta ? Math.round(r.alm_desp / r.vta * 10) / 10 : '', r.obj_alm, r.pal_traer, r.pal_necesarios, r.pal_ext,
-        r.pal_necesarios > r.pal_ext ? 'Externo no alcanza' : (r.sin_datos ? 'Falta bulto/pallet' : '')]) };
-  }
-  let fs = REPO.filas;
-  if (ver === 'alm' && solo) fs = fs.filter(r => r.bultos > 0 || r.sin_alm_bultos > 0);
-  if (ver === 'todo' && solo) fs = fs.filter(r => r.estado !== 'OK');
-  if (ver === 'alm') return { t: 'Almacenamiento → Picking', h: ['Slotting','Marca','Código','Artículo','Palets cerrados','Bultos sueltos','Total bultos','Unidades','Picking antes (u)','Picking después (u)','Estado','Aviso'],
-    f: fs.map(r => [r.slotting || '', r.marca, r.codigo, r.descripcion, r.pal_cerrados, r.bultos_sueltos, r.bultos, r.unidades, r.pick, r.pick_desp, r.estado,
-      r.sin_alm_bultos > 0 ? 'Faltan ' + r.sin_alm_bultos + ' bultos en Almacenamiento' : (r.sin_datos ? 'Falta bulto/pallet' : '')]) };
-  return { t: 'Todos los artículos', h: ['Slotting','Marca','Código','Artículo','Vta diaria (u)','Picking (u)','Días Picking','Almacenamiento (u)','Días Alm.','Externo (u)','Sugerido Picking (u)','Bultos a reponer','Estado'],
-    f: fs.map(r => [r.slotting || '', r.marca, r.codigo, r.descripcion, r.vta, r.pick, r.dias_pick ?? '', r.alm, r.dias_alm ?? '', r.ext, r.sug_pick, r.bultos, r.estado]) };
+  if (!REPO) return { t: '', h: [], f: [] };
+  const fs = REPO.filas.filter(r => r.bultos > 0).sort((x, y) => (x.estado === 'Urgente' ? 0 : 1) - (y.estado === 'Urgente' ? 0 : 1) || String(x.descripcion).localeCompare(String(y.descripcion)));
+  return { t: 'Reposición Almacenamiento → Picking', h: ['SKU','Nombre','Cajas a reponer','Estado'],
+    f: fs.map(r => [r.codigo, r.descripcion, r.bultos, r.estado === 'Urgente' ? 'REPONER URGENTE' : 'REPONER SUGERIDO']) };
 }
 function renderRepo(){
   if (!REPO) return;
   const { h, f } = repoFilas();
-  const urg = REPO.filas.filter(r => r.estado === 'Urgente').length, rep = REPO.filas.filter(r => r.estado === 'Reponer').length;
-  $('#rpAviso').innerHTML = 'Ventas del ' + fechaLabel(REPO.desde) + ' al ' + fechaLabel(REPO.hasta) + ' (' + REPO.dias_con_venta + ' días con venta) · Picking ' + REPO.dias_picking + ' días · Almacenamiento ' + REPO.dias_alm + ' días · <b style="color:var(--mal)">' + urg + ' urgentes</b> · <b style="color:var(--aten)">' + rep + ' a reponer</b>';
-  $('#tRepo').innerHTML = tabla('repo', h, f, { txtCols: [1, 3, h.length - 1, ...(h.includes('Estado') ? [h.indexOf('Estado')] : [])] });
+  const urg = f.filter(r => r[3] === 'REPONER URGENTE').length;
+  $('#rpAviso').innerHTML = 'Ventas del ' + fechaLabel(REPO.desde) + ' al ' + fechaLabel(REPO.hasta) + ' (' + REPO.dias_con_venta + ' días con venta) · Picking a ' + REPO.dias_picking + ' días · <b style="color:var(--mal)">' + urg + ' urgentes</b> · <b style="color:var(--aten)">' + (f.length - urg) + ' sugeridos</b> · solo se listan los que tienen stock en Almacenamiento';
+  $('#tRepo').innerHTML = tabla('repo', h, f, { txtCols: [1, 3] });
 }
 function imprimirRepo(){
   if (!REPO) { alert('Primero calculá la reposición.'); return; }
