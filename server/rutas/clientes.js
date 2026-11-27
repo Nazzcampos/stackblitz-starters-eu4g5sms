@@ -1512,6 +1512,44 @@ app.delete('/api/administracion/carteles', controlAdministracion, async (req, re
     } catch (err) { console.error('❌ [admin] carteles borrar:', err.message); res.status(500).json({ error: err.message }); }
 });
 
+
+// =====================================================================
+//  RECHAZOS (supervisor): notas de crédito con su motivo y el vendedor al que le pegan
+//  Mismo detalle que el reporte manual: fecha, vendedor, motivo, cliente, artículo y suma de cantidad (en negativo).
+//  Trae TODAS las NC con motivo (rechazo o cambio) y el filtro por motivo se hace en la pantalla.
+// =====================================================================
+app.get('/api/seguimiento-clientes/rechazos', controlSupervisor, async (req, res) => {
+    try {
+        const hoy = hoyAR();
+        const desde = fechaValida(req.query.desde) ? req.query.desde : hoy.slice(0, 8) + '01';
+        const hasta = fechaValida(req.query.hasta) ? req.query.hasta : hoy;
+        if (hasta < desde) return res.status(400).json({ error: 'La fecha "hasta" es anterior a "desde"' });
+        if ((new Date(hasta) - new Date(desde)) / 86400000 > 400) return res.status(400).json({ error: 'Elegí un período de hasta 13 meses' });
+        const filtro = await filtroAnuladas();
+        const r = await pool.query(`
+            SELECT to_char(v.fecha_comprobante::date, 'YYYY-MM-DD') AS f,
+                   COALESCE(NULLIF(o.vendedor_nombre, ''), NULLIF(v.vendedor_nombre, ''), '(sin vendedor)') AS vendedor,
+                   COALESCE(NULLIF(v.motivo_rechazo_desc, ''), NULLIF(v.motivo_cambio_desc, ''), '(sin motivo)') AS motivo,
+                   (COALESCE(v.motivo_rechazo_desc, '') = '') AS es_cambio,
+                   COALESCE(ltrim(c.codigo::text, '0'), '') AS cod_cliente,
+                   COALESCE(v.razon_social, c.razon_social, '') AS cliente,
+                   COALESCE(i.descripcion, vi.item_codigo::text) AS articulo,
+                   -SUM(ABS(vi.cantidad))::float AS cantidad
+            FROM venta v
+            JOIN venta_item vi ON vi.venta_id = v.id AND vi.tenant_id = v.tenant_id
+            LEFT JOIN venta o ON o.id = v.venta_referenciada_id AND o.tenant_id = v.tenant_id
+            LEFT JOIN item i ON i.codigo = vi.item_codigo AND i.tenant_id = v.tenant_id
+            LEFT JOIN cliente_hist c ON c.id = v.cliente_id AND c.tenant_id = v.tenant_id AND c.actual = true
+            WHERE v.tenant_id = $1 AND v.tipo_comprobante_codigo LIKE 'NCR%'
+              AND (COALESCE(v.motivo_rechazo_desc, '') <> '' OR COALESCE(v.motivo_cambio_desc, '') <> '')
+              AND v.fecha_comprobante >= $2::date AND v.fecha_comprobante < ($3::date + 1)${filtro}
+            GROUP BY 1, 2, 3, 4, 5, 6, 7
+            ORDER BY 1, 2, 3, 6, 7`, [TENANT, desde, hasta]);
+        const filas = r.rows.map(x => ({ ...x, armado: DEP_MOTIVOS_N.has(sinAcentos(x.motivo)) }));
+        res.json({ desde, hasta, filas });
+    } catch (err) { console.error('❌ [rechazos]:', err.message); res.status(500).json({ error: err.message }); }
+});
+
 console.log('📊 Módulo provisorio de seguimiento de clientes y cobertura de marcas activo en /clientes');
 
 module.exports = {};

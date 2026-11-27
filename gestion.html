@@ -137,6 +137,8 @@
   pre{color:var(--texto)}
   /* bodeguista: solo lectura, ve la tabla mensual y los errores */
   .card .filtros{background:none;border:none;padding:0}
+  #tRech td,#tRech th{white-space:normal}
+  #tRech td:last-child,#tRech th:last-child{white-space:nowrap}
   .bodsolo{display:none}
   body.bod .bodsolo{display:flex}
   body.bod .soloenc,body.bod #dModosFila,body.bod #dLblDia,body.bod #dLblSem,body.bod #dCardInc,body.bod #dCardGrid,body.bod #dNota{display:none!important}
@@ -166,6 +168,7 @@
       <button class="tab" data-roles="sup" data-vista="vCombos" title="Combos Pehuamar"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>Combos Pehuamar</span></button>
       <button class="tab" data-roles="sup" data-vista="vCCC" title="CCC"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg><span>CCC</span></button>
       <button class="tab" data-roles="sup" data-vista="vRuteo" title="Ruteo vendedores"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h8"/></svg><span>Ruteo vendedores</span></button>
+      <button class="tab" data-roles="sup" data-vista="vRechazos" title="Rechazos"><svg class="i" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span>Rechazos</span></button>
       <button class="tab" data-roles="bod enc" data-vista="vDeposito" title="Indicadores de depósito"><svg class="i" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg><span>Indicadores</span></button>
       <button class="tab" data-roles="bod enc" data-vista="vArticulos" title="Artículos"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg><span>Artículos</span></button>
       <button class="tab" data-roles="adm" data-vista="vAdm" title="Resúmenes de cuenta"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg><span>Resúmenes de cuenta</span></button>
@@ -573,6 +576,28 @@
     </div>
   </section>
 
+  <!-- ======================= RECHAZOS (supervisor) ======================= -->
+  <section class="vista" id="vRechazos">
+    <div class="filtros">
+      <label>Desde <input type="date" id="rzDesde"></label>
+      <label>Hasta <input type="date" id="rzHasta"></label>
+      <label>Vendedor <select id="rzVend"></select></label>
+      <label>Buscar <input type="search" id="rzBuscar" placeholder="cliente, código o artículo" autocomplete="off"></label>
+      <button onclick="cargarRechazos()">Filtrar</button>
+      <div style="flex-basis:100%;font-size:12px;color:var(--gris)">Motivos a mostrar:
+        <span style="margin-left:8px"><a href="#" onclick="rzTodos(true);return false" style="color:var(--azul2)">todos</a> · <a href="#" onclick="rzTodos(false);return false" style="color:var(--azul2)">ninguno</a> · <a href="#" onclick="rzTodos(null);return false" style="color:var(--azul2)">solo los que le pegan al vendedor</a></span>
+        <div class="chips" id="rzMotivos"></div>
+      </div>
+    </div>
+    <div class="nota" id="rzNota"></div>
+    <div class="kpis" id="rzKpis"></div>
+    <div class="card">
+      <div class="top"><div><h2>Notas de crédito por rechazo</h2><div class="sub" id="rzSub"></div></div>
+        <button class="sec" onclick="exportar('rechazos','rechazos')">Descargar Excel</button></div>
+      <div class="tw" id="tRech" style="max-height:640px"></div>
+    </div>
+  </section>
+
   <!-- ======================= RUTEO (supervisor) ======================= -->
   <section class="vista" id="vRuteo">
     <div class="card">
@@ -815,6 +840,7 @@ document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () =>
   if (vistaActual === 'vCombos' && !COMB) cargarCombos(false);
     if (vistaActual === 'vCCC' && !CCC) cargarCCC(false);
   if (vistaActual === 'vCarteles') cargarCarteles();
+  if (vistaActual === 'vRechazos' && !RZ.filas) cargarRechazos();
   if (vistaActual === 'vArticulos') $('#aqBuscar').focus();
   if (vistaActual === 'vRuteo') cargarRuteo();
 }));
@@ -830,6 +856,7 @@ function actualizar(){
   if (vistaActual === 'vDeposito') cargarDeposito(true);
   if (vistaActual === 'vCCC') cargarCCC(true);
   if (vistaActual === 'vRuteo') cargarRuteo();
+  if (vistaActual === 'vRechazos') cargarRechazos();
 }
 
 // El "Incluir Deposito" es el mismo en las dos pestañas
@@ -2271,6 +2298,65 @@ async function generarCarteles(){
     catch(e) { if (e.message !== 'sin PIN') $('#ctNota').textContent = 'El PDF se bajó pero no se pudo marcar como impreso: ' + e.message; }
   }
 }
+
+
+// ------------------------------------------------ RECHAZOS (supervisor): NC con motivo, vendedor, cliente y artículo
+let RZ = { filas: null, sel: null };
+async function cargarRechazos(){
+  const desde = $('#rzDesde').value || (hoyAR().slice(0, 8) + '01'), hasta = $('#rzHasta').value || hoyAR();
+  $('#rzDesde').value = desde; $('#rzHasta').value = hasta;
+  $('#rzNota').textContent = 'Cargando…';
+  try {
+    const r = await api('/api/seguimiento-clientes/rechazos?desde=' + desde + '&hasta=' + hasta);
+    RZ.filas = r.filas;
+    const motivos = [...new Set(r.filas.map(f => f.motivo))];
+    // por defecto: los motivos que le pegan al vendedor (no los errores de armado, que son del bodeguista, ni los canjes)
+    if (!RZ.sel) RZ.sel = new Set(r.filas.filter(f => !f.armado && !f.es_cambio).map(f => f.motivo));
+    else motivos.forEach(m => { if (!RZ.vistos || !RZ.vistos.has(m)) { const f = r.filas.find(x => x.motivo === m); if (f && !f.armado && !f.es_cambio) RZ.sel.add(m); } });
+    RZ.vistos = new Set(motivos);
+    const vends = [...new Set(r.filas.map(f => f.vendedor))].sort((a, b) => a.localeCompare(b));
+    const vSel = $('#rzVend').value;
+    $('#rzVend').innerHTML = '<option value="">Todos</option>' + vends.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    if (vends.includes(vSel)) $('#rzVend').value = vSel;
+    $('#rzNota').textContent = '';
+    renderRechazos();
+  } catch(e) { if (e.message !== 'sin PIN') $('#rzNota').textContent = 'Error: ' + e.message; }
+}
+function rzTodos(v){
+  if (!RZ.filas) return;
+  const ms = [...new Set(RZ.filas.map(f => f.motivo))];
+  RZ.sel = new Set(v === true ? ms : v === false ? [] : RZ.filas.filter(f => !f.armado && !f.es_cambio).map(f => f.motivo));
+  renderRechazos();
+}
+function rzToggle(m){ RZ.sel.has(m) ? RZ.sel.delete(m) : RZ.sel.add(m); renderRechazos(); }
+function renderRechazos(){
+  if (!RZ.filas) return;
+  const porMotivo = new Map();
+  RZ.filas.forEach(f => { const o = porMotivo.get(f.motivo) || { n: 0, cambio: f.es_cambio, armado: f.armado }; o.n += -f.cantidad; porMotivo.set(f.motivo, o); });
+  $('#rzMotivos').innerHTML = [...porMotivo.entries()].sort((a, b) => b[1].n - a[1].n).map(([m, o]) =>
+    `<span class="chip ${RZ.sel.has(m) ? 'on' : ''}" onclick="rzToggle(this.dataset.m)" data-m="${esc(m)}">${esc(m)} <span class="sub" style="margin:0">${fmtN(o.n)} u.${o.armado ? ' · armado' : o.cambio ? ' · cambio' : ''}</span></span>`).join('') || '<span class="sub">Sin notas de crédito en el período.</span>';
+  const q = sinAcentosJS($('#rzBuscar').value), vend = $('#rzVend').value;
+  const filas = RZ.filas.filter(f => RZ.sel.has(f.motivo) && (!vend || f.vendedor === vend) &&
+    (!q || sinAcentosJS([f.cliente, f.cod_cliente, f.articulo].join(' ')).includes(q)));
+  const total = filas.reduce((t, f) => t + f.cantidad, 0);
+  $('#rzKpis').innerHTML = `<div class="kpi"><div class="v">${fmtN(-total)}</div><div class="l">Unidades rechazadas</div></div>
+    <div class="kpi"><div class="v">${new Set(filas.map(f => f.cod_cliente + '|' + f.cliente)).size}</div><div class="l">Clientes</div></div>
+    <div class="kpi"><div class="v">${new Set(filas.map(f => f.vendedor)).size}</div><div class="l">Vendedores</div></div>`;
+  $('#rzSub').textContent = 'Del ' + fechaLabel(RZ.desde || $('#rzDesde').value) + ' al ' + fechaLabel($('#rzHasta').value) + ' · cantidades en unidades base';
+  // Se muestra como el reporte: fecha / vendedor / motivo / cliente solo en la primera línea de cada grupo
+  let pf = '', pv = '', pm = '', pc = '';
+  const vista = filas.map(f => {
+    const nf = f.f !== pf, nv = nf || f.vendedor !== pv, nm = nv || f.motivo !== pm, nc = nm || (f.cod_cliente + f.cliente) !== pc;
+    pf = f.f; pv = f.vendedor; pm = f.motivo; pc = f.cod_cliente + f.cliente;
+    return [nf ? fechaLabel(f.f) : '', nv ? f.vendedor : '', nm ? f.motivo : '', nc ? f.cod_cliente : '', nc ? f.cliente : '', f.articulo, f.cantidad];
+  });
+  const completo = filas.map(f => [f.f, f.vendedor, f.motivo, f.cod_cliente, f.cliente, f.articulo, f.cantidad]);
+  $('#tRech').innerHTML = tabla('rechazos', ['FechaRechazo', 'Vendedor', 'Motivo', 'Código cliente', 'Razón social', 'Artículo', 'Suma de cantidad'], vista,
+    { txtCols: [0, 1, 2, 3, 4, 5], exportFilas: completo });
+}
+const sinAcentosJS = t => String(t == null ? '' : t).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+$('#rzBuscar').addEventListener('input', () => { clearTimeout(RZ.t); RZ.t = setTimeout(renderRechazos, 250); });
+$('#rzVend').addEventListener('change', renderRechazos);
 
 // ------------------------------------------------ MI RUTA (vendedor): ordenar con arrastrar y soltar
 let RV = null, rvTimer = null, rvPendiente = false;
