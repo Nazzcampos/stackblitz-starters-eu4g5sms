@@ -74,3 +74,10 @@ Lista de faltantes: filtros por vendedor y día de visita (Lu a Vi), agrupada po
 - Muestra las notas de crédito (NCR) con motivo de rechazo o de cambio, igual que el reporte manual: fecha, vendedor, motivo, código y razón social del cliente, artículo y suma de cantidad (en negativo, unidades base). `GET /api/seguimiento-clientes/rechazos?desde=&hasta=` (`controlSupervisor`), todos los artículos y proveedores.
 - El vendedor es el de la venta original (si la NC no tiene referencia, el de la NC). La fecha es la del comprobante de la NC. Se excluyen las anuladas.
 - Filtros en pantalla: período, vendedor, búsqueda por cliente/código/artículo y motivos (por defecto los que le pegan al vendedor; los errores de armado — que son del bodeguista — y las devoluciones por canje quedan apagados pero se pueden prender). Descarga a Excel.
+
+## Reposición (Administración, /gestion)
+- Pestaña "Reposición" (rol adm) en `gestion.html` (ids `rp*`); endpoint `GET /api/administracion/reposicion` en `server/rutas/clientes.js`.
+- Stock por depósito = el de la pestaña Stock (Picking / Almacenamiento / Externo, columna `cantidad` en unidades). Venta diaria = unidades FAC / días con venta en la ventana (30 por defecto).
+- Reglas: Picking 2 días, Almacenamiento 4 días (editables en pantalla). Bultos a mover Alm→Picking = faltante / unid. por caja, redondeado hacia arriba y limitado al stock de Almacenamiento; pallets cerrados + bultos sueltos. Viaje Externo = pallets para que Almacenamiento (después de reponer) llegue a 4 días, limitado a lo que hay en Externo.
+- Estado: Urgente (picking <= 1 día de venta), Reponer (picking < sugerido), OK.
+- Datos de bulto/pallet/slotting: tabla propia `repo_base` (se crea y se carga sola desde `server/datos/repo-base.json`, hojas BultoxPalet y Slotting del Excel). Para corregir un pallet: UPDATE repo_base SET cajas_pallet = .. WHERE codigo = '..'.

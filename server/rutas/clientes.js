@@ -1550,6 +1550,114 @@ app.get('/api/seguimiento-clientes/rechazos', controlSupervisor, async (req, res
     } catch (err) { console.error('❌ [rechazos]:', err.message); res.status(500).json({ error: err.message }); }
 });
 
+// =====================================================================
+//  REPOSICIÓN (Administración): sugerido Almacenamiento -> Picking y viaje del bodeguista desde Externo
+//  Reglas: Picking = DIAS_PICKING días de venta (2), Almacenamiento = DIAS_ALM días (4). Externo guarda pallets que
+//  el bodeguista trae a la mañana. Stock por depósito = el mismo de la pestaña Stock (Gescom). Venta diaria = unidades
+//  vendidas / días con venta en la ventana. Bulto/pallet/slotting: tabla repo_base (se carga sola desde
+//  server/datos/repo-base.json, que sale de las hojas BultoxPalet y Slotting del Excel de reposición).
+// =====================================================================
+let tablaRepoLista = false, repoBaseJson = null;
+async function asegurarTablaRepo() {
+    if (!db) return;
+    if (tablaRepoLista) return;
+    await db.query(`CREATE TABLE IF NOT EXISTS repo_base (codigo text PRIMARY KEY, descripcion text, marca text,
+        cajas_pallet integer NOT NULL DEFAULT 0, unid_caja integer NOT NULL DEFAULT 0, slotting integer NOT NULL DEFAULT 0)`);
+    const n = (await db.query(`SELECT COUNT(*)::int AS n FROM repo_base`)).rows[0].n;
+    if (!n) {
+        for (const a of leerRepoJson()) {
+            await db.query(`INSERT INTO repo_base (codigo, descripcion, marca, cajas_pallet, unid_caja, slotting) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (codigo) DO NOTHING`,
+                [a.codigo, a.descripcion, a.marca, a.cajas_pallet, a.unid_caja, a.slotting]);
+        }
+    }
+    tablaRepoLista = true;
+}
+function leerRepoJson() {
+    if (!repoBaseJson) repoBaseJson = JSON.parse(require('fs').readFileSync(path.join(__dirname, '..', 'datos', 'repo-base.json'), 'utf8'));
+    return repoBaseJson;
+}
+const normDep = s => sinAcentos(String(s || '')).toLowerCase();
+
+app.get('/api/administracion/reposicion', controlAdministracion, async (req, res) => {
+    try {
+        const dPick = Math.min(30, Math.max(0.5, Number(req.query.dias_picking) || 2));
+        const dAlm = Math.min(60, Math.max(0.5, Number(req.query.dias_alm) || 4));
+        const vent = Math.min(90, Math.max(5, parseInt(req.query.ventana, 10) || 30));
+        let base;
+        try { await asegurarTablaRepo(); base = db ? (await db.query(`SELECT * FROM repo_base`)).rows : leerRepoJson(); }
+        catch (e) { base = leerRepoJson(); }
+        const bm = new Map(base.map(a => [String(a.codigo), a]));
+
+        // Stock por depósito (mismo origen que la pestaña Stock)
+        const st = await obtenerStock(req.query.refresh === '1');
+        const colCant = (st.cantidades.find(c => c.nombre === 'cantidad') || st.cantidades.find(c => c.rol === 'cant') || {}).clave;
+        if (!colCant) throw new Error('La tabla stock no tiene columna de cantidad.');
+        const stock = new Map(); // codigo -> {p,a,e}
+        st.filas.forEach(f => {
+            const c = String(f.codigo || '').trim();
+            if (!bm.has(c)) return;
+            const d = normDep(f.deposito);
+            const k = d.startsWith('picking') ? 'p' : d.startsWith('almacen') ? 'a' : d.startsWith('externo') ? 'e' : null;
+            if (!k) return;
+            if (!stock.has(c)) stock.set(c, { p: 0, a: 0, e: 0 });
+            stock.get(c)[k] += Number(f[colCant]) || 0;
+        });
+
+        // Venta diaria: unidades vendidas / días con venta
+        const filtro = await filtroAnuladas();
+        const hoy = hoyAR();
+        const desde = sumarDias(hoy, -vent);
+        const vr = await pool.query(`
+            SELECT vi.item_codigo::text AS codigo, SUM(vi.cantidad)::float AS u
+            FROM venta v JOIN venta_item vi ON vi.venta_id = v.id AND vi.tenant_id = v.tenant_id
+            WHERE v.tenant_id = $1 AND v.tipo_comprobante_codigo LIKE 'FAC%'
+              AND v.fecha_entrega >= $2::date AND v.fecha_entrega < $3::date${filtro}
+              AND vi.item_codigo::text = ANY($4::text[])
+            GROUP BY 1`, [TENANT, desde, hoy, [...bm.keys()]]);
+        const dr = await pool.query(`
+            SELECT COUNT(DISTINCT v.fecha_entrega::date)::int AS d FROM venta v
+            WHERE v.tenant_id = $1 AND v.tipo_comprobante_codigo LIKE 'FAC%' AND v.fecha_entrega >= $2::date AND v.fecha_entrega < $3::date${filtro}`,
+            [TENANT, desde, hoy]);
+        const dias = Math.max(1, dr.rows[0].d);
+        const vm = new Map(vr.rows.map(r => [r.codigo, r.u]));
+
+        const filas = [];
+        bm.forEach((a, c) => {
+            const s = stock.get(c) || { p: 0, a: 0, e: 0 };
+            const v = (vm.get(c) || 0) / dias;
+            if (!v && !s.p && !s.a && !s.e) return;
+            const uxb = a.unid_caja || 0, cxp = a.cajas_pallet || 0, uxp = uxb * cxp;
+            const sugP = Math.ceil(v * dPick), objA = Math.ceil(v * dAlm);
+            const falta = Math.max(0, sugP - s.p);
+            let bultos = uxb ? Math.ceil(falta / uxb) : 0;
+            const bultosAlm = uxb ? Math.floor(s.a / uxb) : 0;
+            const sinAlm = Math.max(0, bultos - bultosAlm); // bultos que no alcanza a cubrir Almacenamiento
+            bultos = Math.min(bultos, bultosAlm);
+            const unidades = bultos * uxb;
+            const palCerr = cxp ? Math.floor(bultos / cxp) : 0;
+            const bultosSueltos = cxp ? bultos - palCerr * cxp : bultos;
+            const almDesp = s.a - unidades;
+            const faltaAlm = Math.max(0, objA - almDesp);
+            const palExt = uxp ? Math.floor(s.e / uxp) : 0;
+            const palTraer = uxp && faltaAlm > 0 ? Math.min(Math.ceil(faltaAlm / uxp), palExt) : 0;
+            const palNecesarios = uxp && faltaAlm > 0 ? Math.ceil(faltaAlm / uxp) : 0;
+            const estado = v > 0 && s.p <= v ? 'Urgente' : (s.p < sugP ? 'Reponer' : 'OK');
+            filas.push({ codigo: c, descripcion: a.descripcion, marca: a.marca || '', slotting: a.slotting || 0, uxb, cxp,
+                vta: Math.round(v * 100) / 100, pick: s.p, alm: s.a, ext: s.e,
+                dias_pick: v > 0 ? Math.round(s.p / v * 10) / 10 : null, dias_alm: v > 0 ? Math.round(s.a / v * 10) / 10 : null,
+                sug_pick: sugP, falta, bultos, unidades, pal_cerrados: palCerr, bultos_sueltos: bultosSueltos, sin_alm_bultos: sinAlm,
+                pick_desp: s.p + unidades, alm_desp: almDesp, obj_alm: objA,
+                pal_traer: palTraer, pal_necesarios: palNecesarios, pal_ext: palExt, estado,
+                sin_datos: !uxb || !cxp });
+        });
+        filas.sort((x, y) => (x.slotting || 9999) - (y.slotting || 9999) || String(x.descripcion).localeCompare(String(y.descripcion)));
+        res.json({ actualizado: st.actualizado, ventana: vent, dias_con_venta: dias, desde, hasta: hoy, dias_picking: dPick, dias_alm: dAlm, filas });
+    } catch (err) {
+        console.error('❌ [clientes] Error en reposición:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 console.log('📊 Módulo provisorio de seguimiento de clientes y cobertura de marcas activo en /clientes');
 
 module.exports = {};
