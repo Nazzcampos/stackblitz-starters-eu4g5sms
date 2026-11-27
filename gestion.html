@@ -2263,7 +2263,7 @@ async function cargarRepo(){
 }
 function repoFilas(){
   if (!REPO) return { t: '', h: [], f: [] };
-  const fs = REPO.filas.filter(r => r.bultos > 0).sort((x, y) => (x.estado === 'Urgente' ? 0 : 1) - (y.estado === 'Urgente' ? 0 : 1) || String(x.descripcion).localeCompare(String(y.descripcion)));
+  const fs = REPO.filas.filter(r => r.bultos > 0).sort((x, y) => String(x.codigo).length - String(y.codigo).length || String(x.codigo).localeCompare(String(y.codigo)));
   return { t: 'Reposición Almacenamiento → Picking', h: ['SKU','Nombre','Cajas a reponer','Estado'],
     f: fs.map(r => [r.codigo, r.descripcion, r.bultos, r.estado === 'Urgente' ? 'REPONER URGENTE' : 'REPONER SUGERIDO']) };
 }
